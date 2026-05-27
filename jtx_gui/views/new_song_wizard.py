@@ -116,6 +116,7 @@ class NewSongWizard(QDialog):
 
         # ----- style picker -----
         self._style_combo = QComboBox()
+        self._style_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         self._style_combo.setMinimumWidth(240)
         self._style_combo.view().setMinimumWidth(240)
         for style in STYLES.keys():
@@ -132,6 +133,7 @@ class NewSongWizard(QDialog):
 
         # ----- setup picker -----
         self._setup_combo = QComboBox()
+        self._setup_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         self._setup_combo.setMinimumWidth(240)
         self._setup_combo.view().setMinimumWidth(240)
         for path in bundled_setups():
