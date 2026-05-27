@@ -189,8 +189,7 @@ class _VoiceCCSection(QFrame):
         override_chk = QCheckBox("OVERRIDE")
         override_chk.setChecked(is_override)
         override_chk.setStyleSheet(
-            f"QCheckBox {{ color: {theme.INK_DIM.name()}; font-size: 8pt;"
-            "letter-spacing: 1px; }}"
+            f"QCheckBox {{ color: {theme.INK_DIM.name()}; }} "
             f"QCheckBox:checked {{ color: {theme.INK_HOT.name()}; }}"
         )
         self._overrides[function] = override_chk
