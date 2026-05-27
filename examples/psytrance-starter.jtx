@@ -41,7 +41,10 @@
         "style": "euclid",
         "pulses": 12,
         "offset": 0,
-        "velocity": 88
+        "velocity": 88,
+        "roll_pos": "last_bar_of_8",
+        "roll_subdiv": "16t",
+        "roll_depth": 0.7
       },
       "feel": {}
     },
@@ -82,7 +85,7 @@
       "algorithm": "arp",
       "pattern": {
         "mode": "up_down",
-        "rate_steps": 2,
+        "subdivision": "8",
         "octaves": 2,
         "gate": 0.4,
         "base_vel": 96,

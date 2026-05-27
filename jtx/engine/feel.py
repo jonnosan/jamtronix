@@ -7,7 +7,10 @@ vs Feel Knobs:
 * ``humanize`` — ±N tick jitter on every event.
 * ``vel_jitter`` — ±N velocity jitter on note-ons.
 * ``gate_jitter`` — ±fraction of duration jitter on note-off timing.
-* ``swing`` — delay every other 16th by ``swing * step_ticks / 2``.
+* ``swing`` — delay every other 16th. ``swing=0`` straight; ``swing=1.0``
+  lands the odd 16th exactly on the 2/3 (triplet) position of the
+  containing 8th, giving full 16th-note triplet feel; intermediate
+  values interpolate shuffle character (≈0.5 = classic MPC swing).
 * ``accent`` — velocity boost on configured beat steps.
 * ``accent_beats`` — list of step indices (16th positions) that get
   the accent boost. Default ``[0, 8]`` (downbeats of beats 1 and 3).
@@ -64,7 +67,10 @@ def apply_feel(
         accent_beats = {0, 8}
 
     s_ticks = step_ticks(ppq)
-    swing_offset = int(s_ticks * swing * 0.5)
+    # swing=1.0 → odd-16th lands at 2/3 of the containing 8th, i.e.
+    # spacing s_ticks*4/3 (= 160 ticks at PPQ=480). That's the triplet
+    # position, so max-shift = s_ticks/3. Linear interpolation in between.
+    swing_offset = int(round(s_ticks * swing / 3.0))
 
     # Pair up notes for gate_jitter / octave_jump handling. NoteOn ↔
     # NoteOff pairing is by (channel, note) — first-in-first-out.

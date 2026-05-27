@@ -236,3 +236,39 @@ def test_acid_bass_differs_for_different_seeds() -> None:
     e2 = bass.generate_bar(_ctx(seed=2))
     # Different seeds → different step choices and pitch picks.
     assert e1 != e2
+
+
+def test_acid_bass_triplet_prob_one_replaces_every_beat() -> None:
+    bass = AcidBass(midi_channel=2)
+    events = bass.generate_bar(
+        _ctx(
+            pattern_knobs={
+                "drop_prob": 0.0,
+                "cycle": 0,
+                "bend": 0,
+                "triplet_prob": 1.0,
+                "triplet_subdiv": "16t",
+            }
+        )
+    )
+    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
+    # Every beat replaced: 4 beats × 3 triplet positions = 12 notes.
+    assert len(note_ons) == 12
+    # Triplet positions: 0, 80, 160; 480, 560, 640; 960, 1040, 1120; 1440, 1520, 1600.
+    expected_ticks = []
+    for beat in range(4):
+        for i in range(3):
+            expected_ticks.append(beat * 480 + i * 80)
+    assert [e.tick for e in note_ons] == expected_ticks
+
+
+def test_acid_bass_triplet_prob_zero_keeps_pattern_on_16ths() -> None:
+    bass = AcidBass(midi_channel=2)
+    events = bass.generate_bar(
+        _ctx(pattern_knobs={"drop_prob": 0.0, "cycle": 0, "bend": 0, "triplet_prob": 0.0})
+    )
+    note_ons = [e for e in events if isinstance(e, NoteOn)]
+    # No triplet rolls → standard 16 16ths.
+    assert len(note_ons) == 16
+    # No off-grid ticks (every tick divisible by step_ticks=120).
+    assert all(e.tick % 120 == 0 for e in note_ons)

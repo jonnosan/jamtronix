@@ -171,12 +171,12 @@ overridden per role.
 
 | Type | Algorithm | Notes / knobs in scope |
 |------|-----------|-----------------------|
-| drum | `drum_pattern` | Unified euclidean + four-on-floor + breakbeat via knobs (`style=euclid|four_floor|break`, per-piece pulses/offsets, ghost layer, polyrhythm) |
-| drum | `drum_one_shot` | Single hits at given steps; useful for claps, crashes |
-| mono | `acid_bass` | 303-style step sequencer (probabilistic note picks, octave jumps, slide, internal CC74/CC71 sweep, pitch-bend wobble) — covers slackbeatz `acid_303` |
+| drum | `drum_pattern` | Unified euclidean + four-on-floor + breakbeat via knobs (`style=euclid|four_floor|break`, per-piece pulses/offsets, ghost layer, polyrhythm + `polyrhythm_subdiv` for continuous triplet hat, `roll_pos`/`roll_subdiv`/`roll_depth` for triplet roll fills) |
+| drum | `drum_one_shot` | Single hits at given steps; useful for claps, crashes, tom rolls (`roll_pos`/`roll_subdiv`/`roll_depth`) |
+| mono | `acid_bass` | 303-style step sequencer (probabilistic note picks, octave jumps, slide, internal CC74/CC71 sweep, pitch-bend wobble, optional `triplet_prob` for breakdown rolls) — covers slackbeatz `acid_303` |
 | mono | `sub_drone` | Sustained drone, root/fifth alternation, optional progression follow, optional kick-locked filter envelope — covers slackbeatz `subdrone` (deep techno staple) |
-| mono | `melodic_line` | Step-sequenced riff with motif memory, passing tones, voice leading — covers `rolling`, `gallop`, `mellow_pick`, `rhodes_phrase`, `acid_lead`, `psy_lead` |
-| mono | `arp` | Up/down/random/walk arpeggio with rate, octaves, gate, hold — covers `sh101_arp`, `arp_walk` |
+| mono | `melodic_line` | Step-sequenced riff with passing tones, configurable `subdivision` (incl. 8t/16t triplet grids) and per-beat `triplet_prob` rolls — covers `rolling`, `gallop`, `mellow_pick`, `rhodes_phrase`, `acid_lead`, `psy_lead` |
+| mono | `arp` | Up/down/random/walk arpeggio with `subdivision` (16/8/4/8t/16t/…), octaves, gate, hold — covers `sh101_arp`, `arp_walk` |
 | poly | `sustained_chord` | Long-gated chord voicing following the progression — covers `triad_sustain`, `pad_drift`, `sustained_dyad`, `atmos_pad` |
 | poly | `chord_stab` | Short-gated voicings on configurable steps — covers `offbeat_stab`, `acid_stab`, `wurli_chop` |
 | modulator | `cc_lfo` | Single CC with shape (sine/tri/saw/square/random), rate (bars/beats), depth, phase — direct replacement for `candy` family |
@@ -213,7 +213,10 @@ source → latch → pattern_transform → transpose → chord → quantize_to_s
   chord and quantize to a different scale than the source voice is using).
   With `off`, the chord step's literal semitones pass through unchanged.
 - **Ratchet**: turn each output note into N evenly-spaced repeats inside its
-  duration. Knob: `count` (1 = off).
+  duration. Knob: `ratchet` (1 = off; `ratchet=3` is the triplet-fill
+  primitive). `ratchet_curve` (`flat` / `ramp_up` / `last_beat` / `pulse`)
+  varies the count per note across the bar so triplet bursts can be
+  positioned without per-step lists.
 
 Follower voices can chain: a follower can be the source of another follower, so
 any required reordering of the pipeline is built up by chaining. Cycles are
@@ -231,7 +234,7 @@ forbidden and detected at song-load time.
   - `humanize` (±N ticks per event, default varies by role),
   - `vel_jitter` (±N velocity per note-on),
   - `gate_jitter` (±fraction of note duration),
-  - `swing` (delay every other 16th by N ticks),
+  - `swing` (delay every other 16th — 0=straight, 1.0=full 16th-triplet feel),
   - `accent` (velocity boost on configurable beats),
   - `mute_prob` (per-bar drop chance),
   - `evolution` (linear velocity ramp across part),

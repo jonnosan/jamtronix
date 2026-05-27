@@ -87,6 +87,22 @@
       "kit_map": {}
     },
     {
+      "name": "tom",
+      "type": "drum",
+      "default_role": "drum",
+      "midi_channel": 10,
+      "midi_port": null,
+      "kit_map": {"tom": 45}
+    },
+    {
+      "name": "riff",
+      "type": "mono",
+      "default_role": "lead",
+      "midi_channel": 6,
+      "midi_port": null,
+      "kit_map": {}
+    },
+    {
       "name": "chord_ref",
       "type": "mono",
       "default_role": "lead",

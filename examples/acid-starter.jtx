@@ -67,7 +67,9 @@
         "intensity": 1.1,
         "gate": 0.6,
         "cycle": 2,
-        "resonance": 105
+        "resonance": 105,
+        "triplet_prob": 0.08,
+        "triplet_subdiv": "16t"
       },
       "feel": {}
     },
@@ -89,7 +91,9 @@
         "octave": 1,
         "base_vel": 90,
         "passing_prob": 0.15,
-        "palette": "tones_only"
+        "palette": "tones_only",
+        "triplet_prob": 0.15,
+        "triplet_subdiv": "16t"
       },
       "feel": {}
     },

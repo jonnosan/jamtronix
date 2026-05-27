@@ -49,6 +49,30 @@ class AlgorithmMeta:
 
 _VEL_CURVES = ("flat", "ramp_up", "ramp_down", "arc", "valley", "pulse", "drift")
 
+# Subdivision strings supported by jtx.algorithms._subdivision (kept in
+# sync manually; the GUI doesn't import engine internals).
+SUBDIVISION_CHOICES: tuple[str, ...] = (
+    "2",
+    "4",
+    "8",
+    "16",
+    "32",
+    "2t",
+    "4t",
+    "8t",
+    "16t",
+    "32t",
+)
+TRIPLET_SUBDIV_CHOICES: tuple[str, ...] = ("4t", "8t", "16t", "32t")
+ROLL_POS_CHOICES: tuple[str, ...] = (
+    "none",
+    "last_beat",
+    "last_bar_of_4",
+    "last_bar_of_8",
+    "random_sparse",
+)
+RATCHET_CURVE_CHOICES: tuple[str, ...] = ("flat", "ramp_up", "last_beat", "pulse")
+
 _DRUM_PATTERN = (
     KnobSpec(
         "style",
@@ -104,6 +128,35 @@ _DRUM_PATTERN = (
         minimum=0,
         maximum=16,
         description="Polyrhythm pulse count: a second pulse layer at N steps/bar (0 = off).",
+    ),
+    KnobSpec(
+        "polyrhythm_subdiv",
+        "choice",
+        default="16",
+        choices=SUBDIVISION_CHOICES,
+        description="Subdivision grid for the polyrhythm layer (8t/16t = triplet hat).",
+    ),
+    KnobSpec(
+        "roll_pos",
+        "choice",
+        default="none",
+        choices=ROLL_POS_CHOICES,
+        description="When to fire a triplet roll fill (last beat / last bar of N / random).",
+    ),
+    KnobSpec(
+        "roll_subdiv",
+        "choice",
+        default="16t",
+        choices=TRIPLET_SUBDIV_CHOICES,
+        description="Triplet subdivision used inside the roll fill.",
+    ),
+    KnobSpec(
+        "roll_depth",
+        "float",
+        default=0.6,
+        minimum=0.0,
+        maximum=1.0,
+        description="Fraction of roll-grid positions that fire (1.0 = continuous fill).",
     ),
     KnobSpec(
         "vel_curve",
@@ -170,6 +223,28 @@ _DRUM_ONE_SHOT = (
         minimum=0.0,
         maximum=1.0,
         description="Velocity reduction for each flam hit (0=silent, 1=same as main).",
+    ),
+    KnobSpec(
+        "roll_pos",
+        "choice",
+        default="none",
+        choices=ROLL_POS_CHOICES,
+        description="When to fire a triplet roll fill (best for tom rolls into drops).",
+    ),
+    KnobSpec(
+        "roll_subdiv",
+        "choice",
+        default="16t",
+        choices=TRIPLET_SUBDIV_CHOICES,
+        description="Triplet subdivision used inside the roll fill.",
+    ),
+    KnobSpec(
+        "roll_depth",
+        "float",
+        default=0.6,
+        minimum=0.0,
+        maximum=1.0,
+        description="Fraction of roll-grid positions that fire (1.0 = continuous fill).",
     ),
 )
 
@@ -246,6 +321,21 @@ _ACID_BASS = (
         minimum=0,
         maximum=127,
         description="Resonance ceiling sent on CC71 (or your remapped CC).",
+    ),
+    KnobSpec(
+        "triplet_prob",
+        "float",
+        default=0.0,
+        minimum=0.0,
+        maximum=1.0,
+        description="Per-beat chance the four 16ths become a 3-position triplet roll.",
+    ),
+    KnobSpec(
+        "triplet_subdiv",
+        "choice",
+        default="16t",
+        choices=TRIPLET_SUBDIV_CHOICES,
+        description="Subdivision used when triplet_prob fires.",
     ),
 )
 
@@ -356,6 +446,28 @@ _MELODIC_LINE = (
         choices=PALETTE_CHOICES,
         description="Which scale degrees the line draws from (triad / pentatonic / full / …).",
     ),
+    KnobSpec(
+        "subdivision",
+        "choice",
+        default="16",
+        choices=SUBDIVISION_CHOICES,
+        description="Grid the line walks on (16t/8t = full triplet phrase).",
+    ),
+    KnobSpec(
+        "triplet_prob",
+        "float",
+        default=0.0,
+        minimum=0.0,
+        maximum=1.0,
+        description="Per-beat chance the beat becomes a 3-position triplet micro-roll.",
+    ),
+    KnobSpec(
+        "triplet_subdiv",
+        "choice",
+        default="16t",
+        choices=TRIPLET_SUBDIV_CHOICES,
+        description="Triplet subdivision used inside the inserted rolls.",
+    ),
 )
 
 _ARP = (
@@ -367,12 +479,11 @@ _ARP = (
         description="Arpeggio direction across the chord intervals.",
     ),
     KnobSpec(
-        "rate_steps",
-        "int",
-        default=1,
-        minimum=1,
-        maximum=16,
-        description="Steps between successive notes (1 = 16ths, 2 = 8ths, 4 = quarters).",
+        "subdivision",
+        "choice",
+        default="16",
+        choices=SUBDIVISION_CHOICES,
+        description="Grid the arp runs on (16 = 16ths, 8 = 8ths, 8t = 8th triplets, …).",
     ),
     KnobSpec(
         "octaves",
@@ -824,7 +935,17 @@ _VOICE_FOLLOWER = (
         default=1,
         minimum=1,
         maximum=8,
-        description="Repeat each output note N times within its duration (1 = no ratchet).",
+        description="Base retriggers per output note (1 = off; 3 = triplet fill primitive).",
+    ),
+    KnobSpec(
+        "ratchet_curve",
+        "choice",
+        default="flat",
+        choices=RATCHET_CURVE_CHOICES,
+        description=(
+            "How ratchet count varies across the bar: flat / ramp_up / last_beat / pulse "
+            "(combine with ratchet=3 for triplet fills)."
+        ),
     ),
 )
 
@@ -882,8 +1003,8 @@ FEEL_KNOBS: tuple[KnobSpec, ...] = (
         "float",
         default=0.0,
         minimum=0.0,
-        maximum=0.5,
-        description="Delay every other 16th by this fraction",
+        maximum=1.0,
+        description="Shuffle: 0=straight, 0.5≈classic MPC, 1.0=full 16th-triplet feel",
     ),
     KnobSpec(
         "accent",

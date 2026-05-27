@@ -51,6 +51,9 @@ def build(title: str, setup_ref: str) -> Song:
         "cycle": random.choice((1, 2, 2, 4, 8)),  # 2-bar LFO most common
         "resonance": random.randint(80, 120),
         "octave": random.choice((-1, 0, 0, 0, 1)),  # 0 most common
+        # Rare 303 breakdown roll — sparse on purpose; acid is straight 16ths.
+        "triplet_prob": round(random.uniform(0.0, 0.10), 2),
+        "triplet_subdiv": "16t",
     }
 
     voices = {
@@ -83,7 +86,7 @@ def build(title: str, setup_ref: str) -> Song:
                 "vel_curve": random.choice(("pulse", "drift", "ramp_up", "arc")),
                 "vel_curve_depth": round(random.uniform(0.15, 0.35), 2),
             },
-            feel={"swing": round(random.uniform(0.0, 0.22), 2)},
+            feel={"swing": round(random.uniform(0.0, 0.45), 2)},
         ),
         "ohh": VoiceConfig(
             algorithm="drum_one_shot",

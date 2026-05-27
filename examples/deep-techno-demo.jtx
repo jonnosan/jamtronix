@@ -51,10 +51,15 @@
         "velocity": 65,
         "ghost": 0.15,
         "vel_curve": "pulse",
-        "vel_curve_depth": 0.25
+        "vel_curve_depth": 0.25,
+        "polyrhythm": 12,
+        "polyrhythm_subdiv": "8t",
+        "roll_pos": "last_bar_of_8",
+        "roll_subdiv": "16t",
+        "roll_depth": 0.55
       },
       "feel": {
-        "swing": 0.22,
+        "swing": 0.35,
         "sidechain_from": "kick",
         "sidechain_floor": 35,
         "sidechain_release_beats": 0.5
@@ -65,7 +70,10 @@
       "pattern": {
         "velocity": 60,
         "pulses": 1,
-        "offset": 14
+        "offset": 14,
+        "roll_pos": "last_bar_of_8",
+        "roll_subdiv": "16t",
+        "roll_depth": 0.7
       },
       "feel": {}
     },
