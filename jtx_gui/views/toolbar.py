@@ -17,7 +17,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QSlider,
     QWidget,
 )
 
@@ -78,9 +79,10 @@ class TopToolbar(QFrame):
         port_refresh_btn.clicked.connect(self._refresh_ports)
 
         # ----- transport -----
-        self._play_btn = QPushButton("PLAY")
-        self._play_btn.setMinimumWidth(100)
-        self._play_btn.setMinimumHeight(40)
+        # Triangle-right / square glyphs — render fine in the default font
+        # and keep the button tight (was a 100px PLAY/STOP rect).
+        self._play_btn = QPushButton("▶")
+        self._play_btn.setFixedSize(48, 40)
         self._play_btn.setStyleSheet(self._play_button_style(playing=False))
         self._play_btn.clicked.connect(self._on_play_toggle)
 
@@ -88,6 +90,15 @@ class TopToolbar(QFrame):
         self._bar_label.setStyleSheet(
             f"font-family: {theme.MONO_FONT_FAMILY}; color: {theme.INK_HOT.name()};font-size: 12pt;"
         )
+        # Song-position slider — read-only progress bar of bar_index /
+        # part_bars (per part). Visible feedback while jamming.
+        self._position = QSlider(Qt.Orientation.Horizontal)
+        self._position.setRange(0, 1)
+        self._position.setValue(0)
+        self._position.setEnabled(False)
+        self._position.setMinimumWidth(180)
+        self._position.setMaximumHeight(20)
+        self._position.setToolTip("Bar position within the current part")
         self._part_label = QLabel("NOT PLAYING")
         self._part_label.setStyleSheet(
             f"color: {theme.INK_HOT.name()}; font-size: 11pt; font-weight: bold;"
@@ -119,7 +130,8 @@ class TopToolbar(QFrame):
         layout.addSpacing(20)
         layout.addWidget(self._play_btn)
         layout.addWidget(self._bar_label)
-        layout.addWidget(self._part_label, 1)
+        layout.addWidget(self._position, 1)
+        layout.addWidget(self._part_label)
         layout.addWidget(self._daw_btn)
         layout.addWidget(self._render_btn)
 
@@ -205,7 +217,7 @@ class TopToolbar(QFrame):
 
     def _on_transport_started(self) -> None:
         self._clock_combo.setEnabled(False)
-        self._play_btn.setText("STOP")
+        self._play_btn.setText("■")  # stop glyph
         self._play_btn.setStyleSheet(self._play_button_style(playing=True))
         self._beat = 0
         self._beat_ms_elapsed = 0
@@ -213,11 +225,13 @@ class TopToolbar(QFrame):
 
     def _on_transport_stopped(self) -> None:
         self._clock_combo.setEnabled(True)
-        self._play_btn.setText("PLAY")
+        self._play_btn.setText("▶")  # play glyph
         self._play_btn.setStyleSheet(self._play_button_style(playing=False))
         self._beat_timer.stop()
         self._bar_label.setText("BAR — ·  BEAT —")
         self._part_label.setText("NOT PLAYING")
+        self._position.setRange(0, 1)
+        self._position.setValue(0)
 
     def _on_bar_changed(self, tick: BarTick) -> None:
         self._bar_index = tick.bar_index
@@ -225,6 +239,10 @@ class TopToolbar(QFrame):
         self._beat = 0
         self._beat_ms_elapsed = 0
         self._update_bar_label()
+        # Position slider: 0..part_bars-1, current bar index.
+        if tick.part_bars > 0:
+            self._position.setRange(0, max(1, tick.part_bars - 1))
+            self._position.setValue(min(tick.bar_index, tick.part_bars - 1))
 
     def _on_part_changed(self, name: str) -> None:
         self._part_label.setText(f"NOW PLAYING  ·  {name.upper()}")
@@ -331,8 +349,8 @@ class TopToolbar(QFrame):
         return (
             f"QPushButton {{ background-color: {bg};"
             f" color: {theme.PANEL_BG.name()};"
-            "font-weight: bold; font-size: 14pt;"
-            "border-radius: 4px; }"
+            "font-weight: bold; font-size: 18pt;"
+            "border-radius: 4px; padding: 0; }"
         )
 
 

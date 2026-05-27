@@ -175,7 +175,12 @@ class PartsView(QWidget):
                 on_loop_toggle=self._on_loop_toggle,
                 on_bars_changed=self._on_bars_changed,
             )
-            item.setSizeHint(row.sizeHint())
+            # Bias the size hint a little wider than the minimum to give
+            # the spinner's " bars" suffix and the play icon comfortable
+            # vertical breathing room.
+            hint = row.sizeHint()
+            hint.setHeight(max(hint.height(), 52))
+            item.setSizeHint(hint)
             self._list.addItem(item)
             self._list.setItemWidget(item, row)
         self._list.blockSignals(False)
@@ -873,6 +878,9 @@ class _PartListRow(QFrame):
         super().__init__()
         self.part_name = name
         self.setAutoFillBackground(True)
+        # Give the row enough vertical room that the spinner suffix +
+        # icon button don't get clipped by the QListWidgetItem hint.
+        self.setMinimumHeight(48)
 
         name_lbl = QLabel(name.upper())
         name_lbl.setStyleSheet(f"color: {theme.INK.name()}; font-weight: bold; font-size: 11pt;")
@@ -881,11 +889,22 @@ class _PartListRow(QFrame):
         bars.setRange(1, 1024)
         bars.setValue(max(1, part.bars))
         bars.setSuffix(" bars")
-        bars.setMaximumWidth(96)
+        bars.setMaximumWidth(110)
+        bars.setMinimumHeight(28)
         bars.valueChanged.connect(lambda v, n=name: on_bars_changed(n, v))
 
-        play_btn = QPushButton("PLAY")
-        play_btn.setMaximumWidth(72)
+        # Unicode play glyph instead of "PLAY" so the small button isn't
+        # clipped by macOS font padding.
+        play_btn = QPushButton("▶")
+        play_btn.setFixedSize(36, 32)
+        play_btn.setStyleSheet(
+            f"QPushButton {{ background-color: {theme.BRASS_DARK.name()};"
+            f" color: {theme.INK_HOT.name()}; font-size: 14pt;"
+            " border-radius: 3px; padding: 0; }"
+            f"QPushButton:hover {{ background-color: {theme.BRASS_MID.name()};"
+            f" color: {theme.PANEL_BG.name()}; }}"
+        )
+        play_btn.setToolTip(f"Jump to {name} at next bar")
         play_btn.clicked.connect(lambda _checked=False, n=name: on_play(n))
 
         self._loop_chk = QCheckBox("LOOP")
@@ -897,7 +916,7 @@ class _PartListRow(QFrame):
         self._loop_chk.toggled.connect(lambda v, n=name: on_loop_toggle(n, v))
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
         layout.addWidget(name_lbl, 1)
         layout.addWidget(bars)
