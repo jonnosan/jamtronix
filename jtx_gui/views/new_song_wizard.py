@@ -78,10 +78,25 @@ def random_title() -> str:
     return f"{random.choice(_TITLE_FIRST)} {random.choice(_TITLE_SECOND)}"
 
 
+_last_picked_style: str | None = None
+
+
 def random_non_blank_style() -> str:
-    """Pick a random style excluding 'blank'."""
+    """Pick a random style excluding 'blank' and the previous pick.
+
+    Avoiding immediate repeats keeps the wizard feeling fresh — three
+    options is small enough that pure random will visibly clump
+    otherwise.
+    """
+    global _last_picked_style
     non_blank = [s for s in STYLES.keys() if s != "blank"]
-    return random.choice(non_blank) if non_blank else next(iter(STYLES.keys()))
+    if not non_blank:
+        return next(iter(STYLES.keys()))
+    if _last_picked_style is not None and len(non_blank) > 1:
+        non_blank = [s for s in non_blank if s != _last_picked_style]
+    pick = random.choice(non_blank)
+    _last_picked_style = pick
+    return pick
 
 
 class NewSongWizard(QDialog):
