@@ -73,6 +73,7 @@ class InternalClock(ClockSource):
         self._tempo_bpm = float(tempo_bpm)
         self.ppq = ppq
         self._t0: float | None = None
+        self._interrupted = False
 
     def tempo_bpm(self) -> float:
         return self._tempo_bpm
@@ -96,9 +97,20 @@ class InternalClock(ClockSource):
     def start(self) -> None:
         if self._t0 is None:
             self._t0 = time.perf_counter()
+        self._interrupted = False
 
     def stop(self) -> None:
         self._t0 = None
+
+    def request_interrupt(self) -> None:
+        """Wake any in-flight :meth:`wait_until` early.
+
+        Useful for a clean shutdown — the worker can ask the clock to
+        unblock so it can drop out of its loop without waiting up to a
+        whole bar at slow tempos. Reads/writes of a plain ``bool``
+        attribute are atomic under CPython's GIL, so no extra lock.
+        """
+        self._interrupted = True
 
     def now_tick(self) -> int:
         if self._t0 is None:
@@ -110,9 +122,11 @@ class InternalClock(ClockSource):
         if self._t0 is None:
             raise RuntimeError("InternalClock not started")
         target_time = self._t0 + target_tick * self._tick_seconds()
-        delay = target_time - time.perf_counter()
-        if delay > 0:
-            time.sleep(delay)
+        while not self._interrupted:
+            remaining = target_time - time.perf_counter()
+            if remaining <= 0:
+                return
+            time.sleep(min(0.05, remaining))
 
 
 # 24 MIDI clock messages per quarter note — fixed by the MIDI spec.

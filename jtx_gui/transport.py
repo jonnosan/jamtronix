@@ -168,6 +168,25 @@ class TransportService(QObject):
         if self._worker is not None:
             self._worker.request_stop()
 
+    def stop_and_wait(self, timeout_ms: int = 3000) -> None:
+        """Stop the worker and block until the thread exits.
+
+        Use this from MainWindow.closeEvent — without it, Qt destroys
+        the running QThread on app exit (emitting
+        ``QThread: Destroyed while thread is still running``) and the
+        worker's ``finally`` block never gets to fire its
+        all-notes-off CC, so notes linger in the DAW.
+        """
+        if self._worker is not None:
+            self._worker.request_stop()
+        thread = self._thread
+        if thread is not None and thread.isRunning():
+            thread.wait(timeout_ms)
+        self._thread = None
+        self._worker = None
+        self._current_part = None
+        self._queued_part = None
+
     def queue_part(self, part_name: str | None) -> None:
         """Queue ``part_name`` to take over at the next bar boundary."""
         if self._worker is None:
@@ -236,6 +255,11 @@ class _PlaybackWorker(QObject):
 
     def request_stop(self) -> None:
         self._stop_requested = True
+        # If the clock supports interrupt (InternalClock does), wake
+        # any in-flight wait_until so the worker can exit promptly.
+        interrupt = getattr(self._clock, "request_interrupt", None)
+        if callable(interrupt):
+            interrupt()
 
     def queue_part(self, part_name: str | None) -> None:
         self._queued = part_name
