@@ -50,7 +50,22 @@ from jtx_gui.cc_functions import CC_FUNCTIONS, all_functions_used_by
 AuditionFn = Callable[[VoiceSlot, str, int], None]
 """Callable that fires a CC audition. Args: voice, function name, cc number."""
 
+NoteAuditionFn = Callable[[VoiceSlot, list[int]], None]
+"""Callable that fires a brief MIDI note (or chord) audition on the voice."""
+
 _VOICE_TYPES: tuple[str, ...] = ("drum", "mono", "poly", "modulator", "follower")
+
+# Note pitches used for the per-voice audition buttons by role. Drum
+# pitches come from each kit_map row, so they're not in this table.
+_AUDITION_PITCHES: dict[str, list[int]] = {
+    "bass": [45],  # A2
+    "lead": [69],  # A4
+    "pad": [60, 64, 67],  # C major triad at C4
+    "stab": [69, 72, 76],  # A minor triad at A4
+    "chord": [69, 72, 76],  # A minor triad at A4
+    "modulator": [],  # use the CC audition instead
+    "follower": [],  # follower has no own pitch
+}
 _CLOCK_LABELS: tuple[tuple[ClockMode, str], ...] = (
     ("internal_master", "Internal master"),
     ("midi_clock_slave", "MIDI clock slave"),
@@ -67,12 +82,14 @@ class SetupEditor(QDialog):
         setup: Setup,
         setup_path: Path | None,
         audition_fn: AuditionFn | None = None,
+        note_audition_fn: NoteAuditionFn | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._setup = setup
         self._setup_path = setup_path
         self._audition_fn = audition_fn or _default_audition
+        self._note_audition_fn = note_audition_fn or _default_note_audition
         self.setWindowTitle(f"Jamtronix — Edit Setup ({setup.name})")
         self.resize(900, 660)
 
@@ -281,6 +298,7 @@ class SetupEditor(QDialog):
         editor = _VoiceSlotEditor(
             slot=slot,
             audition_fn=self._audition_fn,
+            note_audition_fn=self._note_audition_fn,
             on_changed=self._refresh_voice_list,
         )
         # Insert above the trailing stretch (which is index 0 because we
@@ -400,12 +418,14 @@ class _VoiceSlotEditor(QFrame):
         *,
         slot: VoiceSlot,
         audition_fn: AuditionFn,
+        note_audition_fn: NoteAuditionFn,
         on_changed: Callable[[], None],
     ) -> None:
         super().__init__()
         self.setObjectName("Panel")
         self._slot = slot
         self._audition_fn = audition_fn
+        self._note_audition_fn = note_audition_fn
         self._on_changed = on_changed
 
         title = QLabel(f"VOICE  ·  {slot.name.upper()}")
@@ -441,8 +461,19 @@ class _VoiceSlotEditor(QFrame):
         form.addRow("MIDI channel", self._channel_spin)
         form.addRow("Port override", self._port_edit)
 
+        # Voice-level note audition (mono / poly). Drum voices use the
+        # per-row buttons in the kit map instead.
+        self._note_audition_btn = QPushButton("PLAY NOTE")
+        self._note_audition_btn.setMaximumWidth(160)
+        self._note_audition_btn.setToolTip(
+            "Send a brief note (or chord) consistent with this voice's "
+            "role so you can MIDI-Learn the synth or just check it's wired."
+        )
+        self._note_audition_btn.clicked.connect(self._on_note_audition)
+        self._note_audition_btn.setVisible(slot.type in {"mono", "poly"})
+
         # Kit-map editor — only visible for drum voices.
-        self._kit_panel = _KitMapEditor(slot=slot)
+        self._kit_panel = _KitMapEditor(slot=slot, note_audition_fn=note_audition_fn)
         self._kit_panel.setVisible(slot.type == "drum")
 
         # CC-mapping section — shows all known functions across algorithms.
@@ -453,8 +484,22 @@ class _VoiceSlotEditor(QFrame):
         layout.setSpacing(10)
         layout.addWidget(title)
         layout.addLayout(form)
+        layout.addWidget(self._note_audition_btn, 0, Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self._kit_panel)
         layout.addWidget(self._cc_section)
+
+    def _on_note_audition(self) -> None:
+        notes = _AUDITION_PITCHES.get(self._slot.default_role, [60])
+        if not notes:
+            return
+        try:
+            self._note_audition_fn(self._slot, list(notes))
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.critical(
+                self,
+                "Audition failed",
+                f"Couldn't play audition notes: {exc}",
+            )
 
     # ----- top-level field callbacks --------------------------------------
 
@@ -474,6 +519,7 @@ class _VoiceSlotEditor(QFrame):
             self._slot.default_role = roles[0]  # type: ignore[assignment]
             self._role_combo.setCurrentText(roles[0])
         self._kit_panel.setVisible(new_type == "drum")
+        self._note_audition_btn.setVisible(new_type in {"mono", "poly"})
         self._on_changed()
 
     def _refresh_role_combo(self) -> None:
@@ -508,10 +554,11 @@ class _VoiceSlotEditor(QFrame):
 class _KitMapEditor(QFrame):
     """Free-form ``piece_name → MIDI note`` editor for drum voices."""
 
-    def __init__(self, *, slot: VoiceSlot) -> None:
+    def __init__(self, *, slot: VoiceSlot, note_audition_fn: NoteAuditionFn) -> None:
         super().__init__()
         self.setObjectName("Panel")
         self._slot = slot
+        self._note_audition_fn = note_audition_fn
         # Track per-row (line_edit, spinner) so we never have to call
         # findChildren — that introduced Qt cleanup ordering issues.
         self._rows: list[tuple[QLineEdit, QSpinBox]] = []
@@ -546,6 +593,9 @@ class _KitMapEditor(QFrame):
         note_spin = QSpinBox()
         note_spin.setRange(0, 127)
         note_spin.setValue(int(note))
+        audition_btn = QPushButton("PLAY")
+        audition_btn.setMaximumWidth(64)
+        audition_btn.setToolTip("Send this drum's MIDI note on the voice's channel")
         remove_btn = QPushButton("×")
         remove_btn.setMaximumWidth(32)
 
@@ -555,6 +605,7 @@ class _KitMapEditor(QFrame):
         row.setSpacing(6)
         row.addWidget(piece_edit)
         row.addWidget(note_spin)
+        row.addWidget(audition_btn)
         row.addWidget(remove_btn)
 
         entry = (piece_edit, note_spin)
@@ -562,6 +613,18 @@ class _KitMapEditor(QFrame):
 
         piece_edit.editingFinished.connect(self._rebuild_map)
         note_spin.valueChanged.connect(lambda _v: self._rebuild_map())
+
+        def on_audition() -> None:
+            try:
+                self._note_audition_fn(self._slot, [int(note_spin.value())])
+            except Exception as exc:  # noqa: BLE001
+                QMessageBox.critical(
+                    self,
+                    "Audition failed",
+                    f"Couldn't audition note: {exc}",
+                )
+
+        audition_btn.clicked.connect(on_audition)
 
         def on_remove() -> None:
             if entry in self._rows:
@@ -718,5 +781,28 @@ def _default_audition(voice: VoiceSlot, _function: str, cc: int) -> None:
                 )
             )
             time.sleep(0.04)
+    finally:
+        out.close()
+
+
+def _default_note_audition(voice: VoiceSlot, notes: list[int]) -> None:
+    """Send a short NoteOn cluster + matching NoteOff on the voice."""
+    import time
+
+    import mido
+
+    if not notes:
+        return
+    port_name = voice.midi_port
+    out = mido.open_output(port_name) if port_name else mido.open_output()
+    try:
+        channel = voice.midi_channel - 1  # mido channels are 0..15
+        for note in notes:
+            note = max(0, min(127, int(note)))
+            out.send(mido.Message("note_on", channel=channel, note=note, velocity=100))
+        time.sleep(0.35)
+        for note in notes:
+            note = max(0, min(127, int(note)))
+            out.send(mido.Message("note_off", channel=channel, note=note, velocity=0))
     finally:
         out.close()
