@@ -65,6 +65,8 @@ class NewSongWizard(QDialog):
 
         # ----- style picker -----
         self._style_combo = QComboBox()
+        self._style_combo.setMinimumWidth(240)
+        self._style_combo.view().setMinimumWidth(240)
         for style in STYLES.keys():
             label = style.replace("_", " ").title()
             self._style_combo.addItem(label, style)
@@ -75,6 +77,8 @@ class NewSongWizard(QDialog):
 
         # ----- setup picker -----
         self._setup_combo = QComboBox()
+        self._setup_combo.setMinimumWidth(240)
+        self._setup_combo.view().setMinimumWidth(240)
         for path in bundled_setups():
             self._setup_combo.addItem(f"BUNDLED  ·  {path.stem}", path)
             self._setup_paths[path.stem] = path
