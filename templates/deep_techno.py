@@ -38,15 +38,9 @@ def build(title: str, setup_ref: str) -> Song:
 
     voices = {
         "kick": VoiceConfig(
+            # Strict 4-on-floor; variation belongs on hats / snare / ohh.
             algorithm="drum_pattern",
-            pattern={
-                "style": "four_floor",
-                "velocity": random.randint(110, 118),
-                "ghost": round(random.uniform(0.0, 0.12), 2),
-                "ghost_velocity_ratio": 0.3,
-                "vel_curve": random.choice(("flat", "drift")),
-                "vel_curve_depth": round(random.uniform(0.05, 0.15), 2),
-            },
+            pattern={"style": "four_floor", "velocity": 116},
         ),
         "snare": VoiceConfig(
             algorithm="drum_one_shot",

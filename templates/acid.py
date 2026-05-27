@@ -55,15 +55,11 @@ def build(title: str, setup_ref: str) -> Song:
 
     voices = {
         "kick": VoiceConfig(
+            # Genre signature — always strict 4-on-the-floor, no ghost
+            # notes / polyrhythm / per-step velocity drift. Variation
+            # belongs on the hats / snare / clap / percussion voices.
             algorithm="drum_pattern",
-            pattern={
-                "style": "four_floor",
-                "velocity": random.randint(112, 122),
-                "ghost": round(random.uniform(0.0, 0.25), 2),
-                "ghost_velocity_ratio": 0.35,
-                "vel_curve": random.choice(("flat", "flat", "drift", "arc")),
-                "vel_curve_depth": round(random.uniform(0.05, 0.20), 2),
-            },
+            pattern={"style": "four_floor", "velocity": 118},
         ),
         "snare": VoiceConfig(
             algorithm="drum_one_shot",
