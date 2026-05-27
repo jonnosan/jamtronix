@@ -64,9 +64,54 @@ def test_melodic_line_drop_prob_one_emits_nothing() -> None:
     assert not any(isinstance(e, NoteOn) for e in events)
 
 
-def test_melodic_line_drop_prob_zero_fills_all_steps() -> None:
+def test_melodic_line_drop_prob_zero_fills_all_positions_default_grid() -> None:
     line = MelodicLine(midi_channel=3)
     events = line.generate_bar(_ctx(pattern_knobs={"drop_prob": 0.0}))
+    note_ons = [e for e in events if isinstance(e, NoteOn)]
+    # Default subdivision = "16" → 16 positions per bar.
+    assert len(note_ons) == 16
+
+
+def test_melodic_line_subdivision_8_fills_eight_positions() -> None:
+    line = MelodicLine(midi_channel=3)
+    events = line.generate_bar(_ctx(pattern_knobs={"drop_prob": 0.0, "subdivision": "8"}))
+    note_ons = [e for e in events if isinstance(e, NoteOn)]
+    assert len(note_ons) == 8
+
+
+def test_melodic_line_subdivision_16t_uses_triplet_grid() -> None:
+    line = MelodicLine(midi_channel=3)
+    events = line.generate_bar(_ctx(pattern_knobs={"drop_prob": 0.0, "subdivision": "16t"}))
+    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
+    # 16t = 3 per 8th × 8 8ths per bar = 24 positions per bar.
+    assert len(note_ons) == 24
+    # Triplet spacing at PPQ=480 is 80 ticks; first three positions
+    # cluster at 0, 80, 160 (the 2/3-of-quarter triplet grid).
+    assert [e.tick for e in note_ons[:3]] == [0, 80, 160]
+
+
+def test_melodic_line_triplet_prob_inserts_triplet_runs() -> None:
+    line = MelodicLine(midi_channel=3)
+    events = line.generate_bar(
+        _ctx(
+            pattern_knobs={
+                "drop_prob": 0.0,
+                "triplet_prob": 1.0,
+                "triplet_subdiv": "16t",
+            }
+        )
+    )
+    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
+    # Every beat won the roll; each beat gets 3 triplet positions
+    # instead of 4 16ths. 4 beats × 3 = 12 notes total.
+    assert len(note_ons) == 12
+
+
+def test_melodic_line_triplet_prob_zero_leaves_base_grid_intact() -> None:
+    line = MelodicLine(midi_channel=3)
+    events = line.generate_bar(
+        _ctx(pattern_knobs={"drop_prob": 0.0, "triplet_prob": 0.0}),
+    )
     note_ons = [e for e in events if isinstance(e, NoteOn)]
     assert len(note_ons) == 16
 
@@ -144,17 +189,17 @@ def test_melodic_line_uses_key_scale() -> None:
 def test_arp_up_climbs_chord_tones() -> None:
     arp = Arp(midi_channel=4)
     events = arp.generate_bar(
-        _ctx(pattern_knobs={"mode": "up", "quality": "minor", "rate_steps": 4})
+        _ctx(pattern_knobs={"mode": "up", "quality": "minor", "subdivision": "4"})
     )
     note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
-    # rate_steps=4 → 4 arp notes per bar; 1 octave × 3 intervals.
+    # subdivision="4" → 4 arp notes per bar; 1 octave × 3 intervals.
     assert [e.note for e in note_ons] == [69, 72, 76, 69]
 
 
 def test_arp_down_descends() -> None:
     arp = Arp(midi_channel=4)
     events = arp.generate_bar(
-        _ctx(pattern_knobs={"mode": "down", "quality": "minor", "rate_steps": 4})
+        _ctx(pattern_knobs={"mode": "down", "quality": "minor", "subdivision": "4"})
     )
     note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
     # down starts at top of ladder (76, 72, 69) and wraps.
@@ -169,19 +214,19 @@ def test_arp_octaves_extends_range() -> None:
                 "mode": "up",
                 "quality": "unison",
                 "octaves": 3,
-                "rate_steps": 8,
+                "subdivision": "2",
             }
         )
     )
     note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
-    # rate_steps=8 → 2 notes per bar.
+    # subdivision="2" → 2 notes per bar; 3-rung unison-octave ladder.
     assert [e.note for e in note_ons] == [69, 81]
 
 
 def test_arp_random_stays_within_ladder() -> None:
     arp = Arp(midi_channel=4)
     events = arp.generate_bar(
-        _ctx(pattern_knobs={"mode": "random", "quality": "minor", "rate_steps": 1})
+        _ctx(pattern_knobs={"mode": "random", "quality": "minor", "subdivision": "16"})
     )
     ladder = {69, 72, 76}
     note_ons = [e for e in events if isinstance(e, NoteOn)]
@@ -191,7 +236,7 @@ def test_arp_random_stays_within_ladder() -> None:
 def test_arp_walk_takes_steps_of_one() -> None:
     arp = Arp(midi_channel=4)
     events = arp.generate_bar(
-        _ctx(pattern_knobs={"mode": "walk", "quality": "minor", "rate_steps": 2})
+        _ctx(pattern_knobs={"mode": "walk", "quality": "minor", "subdivision": "8"})
     )
     ladder = [69, 72, 76]
     note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
@@ -202,26 +247,43 @@ def test_arp_walk_takes_steps_of_one() -> None:
         assert abs(prev - curr) <= 1
 
 
-def test_arp_rate_steps_4_produces_4_arp_notes_per_bar() -> None:
+def test_arp_subdivision_4_produces_4_arp_notes_per_bar() -> None:
     arp = Arp(midi_channel=4)
-    events = arp.generate_bar(_ctx(pattern_knobs={"mode": "up", "rate_steps": 4}))
+    events = arp.generate_bar(_ctx(pattern_knobs={"mode": "up", "subdivision": "4"}))
     note_ons = [e for e in events if isinstance(e, NoteOn)]
     assert len(note_ons) == 4
 
 
-def test_arp_rate_steps_1_produces_16_arp_notes() -> None:
+def test_arp_subdivision_16_produces_16_arp_notes() -> None:
     arp = Arp(midi_channel=4)
-    events = arp.generate_bar(_ctx(pattern_knobs={"mode": "up", "rate_steps": 1}))
+    events = arp.generate_bar(_ctx(pattern_knobs={"mode": "up", "subdivision": "16"}))
     note_ons = [e for e in events if isinstance(e, NoteOn)]
     assert len(note_ons) == 16
 
 
+def test_arp_subdivision_8t_produces_triplet_grid() -> None:
+    arp = Arp(midi_channel=4)
+    events = arp.generate_bar(_ctx(pattern_knobs={"mode": "up", "subdivision": "8t"}))
+    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
+    # 8t at PPQ=480 → spacing 160 ticks → 12 positions per 1920-tick bar.
+    assert len(note_ons) == 12
+    assert [e.tick for e in note_ons[:4]] == [0, 160, 320, 480]
+
+
+def test_arp_subdivision_16t_produces_24_notes() -> None:
+    arp = Arp(midi_channel=4)
+    events = arp.generate_bar(_ctx(pattern_knobs={"mode": "up", "subdivision": "16t"}))
+    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
+    # 16t spacing 80 ticks → 24 positions per bar.
+    assert len(note_ons) == 24
+
+
 def test_arp_gate_controls_duration() -> None:
     arp = Arp(midi_channel=4)
-    events = arp.generate_bar(_ctx(pattern_knobs={"mode": "up", "rate_steps": 4, "gate": 0.25}))
+    events = arp.generate_bar(_ctx(pattern_knobs={"mode": "up", "subdivision": "4", "gate": 0.25}))
     note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
     note_offs = sorted((e for e in events if isinstance(e, NoteOff)), key=lambda e: e.tick)
-    # step_ticks=120, rate_steps=4, gate=0.25 → duration = 120*4*0.25 = 120.
+    # quarter-note subdivision = 480 ticks; gate 0.25 → duration = 120.
     for on, off in zip(note_ons, note_offs, strict=True):
         assert off.tick - on.tick == 120
 
@@ -229,12 +291,18 @@ def test_arp_gate_controls_duration() -> None:
 def test_arp_unknown_mode_raises() -> None:
     arp = Arp(midi_channel=4)
     with pytest.raises(ValueError, match="unknown mode"):
-        arp.generate_bar(_ctx(pattern_knobs={"mode": "bogus", "rate_steps": 4}))
+        arp.generate_bar(_ctx(pattern_knobs={"mode": "bogus", "subdivision": "4"}))
+
+
+def test_arp_unknown_subdivision_raises() -> None:
+    arp = Arp(midi_channel=4)
+    with pytest.raises(ValueError, match="unknown subdivision"):
+        arp.generate_bar(_ctx(pattern_knobs={"mode": "up", "subdivision": "bogus"}))
 
 
 def test_arp_chord_root_semitones_transposes() -> None:
     arp = Arp(midi_channel=4)
-    ctx = _ctx(pattern_knobs={"mode": "up", "quality": "unison", "rate_steps": 4})
+    ctx = _ctx(pattern_knobs={"mode": "up", "quality": "unison", "subdivision": "4"})
     ctx.chord_root_semitones = 5
     events = arp.generate_bar(ctx)
     note_ons = [e for e in events if isinstance(e, NoteOn)]

@@ -15,6 +15,17 @@ Knobs (all overridable per part):
 * ``ghost_velocity_ratio`` — multiplier on ``velocity`` for ghost hits.
 * ``polyrhythm`` — secondary euclid layer with N pulses across the bar
   at softer velocity (0 = off).
+* ``polyrhythm_subdiv`` — subdivision grid for the polyrhythm layer
+  (``"16"`` default, or ``"8t"`` / ``"16t"`` for triplet hat/perc
+  layers — signature deep-techno move). The N pulses are euclid-
+  distributed across the chosen grid.
+* ``roll_pos`` — when to fire a triplet roll fill: ``"none"`` (default)
+  / ``"last_beat"`` (every bar's beat 4) / ``"last_bar_of_4"``
+  (bar % 4 == 3) / ``"last_bar_of_8"`` (bar % 8 == 7) /
+  ``"random_sparse"`` (1-in-8 chance per bar).
+* ``roll_subdiv`` (``"16t"``) — subdivision grid for the roll fill.
+* ``roll_depth`` (0.6) — fraction of roll-grid positions that actually
+  fire. ``1.0`` = continuous fill; ``0.3`` = sparse stutter.
 * ``vel_curve`` — algorithmic per-step velocity shape. One of
   ``flat`` (default) / ``ramp_up`` / ``ramp_down`` / ``arc`` /
   ``valley`` / ``pulse`` / ``drift`` (bar-seeded random walk) /
@@ -35,6 +46,7 @@ from typing import ClassVar
 
 from jtx.algorithms._euclid import euclid as euclid_pattern
 from jtx.algorithms._steps import step_ticks, steps_per_bar
+from jtx.algorithms._subdivision import subdivision_grid
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
 from jtx.engine.events import Event, NoteOff, NoteOn
@@ -71,6 +83,26 @@ _BREAK_PATTERNS: dict[str, list[int]] = {
 }
 
 _BEAT_STRIDE = 4  # at 16 steps/bar, beats are on every 4th step
+
+_ROLL_POSITIONS = ("none", "last_beat", "last_bar_of_4", "last_bar_of_8", "random_sparse")
+
+
+def _roll_active(roll_pos: str, bar_index: int, rng: random.Random) -> bool:
+    """True if the chosen roll-pos selector fires on *bar_index*."""
+    if roll_pos == "none":
+        return False
+    if roll_pos == "last_beat":
+        return True  # every bar fires on its own last beat
+    if roll_pos == "last_bar_of_4":
+        return bar_index % 4 == 3
+    if roll_pos == "last_bar_of_8":
+        return bar_index % 8 == 7
+    if roll_pos == "random_sparse":
+        return rng.random() < 0.125  # ~1 in 8 bars
+    raise ValueError(
+        f"drum_pattern: unknown roll_pos {roll_pos!r} (expected one of {_ROLL_POSITIONS})"
+    )
+
 
 # Drum NoteOffs are fired a fixed short offset after the NoteOn, just
 # for MIDI-protocol correctness. Drum samples ignore note-off; any
@@ -138,11 +170,58 @@ class DrumPattern(Algorithm):
 
         if polyrhythm > 0:
             poly_vel = max(1, int(velocity * 0.65))
-            poly_pattern = euclid_pattern(polyrhythm, total_steps, 0)
-            for step, hit in enumerate(poly_pattern):
-                if hit and not pattern[step]:
-                    events.extend(self._note(step * s, poly_vel, duration))
+            poly_subdiv = str(knobs.get("polyrhythm_subdiv", "16"))
+            poly_spacing, poly_positions = subdivision_grid(poly_subdiv, ctx.ticks_per_bar, ctx.ppq)
+            poly_pulses = min(polyrhythm, poly_positions)
+            poly_pattern = euclid_pattern(poly_pulses, poly_positions, 0)
+            base_hit_ticks = {step * s for step, hit in enumerate(pattern) if hit}
+            for poly_idx, hit in enumerate(poly_pattern):
+                if not hit:
+                    continue
+                tick = poly_idx * poly_spacing
+                if tick in base_hit_ticks:
+                    continue  # don't double-hit the main pattern
+                events.extend(self._note(tick, poly_vel, duration))
 
+        roll_pos = str(knobs.get("roll_pos", "none"))
+        if roll_pos != "none":
+            events.extend(self._make_roll(roll_pos, knobs, ctx, velocity, duration))
+
+        return events
+
+    def _make_roll(
+        self,
+        roll_pos: str,
+        knobs: KnobDict,
+        ctx: BarContext,
+        velocity: int,
+        duration: int,
+    ) -> list[Event]:
+        if not _roll_active(roll_pos, ctx.bar_index, ctx.rng):
+            return []
+        roll_subdiv = str(knobs.get("roll_subdiv", "16t"))
+        roll_depth = float(knobs.get("roll_depth", 0.6))
+        spacing, positions = subdivision_grid(roll_subdiv, ctx.ticks_per_bar, ctx.ppq)
+        beats_per_bar = ctx.ticks_per_bar // ctx.ppq
+        roll_start = (beats_per_bar - 1) * ctx.ppq
+        roll_end = ctx.ticks_per_bar
+        # The roll is overlaid as a layer — base pattern hits inside
+        # the window stay, the fill stacks on top. That's the actual
+        # sound of a roll fill (denser, not "different notes").
+        events: list[Event] = []
+        for i in range(positions):
+            tick = i * spacing
+            if tick < roll_start or tick >= roll_end:
+                continue
+            if ctx.rng.random() >= roll_depth:
+                continue
+            # Build a velocity ramp inside the fill (crescendo into the
+            # next bar) — multiplier from 0.7 at the start of the fill
+            # to 1.1 at the end.
+            window_progress = (tick - roll_start) / max(1, roll_end - roll_start)
+            vel_mult = 0.7 + 0.4 * window_progress
+            roll_vel = max(1, min(127, int(velocity * vel_mult)))
+            events.extend(self._note(tick, roll_vel, duration))
         return events
 
     def _make_pattern(

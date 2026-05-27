@@ -39,9 +39,21 @@ def test_apply_feel_swing_delays_odd_steps() -> None:
     )
     out = apply_feel(events, {"swing": 1.0}, ppq=480, rng=random.Random(0))
     on_ticks = sorted(e.tick for e in out if isinstance(e, NoteOn))
-    # swing=1 → swing_offset = step_ticks/2 = 60.
-    # Steps 0 + 2 stay, steps 1 + 3 shift by +60.
-    assert on_ticks == [0, 180, 240, 420]
+    # swing=1.0 → odd 16ths land on the triplet position (2/3 of the
+    # containing 8th). At PPQ=480, step_ticks=120, max shift = 40.
+    # Steps 0 + 2 stay; steps 1 + 3 shift by +40.
+    assert on_ticks == [0, 160, 240, 400]
+
+
+def test_apply_feel_swing_half_lands_between_straight_and_triplet() -> None:
+    events = _notes(
+        (0, 1, 60, 100, 60),
+        (120, 1, 62, 100, 60),
+    )
+    out = apply_feel(events, {"swing": 0.5}, ppq=480, rng=random.Random(0))
+    on_ticks = sorted(e.tick for e in out if isinstance(e, NoteOn))
+    # swing=0.5 → shift = step_ticks * 0.5 / 3 ≈ 20.
+    assert on_ticks == [0, 140]
 
 
 def test_apply_feel_vel_jitter_keeps_velocity_in_range() -> None:

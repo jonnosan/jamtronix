@@ -32,7 +32,10 @@
         "style": "euclid",
         "pulses": 2,
         "offset": 4,
-        "velocity": 100
+        "velocity": 100,
+        "roll_pos": "last_bar_of_8",
+        "roll_subdiv": "16t",
+        "roll_depth": 0.85
       },
       "feel": {
         "accent": 12,
@@ -49,10 +52,12 @@
         "pulses": 8,
         "offset": 0,
         "velocity": 110,
-        "ghost": 0.25
+        "ghost": 0.25,
+        "polyrhythm": 8,
+        "polyrhythm_subdiv": "8t"
       },
       "feel": {
-        "swing": 0.15,
+        "swing": 0.45,
         "fade_in_at_bar": 4,
         "fade_in_beats": 12,
         "fade_shape": "linear",
@@ -63,6 +68,17 @@
         "sidechain_floor": 50,
         "sidechain_release_beats": 0.4
       }
+    },
+    "tom": {
+      "algorithm": "drum_one_shot",
+      "pattern": {
+        "pulses": 0,
+        "velocity": 105,
+        "roll_pos": "last_bar_of_8",
+        "roll_subdiv": "16t",
+        "roll_depth": 0.9
+      },
+      "feel": {}
     },
     "crash": {
       "algorithm": "drum_one_shot",
@@ -83,10 +99,31 @@
         "slide_prob": 0.4,
         "octave": 0,
         "cycle": 0,
-        "bend": 60
+        "bend": 60,
+        "triplet_prob": 0.12,
+        "triplet_subdiv": "16t"
       },
       "feel": {
         "humanize": 6
+      }
+    },
+    "riff": {
+      "algorithm": "melodic_line",
+      "pattern": {
+        "drop_prob": 0.55,
+        "palette": "pentatonic",
+        "octave": 0,
+        "base_vel": 88,
+        "gate": 0.6,
+        "passing_prob": 0.15,
+        "subdivision": "16",
+        "triplet_prob": 0.2,
+        "triplet_subdiv": "16t"
+      },
+      "feel": {
+        "fade_in_at_bar": 6,
+        "fade_in_beats": 8,
+        "humanize": 4
       }
     },
     "stab": {
@@ -108,7 +145,7 @@
       "algorithm": "arp",
       "pattern": {
         "mode": "up",
-        "rate_steps": 2,
+        "subdivision": "8t",
         "octaves": 2,
         "gate": 0.6,
         "base_vel": 90,
@@ -130,6 +167,7 @@
         "every_nth": 2,
         "transpose_octaves": 2,
         "ratchet": 3,
+        "ratchet_curve": "last_beat",
         "quantize": "nearest"
       },
       "feel": {

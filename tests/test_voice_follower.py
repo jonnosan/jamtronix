@@ -270,6 +270,53 @@ def test_follower_ratchet_four_emits_four_evenly_spaced() -> None:
     assert ticks == [0, 30, 60, 90]
 
 
+def test_follower_ratchet_curve_last_beat_only_triplets_inside_beat_four() -> None:
+    follower = VoiceFollower(midi_channel=5)
+    # One note on beat 1 (tick 0) + one note inside beat 4 (tick 1440).
+    src = _source_notes((0, 60, 100, 240), (1440, 60, 100, 240))
+    events = follower.generate_bar(
+        _ctx(
+            source_events=src,
+            pattern_knobs={"ratchet": 3, "ratchet_curve": "last_beat"},
+        )
+    )
+    ticks = sorted(e.tick for e in events if isinstance(e, NoteOn))
+    # Beat 1 note: ratchet=1 (curve filters); beat 4 note: ratchet=3.
+    # First note untouched at tick 0. Second note at 1440 splits into
+    # 3 retriggers across 240-tick duration → 80-tick spacing.
+    assert ticks == [0, 1440, 1520, 1600]
+
+
+def test_follower_ratchet_curve_pulse_only_triplets_on_downbeats() -> None:
+    follower = VoiceFollower(midi_channel=5)
+    # Notes at ticks 0 (downbeat), 240 (off-beat), 480 (downbeat), 720 (off-beat).
+    src = _source_notes(
+        (0, 60, 100, 240),
+        (240, 60, 100, 240),
+        (480, 60, 100, 240),
+        (720, 60, 100, 240),
+    )
+    events = follower.generate_bar(
+        _ctx(
+            source_events=src,
+            pattern_knobs={"ratchet": 3, "ratchet_curve": "pulse"},
+        )
+    )
+    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
+    # Downbeat notes (0, 480) split into 3 retriggers each = 6 notes.
+    # Off-beat notes (240, 720) stay as singletons = 2 notes.
+    assert len(note_ons) == 6 + 2
+
+
+def test_follower_ratchet_curve_unknown_raises() -> None:
+    follower = VoiceFollower(midi_channel=5)
+    src = _source_notes((0, 60, 100, 120))
+    with pytest.raises(ValueError, match="unknown ratchet_curve"):
+        follower.generate_bar(
+            _ctx(source_events=src, pattern_knobs={"ratchet": 3, "ratchet_curve": "bogus"})
+        )
+
+
 # ---------------------------------------------------------- combos
 
 

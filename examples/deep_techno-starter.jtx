@@ -43,10 +43,15 @@
         "style": "euclid",
         "pulses": 6,
         "offset": 1,
-        "velocity": 76
+        "velocity": 76,
+        "polyrhythm": 8,
+        "polyrhythm_subdiv": "8t",
+        "roll_pos": "last_bar_of_8",
+        "roll_subdiv": "16t",
+        "roll_depth": 0.6
       },
       "feel": {
-        "swing": 0.12
+        "swing": 0.18
       }
     },
     "ohh": {
@@ -92,7 +97,9 @@
         "octave": 0,
         "base_vel": 80,
         "passing_prob": 0.25,
-        "palette": "pentatonic"
+        "palette": "pentatonic",
+        "triplet_prob": 0.12,
+        "triplet_subdiv": "16t"
       },
       "feel": {}
     },

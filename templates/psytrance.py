@@ -58,6 +58,10 @@ def build(title: str, setup_ref: str) -> Song:
                 "velocity": random.randint(80, 96),
                 "vel_curve": random.choice(("pulse", "ramp_up", "drift")),
                 "vel_curve_depth": round(random.uniform(0.10, 0.30), 2),
+                # Psy hat roll into the drop — sparse so it stays a fill.
+                "roll_pos": random.choice(("none", "none", "last_bar_of_8")),
+                "roll_subdiv": "16t",
+                "roll_depth": round(random.uniform(0.55, 0.8), 2),
             },
         ),
         "ohh": VoiceConfig(
@@ -94,7 +98,7 @@ def build(title: str, setup_ref: str) -> Song:
             algorithm="arp",
             pattern={
                 "mode": random.choice(("up", "up_down", "up_down", "walk")),
-                "rate_steps": random.choice((1, 2, 2, 4)),
+                "subdivision": random.choice(("16", "8", "8", "4")),
                 "octaves": random.choice((1, 2, 2, 3)),
                 "gate": round(random.uniform(0.35, 0.55), 2),
                 "base_vel": 96,

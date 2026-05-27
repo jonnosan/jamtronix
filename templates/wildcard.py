@@ -162,8 +162,13 @@ def _build_chh() -> VoiceConfig:
                 ("flat", "pulse", "ramp_up", "ramp_down", "arc", "valley", "drift")
             ),
             "vel_curve_depth": round(random.uniform(0.1, 0.4), 2),
+            "polyrhythm": random.choice((0, 0, 0, 8, 12)),
+            "polyrhythm_subdiv": random.choice(("16", "8t", "16t")),
+            "roll_pos": random.choice(("none", "none", "none", "last_bar_of_8", "last_bar_of_4")),
+            "roll_subdiv": random.choice(("16t", "16t", "8t")),
+            "roll_depth": round(random.uniform(0.4, 0.85), 2),
         },
-        feel={"swing": round(random.uniform(0.0, 0.25), 2)},
+        feel={"swing": round(random.uniform(0.0, 0.55), 2)},
     )
 
 
@@ -234,7 +239,7 @@ def _build_poly_voice() -> VoiceConfig:
                 "gate": round(random.uniform(0.15, 0.6), 2),
                 "drop_prob": round(random.uniform(0.0, 0.4), 2),
             },
-            feel={"swing": round(random.uniform(0.0, 0.15), 2)},
+            feel={"swing": round(random.uniform(0.0, 0.35), 2)},
         )
     return VoiceConfig(
         algorithm="sustained_chord",
@@ -256,7 +261,7 @@ def _build_lead_voice() -> VoiceConfig:
             algorithm="arp",
             pattern={
                 "mode": random.choice(("up", "down", "up_down", "random", "walk")),
-                "rate_steps": random.choice((1, 2, 2, 4)),
+                "subdivision": random.choice(("16", "8", "8", "4", "8t")),
                 "octaves": random.choice((1, 2, 2, 3)),
                 "gate": round(random.uniform(0.3, 0.8), 2),
                 "base_vel": random.randint(80, 105),
@@ -272,6 +277,9 @@ def _build_lead_voice() -> VoiceConfig:
             "base_vel": random.randint(80, 100),
             "passing_prob": round(random.uniform(0.0, 0.35), 2),
             "palette": random.choice(_PALETTES),
+            "subdivision": random.choice(("16", "16", "8", "16t")),
+            "triplet_prob": round(random.uniform(0.0, 0.25), 2),
+            "triplet_subdiv": "16t",
         },
     )
 

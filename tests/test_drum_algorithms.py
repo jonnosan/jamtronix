@@ -15,16 +15,16 @@ from jtx.engine.events import NoteOff, NoteOn
 from jtx.model.song import Key
 
 
-def _ctx(pattern_knobs: dict[str, object]) -> BarContext:
+def _ctx(pattern_knobs: dict[str, object], *, bar_index: int = 0, seed: int = 0) -> BarContext:
     return BarContext(
-        bar_index=0,
-        tick_offset=0,
+        bar_index=bar_index,
+        tick_offset=bar_index * 1920,
         ticks_per_bar=1920,  # 4/4 at PPQ 480
         tempo_bpm=120.0,
         ppq=480,
         key=Key(tonic="A", scale="minor"),
         pattern_knobs=pattern_knobs,
-        rng=random.Random(0),
+        rng=random.Random(seed),
     )
 
 
@@ -184,3 +184,93 @@ def test_drum_one_shot_emits_on_euclid_distribution() -> None:
 def test_drum_one_shot_zero_pulses_emits_nothing() -> None:
     crash = DrumOneShot(midi_channel=10, midi_note=49)
     assert crash.generate_bar(_ctx({"pulses": 0})) == []
+
+
+# ----------------------------------------------- triplet rolls + polyrhythm
+
+
+def test_drum_pattern_roll_last_beat_fires_every_bar() -> None:
+    hat = DrumPattern(piece="hat", midi_channel=10, midi_note=42)
+    events = hat.generate_bar(
+        _ctx(
+            {
+                "style": "euclid",
+                "pulses": 0,
+                "roll_pos": "last_beat",
+                "roll_subdiv": "16t",
+                "roll_depth": 1.0,
+            }
+        )
+    )
+    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
+    # 0 main pulses + roll covers beat 4 = ticks 1440..1920 at 16t spacing 80.
+    expected_roll_ticks = [1440 + i * 80 for i in range(6)]
+    assert [e.tick for e in note_ons] == expected_roll_ticks
+
+
+def test_drum_pattern_roll_last_bar_of_4_only_on_bar3() -> None:
+    hat = DrumPattern(piece="hat", midi_channel=10, midi_note=42)
+    # Disable polyrhythm + ghost; pulses=0 so only the roll appears.
+    knobs = {
+        "style": "euclid",
+        "pulses": 0,
+        "roll_pos": "last_bar_of_4",
+        "roll_subdiv": "16t",
+        "roll_depth": 1.0,
+    }
+    bar0 = hat.generate_bar(_ctx(knobs, bar_index=0))
+    bar3 = hat.generate_bar(_ctx(knobs, bar_index=3))
+    assert [e for e in bar0 if isinstance(e, NoteOn)] == []
+    note_ons_3 = [e for e in bar3 if isinstance(e, NoteOn)]
+    assert len(note_ons_3) == 6  # 6 16t positions in beat 4
+
+
+def test_drum_pattern_polyrhythm_triplet_grid() -> None:
+    hat = DrumPattern(piece="hat", midi_channel=10, midi_note=42)
+    events = hat.generate_bar(
+        _ctx(
+            {
+                "style": "four_floor",  # not used for hat — just need a base
+                "pulses": 0,
+                "polyrhythm": 12,
+                "polyrhythm_subdiv": "8t",
+            }
+        )
+    )
+    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
+    # 8t polyrhythm with 12 pulses = continuous 8th-triplet hat layer.
+    # Beats 1+3 (ticks 0 and 960) overlap four-on-the-floor hat skeleton if
+    # any; hat piece has 4 main hits at 0/480/960/1440. The 8t grid at
+    # 160-tick spacing produces 12 positions; positions at 0 and 960
+    # collide with four-floor and get filtered, leaving 10 poly hits + 4 main.
+    # But hat piece isn't four_floor by default — style=four_floor forces it.
+    # Main hits land at 0/480/960/1440. 8t positions: 0,160,320,480,640,
+    # 800,960,1120,1280,1440,1600,1760. Overlap at 0/480/960/1440 (4 collisions).
+    # 12 - 4 = 8 poly hits.
+    assert len(note_ons) == 4 + 8
+
+
+def test_drum_one_shot_roll_last_bar_of_8_only_fires_on_bar7() -> None:
+    tom = DrumOneShot(midi_channel=10, midi_note=45)
+    knobs = {
+        "pulses": 0,
+        "roll_pos": "last_bar_of_8",
+        "roll_subdiv": "16t",
+        "roll_depth": 1.0,
+    }
+    bar0 = tom.generate_bar(_ctx(knobs, bar_index=0))
+    bar7 = tom.generate_bar(_ctx(knobs, bar_index=7))
+    assert [e for e in bar0 if isinstance(e, NoteOn)] == []
+    note_ons_7 = [e for e in bar7 if isinstance(e, NoteOn)]
+    assert len(note_ons_7) == 6
+    # Velocity ramps up across the fill (crescendo).
+    velocities = [e.velocity for e in note_ons_7]
+    assert velocities[0] < velocities[-1]
+
+
+def test_drum_one_shot_roll_none_is_no_op() -> None:
+    tom = DrumOneShot(midi_channel=10, midi_note=45)
+    events = tom.generate_bar(_ctx({"pulses": 2, "offset": 4, "roll_pos": "none"}))
+    note_ons = [e for e in events if isinstance(e, NoteOn)]
+    # Just the two euclid hits, no roll.
+    assert [e.tick for e in note_ons] == [480, 1440]

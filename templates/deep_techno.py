@@ -60,8 +60,15 @@ def build(title: str, setup_ref: str) -> Song:
                 "velocity": random.randint(68, 84),
                 "vel_curve": random.choice(("flat", "drift", "valley")),
                 "vel_curve_depth": round(random.uniform(0.08, 0.22), 2),
+                # Signature deep-techno: continuous triplet hat polyrhythm
+                # and an occasional triplet roll fill into the bar of 8.
+                "polyrhythm": random.choice((0, 8, 8, 12)),
+                "polyrhythm_subdiv": random.choice(("16", "8t", "8t")),
+                "roll_pos": random.choice(("none", "none", "last_bar_of_8")),
+                "roll_subdiv": "16t",
+                "roll_depth": round(random.uniform(0.5, 0.75), 2),
             },
-            feel={"swing": round(random.uniform(0.08, 0.16), 2)},
+            feel={"swing": round(random.uniform(0.15, 0.35), 2)},
         ),
         "ohh": VoiceConfig(
             algorithm="drum_one_shot",
@@ -92,7 +99,7 @@ def build(title: str, setup_ref: str) -> Song:
                 "gate": round(random.uniform(0.25, 0.5), 2),
                 "drop_prob": round(random.uniform(0.25, 0.55), 2),
             },
-            feel={"swing": round(random.uniform(0.04, 0.12), 2), "humanize": 8},
+            feel={"swing": round(random.uniform(0.10, 0.25), 2), "humanize": 8},
         ),
         "lead": VoiceConfig(
             algorithm="melodic_line",
@@ -102,6 +109,8 @@ def build(title: str, setup_ref: str) -> Song:
                 "base_vel": 80,
                 "passing_prob": round(random.uniform(0.15, 0.3), 2),
                 "palette": random.choice(("pentatonic", "triad", "tones_only")),
+                "triplet_prob": round(random.uniform(0.0, 0.15), 2),
+                "triplet_subdiv": "16t",
             },
         ),
         "filter": VoiceConfig(
