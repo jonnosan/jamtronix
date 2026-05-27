@@ -71,7 +71,7 @@
       "kit_map": {}
     },
     {
-      "name": "tonic_ref",
+      "name": "root_ref",
       "type": "mono",
       "default_role": "lead",
       "midi_channel": 16,

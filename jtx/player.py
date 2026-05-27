@@ -40,14 +40,13 @@ from jtx.algorithms import (
     AcidBass,
     Arp,
     CCEnvelope,
-    ChordPulse,
     ChordStab,
     DrumOneShot,
     DrumPattern,
     MelodicLine,
+    RootPulse,
     SubDrone,
     SustainedChord,
-    TonicPulse,
     VoiceFollower,
 )
 from jtx.engine.algorithm import Algorithm
@@ -101,10 +100,8 @@ def instantiate_algorithm(algorithm_name: str, voice_slot: VoiceSlot) -> Algorit
         return CCEnvelope(midi_channel=ch)
     if algorithm_name == "voice_follower":
         return VoiceFollower(midi_channel=ch)
-    if algorithm_name == "tonic_pulse":
-        return TonicPulse(midi_channel=ch)
-    if algorithm_name == "chord_pulse":
-        return ChordPulse(midi_channel=ch)
+    if algorithm_name == "root_pulse":
+        return RootPulse(midi_channel=ch)
     raise ValueError(f"unknown algorithm: {algorithm_name!r}")
 
 
