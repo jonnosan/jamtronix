@@ -17,8 +17,11 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from jtx.algorithms._chords import QUALITY_CHOICES
+from jtx.algorithms._contours import CONTOUR_NAMES
 from jtx.algorithms._cycle import CYCLE_BARS_CHOICES
 from jtx.algorithms._palettes import PALETTE_CHOICES
+from jtx.algorithms._phrase_shapes import PHRASE_SHAPE_CHOICES, PROGRESSION_MODES
+from jtx.algorithms._rhythm_templates import TEMPLATE_NAMES
 from jtx.model import VoiceType
 
 KnobKind = Literal["float", "int", "choice", "list_int", "list_str", "string"]
@@ -519,6 +522,165 @@ _MELODIC_LINE = (
             "Compose with pitch_cycle_bars for a fully looping phrase. "
             "Not v1 LFO target."
         ),
+    ),
+)
+
+_MOTIF_PHRASE = (
+    KnobSpec(
+        "phrase_shape",
+        "choice",
+        default="A_A_A_B",
+        choices=PHRASE_SHAPE_CHOICES,
+        description=(
+            "Phrase template: which bars are A, A', A'', B. "
+            "'random_walk' falls back to per-bar fresh motifs (no phrase structure). "
+            "Not v1 LFO target."
+        ),
+    ),
+    KnobSpec(
+        "phrase_length_bars",
+        "int",
+        default=4,
+        minimum=2,
+        maximum=8,
+        description=(
+            "Bars per phrase cycle. Also the hold period for the motif content RNG. "
+            "LFO target — int range not scaled in v1."
+        ),
+    ),
+    KnobSpec(
+        "motif_length_beats",
+        "int",
+        default=1,
+        minimum=1,
+        maximum=4,
+        description=(
+            "Beats per motif cell. Cell repeats inside the bar; trailing partial truncated. "
+            "LFO target — int range not scaled in v1."
+        ),
+    ),
+    KnobSpec(
+        "rhythm_template",
+        "choice",
+        default="auto",
+        choices=("auto",) + TEMPLATE_NAMES,
+        description=(
+            "Rhythm cell. 'auto' lets motif_complexity + phrase RNG pick. Not v1 LFO target."
+        ),
+    ),
+    KnobSpec(
+        "motif_complexity",
+        "float",
+        default=0.4,
+        minimum=0.0,
+        maximum=1.0,
+        description=(
+            "Biases 'auto' template / contour selection toward busier shapes. LFO-friendly."
+        ),
+    ),
+    KnobSpec(
+        "contour",
+        "choice",
+        default="auto",
+        choices=("auto",) + CONTOUR_NAMES,
+        description=(
+            "Pitch curve through palette positions. 'auto' uses motif_complexity. "
+            "Not v1 LFO target."
+        ),
+    ),
+    KnobSpec(
+        "palette",
+        "choice",
+        default="tones_only",
+        choices=PALETTE_CHOICES,
+        description="Scale-degree pool the motif draws from. Not v1 LFO target.",
+    ),
+    KnobSpec(
+        "density",
+        "float",
+        default=0.7,
+        minimum=0.0,
+        maximum=1.0,
+        description=(
+            "Post-template fire probability per position (1.0 = all template hits fire). "
+            "LFO-friendly."
+        ),
+    ),
+    KnobSpec(
+        "variation_depth",
+        "float",
+        default=0.5,
+        minimum=0.0,
+        maximum=1.0,
+        description=(
+            "A' / A'' transform intensity. Higher = more transforms composed in. LFO-friendly."
+        ),
+    ),
+    KnobSpec(
+        "b_section_difference",
+        "float",
+        default=0.7,
+        minimum=0.0,
+        maximum=1.0,
+        description=(
+            "How far the B-section motif departs from A "
+            "(0 = contour swap; 0.5 = tension transpose; 1 = full re-roll). "
+            "LFO-friendly."
+        ),
+    ),
+    KnobSpec(
+        "progression_mode",
+        "choice",
+        default="static",
+        choices=PROGRESSION_MODES,
+        description=(
+            "Cross-bar scale-step transpose per phrase-slot. Scale-aware (not chromatic). "
+            "Not v1 LFO target."
+        ),
+    ),
+    KnobSpec(
+        "progression_range",
+        "int",
+        default=4,
+        minimum=1,
+        maximum=7,
+        description=(
+            "Max scale-step span for the progression. LFO target — int range not scaled in v1."
+        ),
+    ),
+    KnobSpec(
+        "octave",
+        "int",
+        default=0,
+        minimum=-3,
+        maximum=3,
+        description=(
+            "Register shift (0 = octave 4 lead range). LFO target — int range not scaled in v1."
+        ),
+    ),
+    KnobSpec(
+        "gate",
+        "float",
+        default=0.5,
+        minimum=0.05,
+        maximum=2.0,
+        description="Note length as a fraction of position spacing. LFO-friendly.",
+    ),
+    KnobSpec(
+        "base_vel",
+        "int",
+        default=95,
+        minimum=0,
+        maximum=127,
+        description=("Baseline MIDI velocity. LFO target — int range not scaled in v1."),
+    ),
+    KnobSpec(
+        "intensity",
+        "float",
+        default=1.0,
+        minimum=0.0,
+        maximum=2.0,
+        description="Velocity multiplier — >1 punches harder, <1 softer. LFO-friendly.",
     ),
 )
 
@@ -1263,6 +1425,7 @@ ALGORITHMS: dict[str, AlgorithmMeta] = {
     "sub_drone": AlgorithmMeta("sub_drone", ("mono",), _SUB_DRONE),
     "reese_bass": AlgorithmMeta("reese_bass", ("mono",), _REESE_BASS),
     "melodic_line": AlgorithmMeta("melodic_line", ("mono",), _MELODIC_LINE),
+    "motif_phrase": AlgorithmMeta("motif_phrase", ("mono",), _MOTIF_PHRASE),
     "arp": AlgorithmMeta("arp", ("mono",), _ARP),
     "noise_riser": AlgorithmMeta("noise_riser", ("mono",), _NOISE_RISER),
     "sustained_chord": AlgorithmMeta("sustained_chord", ("poly",), _SUSTAINED_CHORD),
