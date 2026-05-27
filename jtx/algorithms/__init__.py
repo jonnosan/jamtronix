@@ -8,6 +8,7 @@ from jtx.algorithms.drum_pattern import DrumPattern
 from jtx.algorithms.melodic_line import MelodicLine
 from jtx.algorithms.sub_drone import SubDrone
 from jtx.algorithms.sustained_chord import ChordStab, SustainedChord
+from jtx.algorithms.voice_follower import VoiceFollower
 
 __all__ = [
     "AcidBass",
@@ -20,4 +21,5 @@ __all__ = [
     "MelodicLine",
     "SubDrone",
     "SustainedChord",
+    "VoiceFollower",
 ]
