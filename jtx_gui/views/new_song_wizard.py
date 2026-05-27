@@ -104,9 +104,13 @@ class NewSongWizard(QDialog):
 
     _STYLE_BLURBS = {
         "blank": "Empty song — no voices, one intro part. Compose from scratch.",
-        "acid": "Four-on-floor, 303 lead bass, chord stab, filter LFO. 126 BPM A minor.",
-        "deep_techno": "Sub drone, dub stab, sparse top-end. 122 BPM C minor.",
-        "psytrance": "Rolling offbeat bass, fast arp leads. 145 BPM F# minor.",
+        "acid": "Four-on-floor, 303 lead bass, chord stab, filter LFO. Minor scale, 122–130 BPM.",
+        "deep_techno": "Sub drone, dub stab, sparse top-end. Minor scale, 118–124 BPM.",
+        "psytrance": "Rolling offbeat bass, fast arp leads. Minor scale, 140–148 BPM.",
+        "wildcard": (
+            "Everything randomised — key, scale, tempo, progression, algorithms, knobs. "
+            "Kick stays four-on-the-floor; everything else is up for grabs."
+        ),
     }
 
     def __init__(self, parent: QWidget | None = None) -> None:

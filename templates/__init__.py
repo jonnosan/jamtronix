@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from jtx.model import Song
-from templates import acid, blank, deep_techno, psytrance
+from templates import acid, blank, deep_techno, psytrance, wildcard
 
 StyleBuilder = Callable[[str, str], Song]
 
@@ -23,6 +23,7 @@ STYLES: dict[str, StyleBuilder] = {
     "acid": acid.build,
     "deep_techno": deep_techno.build,
     "psytrance": psytrance.build,
+    "wildcard": wildcard.build,
 }
 
 
