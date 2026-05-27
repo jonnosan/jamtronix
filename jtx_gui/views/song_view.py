@@ -44,6 +44,7 @@ from jtx_gui.algorithm_meta import (
     KnobSpec,
     algorithms_for,
 )
+from jtx_gui.progressions import FAMILY_CHOICES, degrees_for, lookup, rotation_count
 from jtx_gui.state import AppState
 from jtx_gui.widgets.collapsible import CollapsibleSection
 from jtx_gui.widgets.knob import KnobWidget
@@ -411,9 +412,44 @@ class _HeaderPanel(QFrame):
         self._tempo.valueChanged.connect(self._on_tempo)
 
         prog = song.chord_progression or ChordProgression(degrees=[], bars_per_chord=4)
-        self._prog_degrees = QLineEdit(" ".join(prog.degrees))
-        self._prog_degrees.setPlaceholderText("e.g. i VI III VII")
-        self._prog_degrees.textChanged.connect(self._on_progression)
+        # Detect which named family + rotation produces the current
+        # degree list, so the picker opens on a meaningful selection.
+        match = lookup(prog.degrees)
+        if match is None:
+            # Song has a hand-written progression that doesn't match any
+            # bundled family — default the combo to the first family so
+            # twisting the rotation always feels musical, but only commit
+            # the change once the user actually touches the combo.
+            self._family = next(iter(FAMILY_CHOICES))
+            self._rotation = 0
+            initial_family_matches_degrees = False
+        else:
+            self._family, self._rotation = match
+            initial_family_matches_degrees = True
+
+        self._prog_family = QComboBox()
+        self._prog_family.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        for fname in FAMILY_CHOICES:
+            self._prog_family.addItem(fname, fname)
+        self._prog_family.setCurrentText(self._family)
+        self._prog_family.currentTextChanged.connect(self._on_family_changed)
+
+        self._prog_rotation = QSpinBox()
+        self._prog_rotation.setRange(0, max(0, rotation_count(self._family) - 1))
+        self._prog_rotation.setValue(self._rotation)
+        self._prog_rotation.setPrefix("rot ")
+        self._prog_rotation.valueChanged.connect(self._on_rotation_changed)
+
+        self._prog_preview = QLabel(self._format_preview(prog.degrees))
+        self._prog_preview.setStyleSheet(
+            f"font-family: {theme.MONO_FONT_FAMILY}; color: {theme.INK_HOT.name()};"
+        )
+
+        # Suppress the no-op save when the song originally had a custom
+        # progression that happens to match no family — keep the list
+        # untouched until the user actually edits it.
+        self._suppress_initial_resync = not initial_family_matches_degrees
+
         self._prog_bars = QSpinBox()
         self._prog_bars.setRange(1, 64)
         self._prog_bars.setValue(prog.bars_per_chord)
@@ -436,8 +472,13 @@ class _HeaderPanel(QFrame):
         _add_labeled(grid, 2, 2, "SCALE", self._scale, span=1)
         _add_labeled(grid, 3, 0, "METER", self._meter, span=1)
         _add_labeled(grid, 3, 1, "TEMPO", self._tempo, span=1)
-        _add_labeled(grid, 4, 0, "PROGRESSION", self._prog_degrees, span=2)
+        prog_row = QHBoxLayout()
+        prog_row.setSpacing(8)
+        prog_row.addWidget(self._prog_family)
+        prog_row.addWidget(self._prog_rotation)
+        _add_labeled(grid, 4, 0, "PROGRESSION", _wrap_layout(prog_row), span=2)
         _add_labeled(grid, 4, 2, "BARS / CHORD", self._prog_bars, span=1)
+        _add_labeled(grid, 5, 0, "DEGREES", self._prog_preview, span=3)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(14, 12, 14, 14)
@@ -479,26 +520,50 @@ class _HeaderPanel(QFrame):
         self._song.tempo = bpm
         self._on_dirty()
 
-    def _on_progression(self, text: str) -> None:
-        degrees = [d for d in text.split() if d]
+    def _on_family_changed(self, family: str) -> None:
+        self._family = family
+        # Clamp existing rotation to the new family's range.
+        max_rot = max(0, rotation_count(family) - 1)
+        self._prog_rotation.blockSignals(True)
+        self._prog_rotation.setRange(0, max_rot)
+        if self._rotation > max_rot:
+            self._rotation = 0
+            self._prog_rotation.setValue(0)
+        self._prog_rotation.blockSignals(False)
+        self._sync_progression_to_song()
+
+    def _on_rotation_changed(self, rotation: int) -> None:
+        self._rotation = rotation
+        self._sync_progression_to_song()
+
+    def _sync_progression_to_song(self) -> None:
+        degrees = degrees_for(self._family, self._rotation)
+        bars = self._prog_bars.value()
         if self._song.chord_progression is None:
-            self._song.chord_progression = ChordProgression(
-                degrees=degrees,
-                bars_per_chord=self._prog_bars.value(),
-            )
+            self._song.chord_progression = ChordProgression(degrees=degrees, bars_per_chord=bars)
         else:
             self._song.chord_progression.degrees = degrees
+            self._song.chord_progression.bars_per_chord = bars
+        self._prog_preview.setText(self._format_preview(degrees))
+        if self._suppress_initial_resync:
+            # First user-triggered sync — clear the suppression so subsequent
+            # rotations still fire dirty.
+            self._suppress_initial_resync = False
         self._on_dirty()
 
     def _on_progression_bars(self, n: int) -> None:
         if self._song.chord_progression is None:
             self._song.chord_progression = ChordProgression(
-                degrees=[d for d in self._prog_degrees.text().split() if d],
+                degrees=degrees_for(self._family, self._rotation),
                 bars_per_chord=n,
             )
         else:
             self._song.chord_progression.bars_per_chord = n
         self._on_dirty()
+
+    @staticmethod
+    def _format_preview(degrees: list[str]) -> str:
+        return "  ·  ".join(degrees) if degrees else "(none)"
 
     # ----- helpers ---------------------------------------------------------
 
