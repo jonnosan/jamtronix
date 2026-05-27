@@ -27,7 +27,6 @@ from jtx.model import ValidationError
 from jtx_gui import theme
 from jtx_gui.state import AppState
 from jtx_gui.transport import TransportService
-from jtx_gui.views.live_view import LiveView
 from jtx_gui.views.new_song_wizard import NewSongWizard
 from jtx_gui.views.parts_view import PartsView
 from jtx_gui.views.setup_editor import SetupEditor
@@ -58,16 +57,9 @@ class MainWindow(QMainWindow):
 
         self._stack = QStackedWidget(self)
         self._song_view = SongView(self._state, self)
-        self._parts_view = PartsView(self._state, self)
-        self._live_view = LiveView(
-            self._state,
-            transport=self._transport,
-            playback_prefs=lambda: (self._toolbar.clock_mode, self._toolbar.port_override),
-            parent=self,
-        )
+        self._parts_view = PartsView(self._state, transport=self._transport, parent=self)
         self._stack.addWidget(self._song_view)
         self._stack.addWidget(self._parts_view)
-        self._stack.addWidget(self._live_view)
 
         sidebar = self._build_sidebar()
         self._toolbar = TopToolbar(state=self._state, transport=self._transport, parent=self)
@@ -109,7 +101,7 @@ class MainWindow(QMainWindow):
         )
         layout.addWidget(brand)
 
-        labels = ("SONG", "PARTS", "LIVE")
+        labels = ("SONG", "PARTS")
         self._nav_buttons: list[QPushButton] = []
         for index, text in enumerate(labels):
             btn = QPushButton(text, sidebar)
@@ -166,14 +158,16 @@ class MainWindow(QMainWindow):
     # ----- file actions ----------------------------------------------------
 
     def new_song_wizard(self) -> bool:
-        """Show the new-song wizard; if it produces a song, open it."""
+        """Show the new-song wizard; if it produces a song, adopt it in-memory."""
         wizard = NewSongWizard(self)
         if wizard.exec() != NewSongWizard.DialogCode.Accepted:
             return False
-        path = wizard.created_path()
-        if path is None:
+        result = wizard.result_song()
+        if result is None:
             return False
-        return self.open_song(path)
+        song, setup = result
+        self._state.adopt(song=song, setup=setup)
+        return True
 
     def open_song_dialog(self) -> bool:
         settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
@@ -286,22 +280,3 @@ class MainWindow(QMainWindow):
 
     def _sync_title(self) -> None:
         self.setWindowTitle(self._state.display_title())
-
-
-class _Placeholder(QWidget):
-    def __init__(self, title: str, message: str) -> None:
-        super().__init__()
-        layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_lbl = QLabel(title)
-        title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_lbl.setStyleSheet(
-            f"color: {theme.INK_HOT.name()}; font-size: 24pt;"
-            "font-weight: bold; letter-spacing: 6px;"
-        )
-        msg = QLabel(message)
-        msg.setWordWrap(True)
-        msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        msg.setStyleSheet(f"color: {theme.INK_DIM.name()}; font-size: 12pt; padding-top: 16px;")
-        layout.addWidget(title_lbl)
-        layout.addWidget(msg)

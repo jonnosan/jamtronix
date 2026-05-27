@@ -48,8 +48,8 @@ from jtx_gui.algorithm_meta import (
     algorithms_for,
 )
 from jtx_gui.state import AppState
+from jtx_gui.transport import TransportService
 from jtx_gui.views.song_view import _SCALES, _TONICS, _clear_layout, _infer_voice_type
-from jtx_gui.widgets.arrangement import ArrangementEditor
 from jtx_gui.widgets.collapsible import CollapsibleSection
 from jtx_gui.widgets.override import OverrideField, OverrideRow
 
@@ -57,12 +57,28 @@ _KNOBS_PER_ROW = 4
 
 
 class PartsView(QWidget):
-    """Top-level Parts editor pane."""
+    """Top-level Parts editor pane.
 
-    def __init__(self, state: AppState, parent: QWidget | None = None) -> None:
+    Layout: left = parts list with per-row PLAY + LOOP toggles + active
+    highlight (driven by ``TransportService.part_changed``); right =
+    detail pane for the selected part's per-voice overrides. The
+    Live view is gone; transport controls live in the top toolbar
+    and the arrangement now comes from natural parts order (advance
+    or loop per ``Part.loop``).
+    """
+
+    def __init__(
+        self,
+        state: AppState,
+        *,
+        transport: TransportService | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self._state = state
+        self._transport = transport
         self._current_part: str | None = None
+        self._active_part: str | None = None
 
         self._empty_label = QLabel("Open a .jtx file from the File menu to begin.")
         self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -72,7 +88,8 @@ class PartsView(QWidget):
 
         # ----- list sidebar -----
         self._list = QListWidget()
-        self._list.setMaximumWidth(220)
+        self._list.setMinimumWidth(320)
+        self._list.setMaximumWidth(380)
         self._list.itemSelectionChanged.connect(self._on_select_part)
 
         add_btn = QPushButton("ADD")
@@ -115,18 +132,12 @@ class PartsView(QWidget):
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
 
-        # ----- bottom strip placeholder -----
-        self._arrangement_holder = QWidget()
-        self._arrangement_holder_layout = QVBoxLayout(self._arrangement_holder)
-        self._arrangement_holder_layout.setContentsMargins(0, 0, 0, 0)
-
         # ----- assemble -----
         self._content = QWidget()
         content_layout = QVBoxLayout(self._content)
         content_layout.setContentsMargins(12, 12, 12, 12)
         content_layout.setSpacing(10)
         content_layout.addWidget(splitter, 1)
-        content_layout.addWidget(self._arrangement_holder, 0)
         self._content.setVisible(False)
 
         root = QVBoxLayout(self)
@@ -135,6 +146,9 @@ class PartsView(QWidget):
         root.addWidget(self._content)
 
         self._state.song_changed.connect(self._refresh_part_list)
+        if self._transport is not None:
+            self._transport.part_changed.connect(self._on_transport_part_changed)
+            self._transport.stopped.connect(self._on_transport_stopped)
         self._refresh_part_list()
 
     # ----- list management -------------------------------------------------
@@ -151,10 +165,19 @@ class PartsView(QWidget):
         previous = self._current_part
         self._list.blockSignals(True)
         self._list.clear()
-        for name in song.parts.keys():
-            item = QListWidgetItem(name)
+        for name, part in song.parts.items():
+            item = QListWidgetItem()
             item.setData(Qt.ItemDataRole.UserRole, name)
+            row = _PartListRow(
+                name=name,
+                part=part,
+                on_play=self._on_play_part,
+                on_loop_toggle=self._on_loop_toggle,
+                on_bars_changed=self._on_bars_changed,
+            )
+            item.setSizeHint(row.sizeHint())
             self._list.addItem(item)
+            self._list.setItemWidget(item, row)
         self._list.blockSignals(False)
 
         # Select previous if still present; else first.
@@ -166,11 +189,7 @@ class PartsView(QWidget):
             self._current_part = None
             _clear_layout(self._detail_layout)
 
-        # (Re)build the arrangement editor; it's tied to a specific Song
-        # instance, so we rebuild on every refresh.
-        _clear_layout(self._arrangement_holder_layout)
-        editor = ArrangementEditor(song=song, on_dirty=self._state.mark_dirty)
-        self._arrangement_holder_layout.addWidget(editor)
+        self._restyle_rows()
 
     def _select_by_name(self, name: str) -> None:
         for i in range(self._list.count()):
@@ -189,6 +208,50 @@ class PartsView(QWidget):
             return
         self._current_part = name
         self._rebuild_detail()
+
+    def _restyle_rows(self) -> None:
+        for i in range(self._list.count()):
+            item = self._list.item(i)
+            widget = self._list.itemWidget(item)
+            if isinstance(widget, _PartListRow):
+                widget.set_active(widget.part_name == self._active_part)
+
+    def _on_play_part(self, name: str) -> None:
+        if self._transport is None:
+            return
+        if self._transport.is_running:
+            self._transport.queue_part(name)
+        else:
+            QMessageBox.information(
+                self,
+                "Not playing",
+                "Hit PLAY in the toolbar to start playback; the parts list "
+                "queues jumps once the transport is running.",
+            )
+
+    def _on_loop_toggle(self, name: str, value: bool) -> None:
+        song = self._state.song
+        if song is None or name not in song.parts:
+            return
+        song.parts[name].loop = value
+        self._state.mark_dirty()
+
+    def _on_bars_changed(self, name: str, value: int) -> None:
+        song = self._state.song
+        if song is None or name not in song.parts:
+            return
+        if song.parts[name].bars == value:
+            return
+        song.parts[name].bars = value
+        self._state.mark_dirty()
+
+    def _on_transport_part_changed(self, name: str) -> None:
+        self._active_part = name
+        self._restyle_rows()
+
+    def _on_transport_stopped(self) -> None:
+        self._active_part = None
+        self._restyle_rows()
 
     def _on_add_part(self) -> None:
         song = self._state.song
@@ -722,3 +785,62 @@ def _make_feel_toggle(panel: _VoiceOverridePanel, name: str) -> Callable[[bool, 
 
 def _make_feel_setter(panel: _VoiceOverridePanel, name: str) -> Callable[[Any], None]:
     return lambda value: panel._set_feel_value(name, value)
+
+
+class _PartListRow(QFrame):
+    """One row in the parts list — name + bars + PLAY + LOOP."""
+
+    def __init__(
+        self,
+        *,
+        name: str,
+        part: Part,
+        on_play: Callable[[str], None],
+        on_loop_toggle: Callable[[str, bool], None],
+        on_bars_changed: Callable[[str, int], None],
+    ) -> None:
+        super().__init__()
+        self.part_name = name
+        self.setAutoFillBackground(True)
+
+        name_lbl = QLabel(name.upper())
+        name_lbl.setStyleSheet(f"color: {theme.INK.name()}; font-weight: bold; font-size: 11pt;")
+
+        bars = QSpinBox()
+        bars.setRange(1, 1024)
+        bars.setValue(max(1, part.bars))
+        bars.setSuffix(" bars")
+        bars.setMaximumWidth(96)
+        bars.valueChanged.connect(lambda v, n=name: on_bars_changed(n, v))
+
+        play_btn = QPushButton("PLAY")
+        play_btn.setMaximumWidth(72)
+        play_btn.clicked.connect(lambda _checked=False, n=name: on_play(n))
+
+        self._loop_chk = QCheckBox("LOOP")
+        self._loop_chk.setChecked(part.loop)
+        self._loop_chk.setStyleSheet(
+            f"QCheckBox {{ color: {theme.INK_DIM.name()}; }} "
+            f"QCheckBox:checked {{ color: {theme.INK_HOT.name()}; }}"
+        )
+        self._loop_chk.toggled.connect(lambda v, n=name: on_loop_toggle(n, v))
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(8)
+        layout.addWidget(name_lbl, 1)
+        layout.addWidget(bars)
+        layout.addWidget(play_btn)
+        layout.addWidget(self._loop_chk)
+
+        self.set_active(False)
+
+    def set_active(self, active: bool) -> None:
+        """Toggle the 'now playing' highlight."""
+        if active:
+            self.setStyleSheet(
+                f"QFrame {{ background-color: {theme.ACCENT_GREEN.name()}; }}"
+                f"QLabel {{ color: {theme.PANEL_BG.name()}; }}"
+            )
+        else:
+            self.setStyleSheet("")

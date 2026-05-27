@@ -116,6 +116,7 @@ def _part_from_dict(d: dict[str, Any]) -> Part:
         voice_overrides={
             name: _voice_override_from_dict(ov) for name, ov in d.get("voice_overrides", {}).items()
         },
+        loop=bool(d.get("loop", False)),
     )
 
 
