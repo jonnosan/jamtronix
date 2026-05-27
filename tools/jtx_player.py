@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Any
 
 from jtx.engine.clock_source import (
     AbletonLinkClock,
@@ -85,6 +86,63 @@ def _preflight_midi_port(port_name: str, parser: argparse.ArgumentParser) -> Non
             f"  Available ports:\n    {listing}\n"
             "  Use --port to pick one, or --list-ports to see them all."
         )
+
+
+def _log_bar_summary(player: SongPlayer, local_bar: int, abs_bar: int, events: list[Event]) -> None:
+    """One-line per-bar summary for --verbose."""
+    from collections import Counter
+
+    from jtx.engine.events import NoteOn
+
+    chord_root = player.root_provider.root_semitones_for_bar(local_bar)
+    counts: Counter[int] = Counter()
+    for ev in events:
+        if isinstance(ev, NoteOn):
+            counts[ev.channel] += 1
+    ch_summary = " ".join(f"ch{c}:{n}" for c, n in sorted(counts.items()))
+    abs_marker = f" abs={abs_bar}" if abs_bar != local_bar else ""
+    print(
+        f"bar {local_bar} [{player.part_name}] chord_root=+{chord_root}st"
+        f"{abs_marker} — {ch_summary or '(no notes)'}"
+    )
+
+
+class _DebugSink:
+    """Wraps a real sink, printing each event before forwarding."""
+
+    def __init__(self, inner: object) -> None:
+        # Use a sentinel any-typed attribute so mypy doesn't insist on a
+        # concrete Sink type — keeps this dev tool free of an extra
+        # interface declaration.
+        self._inner: Any = inner
+        self.ppq = getattr(inner, "ppq", 480)
+
+    def start(self) -> None:
+        self._inner.start()
+
+    def emit(self, event: Event) -> None:
+        from jtx.engine.events import ControlChange, NoteOff, NoteOn, PitchBend
+
+        if isinstance(event, NoteOn):
+            kind = "NoteOn "
+            extra = f"note={event.note:3d} vel={event.velocity:3d}"
+        elif isinstance(event, NoteOff):
+            kind = "NoteOff"
+            extra = f"note={event.note:3d}"
+        elif isinstance(event, ControlChange):
+            kind = "CC     "
+            extra = f"cc={event.cc:3d} val={event.value:3d}"
+        elif isinstance(event, PitchBend):
+            kind = "Bend   "
+            extra = f"value={event.value:+5d}"
+        else:  # pragma: no cover
+            kind = type(event).__name__
+            extra = ""
+        print(f"  t={event.tick:5d} {kind} ch={event.channel:2d} {extra}")
+        self._inner.emit(event)
+
+    def stop(self) -> None:
+        self._inner.stop()
 
 
 def _build_clock(
@@ -174,6 +232,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="List available MIDI output ports and exit",
     )
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Per-bar summary: bar index, part, chord root, NoteOn count per channel",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Per-event detail (every NoteOn/NoteOff/CC). Implies --verbose. Noisy.",
+    )
 
     args = parser.parse_args(argv)
 
@@ -234,9 +303,14 @@ def main(argv: list[str] | None = None) -> int:
         # Should be unreachable: the scheduler stops at bar_count.
         raise IndexError(f"bar {abs_bar} past end of sequence")
 
+    verbose = args.verbose or args.debug
+
     def bar_gen(abs_bar: int) -> list[Event]:
         player, local_bar = resolve_bar(abs_bar)
-        return player.events_for_bar(local_bar)
+        events = player.events_for_bar(local_bar)
+        if verbose:
+            _log_bar_summary(player, local_bar, abs_bar, events)
+        return events
 
     if args.render is not None:
         if args.loop:
@@ -267,6 +341,7 @@ def main(argv: list[str] | None = None) -> int:
         subprocess.run(["open", str(daw_path)], check=False)
 
     sink = RealtimeMidiSink(port_name=port_name)
+    runtime_sink: Any = _DebugSink(sink) if args.debug else sink
 
     mode: ClockMode = args.clock or setup.clock_mode
     midi_clock_in = args.midi_clock_in or setup.midi_clock_in_port
@@ -294,7 +369,7 @@ def main(argv: list[str] | None = None) -> int:
         f"{bpm:.1f} BPM via {port_name!r} (clock: {mode}; Ctrl-C to stop)"
     )
     try:
-        Scheduler(clock, sink).run(
+        Scheduler(clock, runtime_sink).run(
             bar_count=bar_count, ticks_per_bar=ticks_per_bar, bar_generator=bar_gen
         )
     except KeyboardInterrupt:

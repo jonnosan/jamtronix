@@ -55,6 +55,7 @@ from jtx.engine.events import Event
 from jtx.engine.feel import apply_feel
 from jtx.engine.lfo import apply_lfos_to_bar
 from jtx.engine.meter import ticks_per_bar
+from jtx.engine.mix import apply_mix_pass
 from jtx.engine.root_provider import ProgressionRootProvider, RootProvider
 from jtx.model.setup import Setup, VoiceSlot
 from jtx.model.song import KnobDict, Song, VoiceConfig, VoiceOverride
@@ -170,6 +171,14 @@ class SongPlayer:
         # dependency order. Cycle-free by validation.
         self._run_order = self._topo_sort()
 
+        # Previous-bar event cache for cross-bar sidechain lookback
+        # and (later) follower lookback. Updated at the end of every
+        # ``events_for_bar``. Initially empty (the part's bar 0 has
+        # no history); after a full pass through the part it
+        # naturally provides modular wraparound when the CLI loops.
+        self._last_bar: int | None = None
+        self._prev_voice_events: dict[str, list[Event]] = {}
+
     def _topo_sort(self) -> list[_ResolvedVoice]:
         # Sources first, followers after. For followers, the source
         # must precede them — recurse if a follower's source is itself
@@ -240,19 +249,52 @@ class SongPlayer:
             _r.Random(lfo_seed),
         )
 
+        # Did the caller request consecutive bars? Only then does the
+        # cached previous bar count as "history" for cross-bar lookback.
+        # If they jumped (e.g. asked for bar 5 cold), prev = empty.
+        expected_prev = (bar_idx - 1) % self.part.bars if self.part.bars > 0 else None
+        if self._last_bar is not None and self._last_bar == expected_prev:
+            prev_voice_events = self._prev_voice_events
+        else:
+            prev_voice_events = {}
+
         # Run algorithms in topological order; feed follower source_events.
-        voice_events: dict[str, list[Event]] = {}
+        raw_voice_events: dict[str, list[Event]] = {}
         for v in self._voices:
             ctx = contexts[v.name]
             if v.algorithm_name == "voice_follower":
                 src = self.song.voices[v.name].pattern.get("source")
                 if isinstance(src, str):
-                    ctx.source_events = voice_events.get(src, [])
-            raw = v.algorithm.generate_bar(ctx)
-            # Run feel pass on each voice's events with that voice's
-            # RNG (independent jitter per voice).
-            shaped = apply_feel(raw, ctx.feel_knobs, self.ppq, ctx.rng)
+                    ctx.source_events = raw_voice_events.get(src, [])
+                    ctx.prev_source_events = prev_voice_events.get(src)
+            raw_voice_events[v.name] = v.algorithm.generate_bar(ctx)
+
+        # Mix pass — sidechain ducking (cross-voice, cross-bar) +
+        # fade-in/out envelope per voice. Runs before the per-voice
+        # feel pass so jitter / accent layer on top of the ducked /
+        # faded velocities.
+        feel_knobs_by_voice = {v.name: contexts[v.name].feel_knobs for v in self._voices}
+        mixed_voice_events = apply_mix_pass(
+            raw_voice_events,
+            prev_voice_events,
+            feel_knobs_by_voice,
+            bar_idx,
+            self.ticks_per_bar,
+            self.ppq,
+        )
+
+        # Feel post-emit pass per voice (bar-internal jitter/accent/swing).
+        voice_events: dict[str, list[Event]] = {}
+        for v in self._voices:
+            ctx = contexts[v.name]
+            shaped = apply_feel(mixed_voice_events[v.name], ctx.feel_knobs, self.ppq, ctx.rng)
             voice_events[v.name] = shaped
+
+        # Cache for next bar's lookback. We cache the *post-mix* events
+        # because that's what next-bar sidechain triggers reference —
+        # ducking a voice that itself got ducked is musically sane.
+        self._last_bar = bar_idx
+        self._prev_voice_events = {n: list(es) for n, es in mixed_voice_events.items()}
 
         all_events: list[Event] = list(lfo_events)
         for v in self._voices:

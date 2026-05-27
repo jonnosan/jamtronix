@@ -19,8 +19,16 @@
     },
     "hat": {
       "algorithm": "drum_pattern",
-      "pattern": {"style": "euclid", "pulses": 8, "offset": 0, "velocity": 70, "ghost": 0.2},
-      "feel": {"swing": 0.15}
+      "pattern": {"style": "euclid", "pulses": 8, "offset": 0, "velocity": 110, "ghost": 0.2},
+      "feel": {
+        "swing": 0.15,
+        "fade_in_at_bar": 4,
+        "fade_in_beats": 12,
+        "fade_shape": "linear",
+        "sidechain_from": "kick",
+        "sidechain_floor": 50,
+        "sidechain_release_beats": 0.4
+      }
     },
     "acid": {
       "algorithm": "acid_bass",
@@ -39,9 +47,13 @@
         "intervals": [0, 3, 7, 10],
         "steps": [2, 6, 10, 14],
         "gate": 0.35,
-        "base_vel": 85
+        "base_vel": 95
       },
-      "feel": {}
+      "feel": {
+        "sidechain_from": "kick",
+        "sidechain_floor": 70,
+        "sidechain_release_beats": 0.6
+      }
     },
     "lead": {
       "algorithm": "arp",
@@ -53,7 +65,12 @@
         "gate": 0.6,
         "base_vel": 90
       },
-      "feel": {"vel_jitter": 8}
+      "feel": {
+        "vel_jitter": 8,
+        "fade_in_at_bar": 8,
+        "fade_in_beats": 8,
+        "fade_shape": "exp"
+      }
     },
     "filt": {
       "algorithm": "cc_lfo",
