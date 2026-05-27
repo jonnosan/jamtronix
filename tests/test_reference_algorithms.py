@@ -59,12 +59,11 @@ def test_root_pulse_follows_song_key() -> None:
     assert all(e.note == 60 for e in events if isinstance(e, NoteOn))  # C4
 
 
-def test_root_pulse_one_pulse_emits_one_whole_note() -> None:
+def test_root_pulse_one_pulse_with_long_gate_holds_most_of_bar() -> None:
     """Useful as a sustained chord-root reference next to the rhythmic stream."""
     pulse = RootPulse(midi_channel=15)
-    events = pulse.generate_bar(
-        _ctx(pattern_knobs={"pulses": 1, "offset": 0, "duration_ticks": 1824})
-    )
+    # step_ticks = 120, gate = 15.2 → duration 1824 ticks (≈ 95% of a bar).
+    events = pulse.generate_bar(_ctx(pattern_knobs={"pulses": 1, "offset": 0, "gate": 15.2}))
     ons = [e for e in events if isinstance(e, NoteOn)]
     offs = [e for e in events if isinstance(e, NoteOff)]
     assert len(ons) == 1 and len(offs) == 1
@@ -85,15 +84,6 @@ def test_root_pulse_gate_controls_step_relative_duration() -> None:
     offs = sorted((e for e in events if isinstance(e, NoteOff)), key=lambda e: e.tick)
     for on, off in zip(ons, offs, strict=True):
         assert off.tick - on.tick == 30  # step_ticks 120 × 0.25
-
-
-def test_root_pulse_duration_ticks_overrides_gate() -> None:
-    pulse = RootPulse(midi_channel=16)
-    events = pulse.generate_bar(
-        _ctx(pattern_knobs={"pulses": 1, "offset": 0, "duration_ticks": 1000, "gate": 0.01})
-    )
-    off = next(e for e in events if isinstance(e, NoteOff))
-    assert off.tick == 1000
 
 
 def test_root_pulse_zero_pulses_emits_nothing() -> None:

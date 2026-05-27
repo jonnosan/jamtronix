@@ -120,14 +120,6 @@ _DRUM_PATTERN = (
         maximum=1.0,
         description="How strongly vel_curve modulates the base velocity.",
     ),
-    KnobSpec(
-        "duration_ticks",
-        "int",
-        default=60,
-        minimum=1,
-        maximum=960,
-        description="Length of each hit (ticks at PPQ 480; a quarter note = 480).",
-    ),
 )
 
 _DRUM_ONE_SHOT = (
@@ -154,14 +146,6 @@ _DRUM_ONE_SHOT = (
         minimum=0,
         maximum=127,
         description="MIDI velocity for each hit.",
-    ),
-    KnobSpec(
-        "duration_ticks",
-        "int",
-        default=60,
-        minimum=1,
-        maximum=960,
-        description="Length of each hit in ticks (PPQ 480; a beat = 480 ticks).",
     ),
     KnobSpec(
         "flam_count",
@@ -728,16 +712,12 @@ _ROOT_PULSE = (
         "float",
         default=0.5,
         minimum=0.05,
-        maximum=4.0,
-        description="Pulse length as a fraction of a step (used when duration_ticks=0).",
-    ),
-    KnobSpec(
-        "duration_ticks",
-        "int",
-        default=0,
-        minimum=0,
-        maximum=8192,
-        description="Absolute pulse length in ticks (0 = derive from gate).",
+        maximum=32.0,
+        description=(
+            "Note length as a fraction of a step. Range goes up to 32 so a"
+            " single pulse can sustain across most of the bar (e.g. gate=15"
+            " with pulses=1 = near-whole-bar root)."
+        ),
     ),
 )
 

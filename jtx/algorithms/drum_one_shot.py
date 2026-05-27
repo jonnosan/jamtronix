@@ -8,6 +8,10 @@ across the bar's 16 steps (``pulses=2, offset=4`` = backbeat clap).
 Optional flam cluster: ``flam_count`` extra hits per main hit, each
 ``flam_spacing_ticks`` ticks apart and ``flam_decay`` quieter than
 the last (TR-909 / TR-707 clap character).
+
+Each NoteOff lands a fixed 30 ticks after its NoteOn — purely MIDI-
+protocol housekeeping. Drum samples ignore note-off and play their
+internal envelope, so there's no knob for this.
 """
 
 from __future__ import annotations
@@ -19,6 +23,8 @@ from jtx.algorithms._steps import step_ticks, steps_per_bar
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
 from jtx.engine.events import Event, NoteOff, NoteOn
+
+_NOTE_OFF_OFFSET_TICKS = 30
 
 
 class DrumOneShot(Algorithm):
@@ -38,7 +44,10 @@ class DrumOneShot(Algorithm):
         velocity = int(knobs.get("velocity", 110))
         s = step_ticks(ctx.ppq)
         total_steps = steps_per_bar(ctx.ticks_per_bar, ctx.ppq)
-        duration = int(knobs.get("duration_ticks", max(1, s // 2)))
+        # NoteOff is housekeeping only — drum samples ignore it. 30
+        # ticks ≈ 32nd note, short enough that any DAW that *does*
+        # respect note-off (rare) sees a tight, percussive hit.
+        duration = _NOTE_OFF_OFFSET_TICKS
 
         flam_count = max(0, int(knobs.get("flam_count", 0)))
         flam_spacing = max(0, int(knobs.get("flam_spacing_ticks", 12)))

@@ -64,7 +64,6 @@
       "algorithm": "drum_one_shot",
       "pattern": {
         "velocity": 60,
-        "duration_ticks": 240,
         "pulses": 1,
         "offset": 14
       },
@@ -131,7 +130,6 @@
       "pattern": {
         "octave": 0,
         "velocity": 70,
-        "duration_ticks": 1824,
         "pulses": 1,
         "offset": 0
       },
