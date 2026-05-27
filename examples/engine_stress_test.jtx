@@ -1,5 +1,5 @@
 {
-  "title": "Phuture Test",
+  "title": "Engine Stress Test",
   "setup_ref": "ableton",
   "key": {"tonic": "A", "scale": "minor"},
   "seed_override": null,
@@ -9,26 +9,31 @@
   "voices": {
     "kick": {
       "algorithm": "drum_pattern",
-      "pattern": {"style": "four_floor"},
+      "pattern": {"style": "four_floor", "velocity": 112},
       "feel": {}
     },
     "snare": {
       "algorithm": "drum_pattern",
-      "pattern": {"style": "euclid", "pulses": 2, "offset": 4},
-      "feel": {}
+      "pattern": {"style": "euclid", "pulses": 2, "offset": 4, "velocity": 100},
+      "feel": {"accent": 12, "accent_beats": [4, 12]}
     },
     "hat": {
       "algorithm": "drum_pattern",
-      "pattern": {"style": "euclid", "pulses": 8, "offset": 0, "velocity": 110, "ghost": 0.2},
+      "pattern": {"style": "euclid", "pulses": 8, "offset": 0, "velocity": 110, "ghost": 0.25},
       "feel": {
         "swing": 0.15,
         "fade_in_at_bar": 4,
         "fade_in_beats": 12,
         "fade_shape": "linear",
-        "sidechain_from": "kick",
+        "sidechain_from": ["kick", "snare"],
         "sidechain_floor": 50,
         "sidechain_release_beats": 0.4
       }
+    },
+    "crash": {
+      "algorithm": "drum_one_shot",
+      "pattern": {"steps": [0], "velocity": 95, "duration_ticks": 480},
+      "feel": {"fade_in_at_bar": 12, "fade_in_beats": 4}
     },
     "acid": {
       "algorithm": "acid_bass",
@@ -70,6 +75,38 @@
         "fade_in_at_bar": 8,
         "fade_in_beats": 8,
         "fade_shape": "exp"
+      }
+    },
+    "lead_echo": {
+      "algorithm": "voice_follower",
+      "pattern": {
+        "source": "acid",
+        "shift_bars": 1,
+        "latch": "every_nth",
+        "every_nth": 2,
+        "transpose_octaves": 2,
+        "ratchet": 3,
+        "quantize": "nearest"
+      },
+      "feel": {
+        "fade_in_at_bar": 6,
+        "fade_in_beats": 8,
+        "fade_sustain_level": 0.75
+      }
+    },
+    "strings": {
+      "algorithm": "voice_follower",
+      "pattern": {
+        "source": "stab",
+        "transform": "invert",
+        "invert_axis": 72,
+        "chord": [0, 4, 7, 10],
+        "quantize": "nearest"
+      },
+      "feel": {
+        "fade_in_at_bar": 4,
+        "fade_in_beats": 12,
+        "fade_sustain_level": 0.8
       }
     },
     "filt": {
