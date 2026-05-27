@@ -117,6 +117,17 @@ class KnobWidget(QWidget):
             self._modulated = on
             self.update()
 
+    def set_range(self, minimum: float, maximum: float) -> None:
+        """Update the knob's min/max, clamping the current value to fit."""
+        self._min = float(minimum)
+        self._max = float(maximum)
+        clamped = self._clamp(self._value)
+        if clamped != self._value:
+            self._value = clamped
+            self.value_changed.emit(self._value)
+        self.setToolTip(f"{self._label}\n[{self._min} … {self._max}]")
+        self.update()
+
     # ----- input -----------------------------------------------------------
 
     def mousePressEvent(self, event: QMouseEvent) -> None:

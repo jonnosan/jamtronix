@@ -434,11 +434,17 @@ class _HeaderPanel(QFrame):
         self._prog_family.setCurrentText(self._family)
         self._prog_family.currentTextChanged.connect(self._on_family_changed)
 
-        self._prog_rotation = QSpinBox()
-        self._prog_rotation.setRange(0, max(0, rotation_count(self._family) - 1))
-        self._prog_rotation.setValue(self._rotation)
-        self._prog_rotation.setPrefix("rot ")
-        self._prog_rotation.valueChanged.connect(self._on_rotation_changed)
+        self._prog_rotation = KnobWidget(
+            label="rotation",
+            minimum=0,
+            maximum=max(0, rotation_count(self._family) - 1),
+            value=float(self._rotation),
+            integer=True,
+            step=1,
+        )
+        self._prog_rotation.value_changed.connect(
+            lambda v: self._on_rotation_changed(int(v))
+        )
 
         self._prog_preview = QLabel(self._format_preview(prog.degrees))
         self._prog_preview.setStyleSheet(
@@ -450,11 +456,17 @@ class _HeaderPanel(QFrame):
         # untouched until the user actually edits it.
         self._suppress_initial_resync = not initial_family_matches_degrees
 
-        self._prog_bars = QSpinBox()
-        self._prog_bars.setRange(1, 64)
-        self._prog_bars.setValue(prog.bars_per_chord)
-        self._prog_bars.setSuffix(" bars/chord")
-        self._prog_bars.valueChanged.connect(self._on_progression_bars)
+        self._prog_bars = KnobWidget(
+            label="bars/chord",
+            minimum=1,
+            maximum=16,
+            value=float(prog.bars_per_chord),
+            integer=True,
+            step=1,
+        )
+        self._prog_bars.value_changed.connect(
+            lambda v: self._on_progression_bars(int(v))
+        )
 
         # ----- layout -----
         seed_row = QHBoxLayout()
@@ -522,13 +534,14 @@ class _HeaderPanel(QFrame):
 
     def _on_family_changed(self, family: str) -> None:
         self._family = family
-        # Clamp existing rotation to the new family's range.
         max_rot = max(0, rotation_count(family) - 1)
+        # Update the rotation knob's range; KnobWidget clamps the
+        # current value and emits if it changed.
         self._prog_rotation.blockSignals(True)
-        self._prog_rotation.setRange(0, max_rot)
+        self._prog_rotation.set_range(0, max_rot)
         if self._rotation > max_rot:
             self._rotation = 0
-            self._prog_rotation.setValue(0)
+            self._prog_rotation.set_value(0.0, emit=False)
         self._prog_rotation.blockSignals(False)
         self._sync_progression_to_song()
 
@@ -538,7 +551,7 @@ class _HeaderPanel(QFrame):
 
     def _sync_progression_to_song(self) -> None:
         degrees = degrees_for(self._family, self._rotation)
-        bars = self._prog_bars.value()
+        bars = int(self._prog_bars.value())
         if self._song.chord_progression is None:
             self._song.chord_progression = ChordProgression(degrees=degrees, bars_per_chord=bars)
         else:
