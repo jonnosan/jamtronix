@@ -66,6 +66,18 @@ _PIECE_DEFAULTS: dict[str, dict[str, int]] = {
     "ohat": {"pulses": 1, "offset": 14, "velocity": 88},
     "rim": {"pulses": 5, "offset": 3, "velocity": 95},
     "tom": {"pulses": 3, "offset": 8, "velocity": 95},
+    # Percussion expansion: clave / conga / cowbell / shaker / tamb.
+    # Defaults tuned for deep-techno + acid + psy percussion grooves.
+    "clave": {"pulses": 5, "offset": 0, "velocity": 92},
+    "conga_hi": {"pulses": 4, "offset": 2, "velocity": 90},
+    "conga": {"pulses": 4, "offset": 2, "velocity": 90},
+    "conga_lo": {"pulses": 3, "offset": 7, "velocity": 96},
+    "cowbell": {"pulses": 4, "offset": 1, "velocity": 88},
+    "cb": {"pulses": 4, "offset": 1, "velocity": 88},
+    "shaker": {"pulses": 16, "offset": 0, "velocity": 70},
+    "shk": {"pulses": 16, "offset": 0, "velocity": 70},
+    "tamb": {"pulses": 2, "offset": 4, "velocity": 80},
+    "wood": {"pulses": 4, "offset": 2, "velocity": 88},
 }
 
 # Per-piece breakbeat patterns on a 16-step bar.
@@ -80,6 +92,23 @@ _BREAK_PATTERNS: dict[str, list[int]] = {
     "hat": list(range(0, 16, 1)),
     "hh": list(range(0, 16, 1)),
     "hats": list(range(0, 16, 1)),
+    # 3-2 son clave: 0, 3, 6, 10, 12 (the "bossa" / Latin foundation
+    # underneath a lot of deep-techno percussion grooves).
+    "clave": [0, 3, 6, 10, 12],
+    # Cascara on cowbell — standard 3-2 cowbell pattern under clave.
+    "cowbell": [0, 2, 4, 6, 7, 10, 12, 14],
+    "cb": [0, 2, 4, 6, 7, 10, 12, 14],
+    # Conga tumbao — low conga on the and-of-2 and 4, high open on 2 and 4.
+    "conga_lo": [3, 11],
+    "conga_hi": [4, 6, 12, 14],
+    "conga": [4, 6, 12, 14],
+    # Tambourine on the and-of-each-beat.
+    "tamb": [2, 6, 10, 14],
+    # Wood block / claves — bossa rim.
+    "wood": [0, 4, 6, 10, 12],
+    # Shaker continuous 16ths.
+    "shaker": list(range(0, 16, 1)),
+    "shk": list(range(0, 16, 1)),
 }
 
 _BEAT_STRIDE = 4  # at 16 steps/bar, beats are on every 4th step

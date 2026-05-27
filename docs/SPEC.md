@@ -179,12 +179,15 @@ overridden per role.
 | mono | `arp` | Up/down/random/walk arpeggio with `subdivision` (16/8/4/8t/16t/…), octaves, gate, hold — covers `sh101_arp`, `arp_walk` |
 | poly | `sustained_chord` | Long-gated chord voicing following the progression — covers `triad_sustain`, `pad_drift`, `sustained_dyad`, `atmos_pad` |
 | poly | `chord_stab` | Short-gated voicings on configurable steps — covers `offbeat_stab`, `acid_stab`, `wurli_chop` |
+| mono | `reese_bass` | Held bass with rhythmic CC74 wobble + slow detune LFO — modern dub-techno / half-time wobble bass not covered by `acid_bass` or `sub_drone` |
+| mono | `noise_riser` | Multi-bar crescendo voice: retriggered NoteOn + CC74 + pitch-bend ramp. Build-up into the drop |
 | modulator | `cc_lfo` | Single CC with shape (sine/tri/saw/square/random), rate (bars/beats), depth, phase — direct replacement for `candy` family |
 | modulator | `cc_envelope` | Triggered envelope on CC, with attack/decay/sustain/release driven by bar/beat events — for kick-synced filter sweeps |
+| modulator | `step_cc` | Step-sequenced CC modulator — knob-driven value curves on a configurable subdivision (rhythmic, not periodic) |
 | follower | `voice_follower` | Single algorithm, fixed pipeline (see Followers below) |
 
-That's 10. Two slots reserved for additions discovered during implementation
-(e.g. a dedicated `noise_riser` or a `vocal_chop` that doesn't fit `melodic_line`).
+13 algorithms. Future additions (e.g. `motif_phrase` for A-A'-A-B lead structure
+with motif memory — see GitHub issues) get added per-PR.
 
 ### Followers
 

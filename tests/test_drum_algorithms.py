@@ -103,10 +103,10 @@ def test_drum_pattern_break_kick() -> None:
 
 
 def test_drum_pattern_break_unknown_piece_falls_back_to_euclid() -> None:
-    bell = DrumPattern(piece="cowbell", midi_channel=10, midi_note=56)
-    events = bell.generate_bar(_ctx({"style": "break", "pulses": 4}))
+    triangle = DrumPattern(piece="triangle", midi_channel=10, midi_note=81)
+    events = triangle.generate_bar(_ctx({"style": "break", "pulses": 4}))
     note_ons = [e for e in events if isinstance(e, NoteOn)]
-    # cowbell has no break entry → euclid(4, 16) → [0, 4, 8, 12]
+    # triangle has no break entry → euclid(4, 16) → [0, 4, 8, 12]
     assert [e.tick for e in note_ons] == [0, 4 * 120, 8 * 120, 12 * 120]
 
 
@@ -266,6 +266,29 @@ def test_drum_one_shot_roll_last_bar_of_8_only_fires_on_bar7() -> None:
     # Velocity ramps up across the fill (crescendo).
     velocities = [e.velocity for e in note_ons_7]
     assert velocities[0] < velocities[-1]
+
+
+def test_drum_pattern_clave_break_pattern_is_3_2_son() -> None:
+    clave = DrumPattern(piece="clave", midi_channel=10, midi_note=75)
+    events = clave.generate_bar(_ctx({"style": "break"}))
+    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
+    # 3-2 son clave: 0, 3, 6, 10, 12.
+    assert [e.tick // 120 for e in note_ons] == [0, 3, 6, 10, 12]
+
+
+def test_drum_pattern_cowbell_default_euclid() -> None:
+    cb = DrumPattern(piece="cowbell", midi_channel=10, midi_note=56)
+    events = cb.generate_bar(_ctx({"style": "euclid"}))
+    note_ons = [e for e in events if isinstance(e, NoteOn)]
+    # cowbell default: pulses=4, offset=1.
+    assert len(note_ons) == 4
+
+
+def test_drum_pattern_shaker_continuous_sixteenths() -> None:
+    shk = DrumPattern(piece="shaker", midi_channel=10, midi_note=70)
+    events = shk.generate_bar(_ctx({"style": "break"}))
+    note_ons = [e for e in events if isinstance(e, NoteOn)]
+    assert len(note_ons) == 16
 
 
 def test_drum_one_shot_roll_none_is_no_op() -> None:

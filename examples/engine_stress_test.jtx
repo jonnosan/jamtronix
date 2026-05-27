@@ -203,6 +203,78 @@
       },
       "feel": {}
     },
+    "clave": {
+      "algorithm": "drum_pattern",
+      "pattern": {
+        "style": "break",
+        "velocity": 92
+      },
+      "feel": {
+        "fade_in_at_bar": 4,
+        "fade_in_beats": 8
+      }
+    },
+    "shaker": {
+      "algorithm": "drum_pattern",
+      "pattern": {
+        "style": "break",
+        "velocity": 68,
+        "vel_curve": "pulse",
+        "vel_curve_depth": 0.3
+      },
+      "feel": {
+        "fade_in_at_bar": 6,
+        "fade_in_beats": 8,
+        "swing": 0.35
+      }
+    },
+    "reese": {
+      "algorithm": "reese_bass",
+      "pattern": {
+        "gate": 0.95,
+        "wobble_subdiv": "8t",
+        "wobble_depth": 0.7,
+        "cutoff_min": 30,
+        "cutoff_max": 105,
+        "detune_depth": 0.5,
+        "detune_cycle_bars": 4.0,
+        "octave": 0,
+        "bars_per_chord": 4
+      },
+      "feel": {
+        "fade_in_at_bar": 2,
+        "fade_in_beats": 8
+      }
+    },
+    "riser": {
+      "algorithm": "noise_riser",
+      "pattern": {
+        "trigger": "last_bar_of_8",
+        "duration_bars": 1,
+        "base_note": "A3",
+        "cutoff_start": 25,
+        "cutoff_end": 120,
+        "vel_start": 60,
+        "vel_end": 120,
+        "pitch_rise_cents": 400,
+        "curve": "exp",
+        "samples_per_bar": 24
+      },
+      "feel": {}
+    },
+    "filt_step": {
+      "algorithm": "step_cc",
+      "pattern": {
+        "cc": 74,
+        "subdivision": "8",
+        "value_curve": "arc",
+        "cc_min": 40,
+        "cc_max": 100,
+        "depth": 0.9,
+        "samples_per_step": 2
+      },
+      "feel": {}
+    },
     "chord_ref": {
       "algorithm": "root_pulse",
       "pattern": {
