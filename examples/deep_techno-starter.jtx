@@ -29,10 +29,8 @@
     "snare": {
       "algorithm": "drum_one_shot",
       "pattern": {
-        "steps": [
-          4,
-          12
-        ],
+        "pulses": 2,
+        "offset": 4,
         "velocity": 92,
         "duration_ticks": 50
       },
@@ -55,9 +53,8 @@
     "ohh": {
       "algorithm": "drum_one_shot",
       "pattern": {
-        "steps": [
-          6
-        ],
+        "pulses": 1,
+        "offset": 6,
         "velocity": 84,
         "duration_ticks": 220
       },
@@ -78,15 +75,9 @@
     "stab": {
       "algorithm": "chord_stab",
       "pattern": {
-        "intervals": [
-          0,
-          3,
-          10
-        ],
-        "steps": [
-          6,
-          14
-        ],
+        "quality": "min7",
+        "pulses": 2,
+        "offset": 6,
         "base_vel": 78,
         "gate": 0.35,
         "drop_prob": 0.4
@@ -102,7 +93,8 @@
         "drop_prob": 0.78,
         "octave": 0,
         "base_vel": 80,
-        "passing_prob": 0.25
+        "passing_prob": 0.25,
+        "palette": "pentatonic"
       },
       "feel": {}
     },
@@ -121,23 +113,28 @@
   "parts": {
     "intro": {
       "bars": 16,
-      "voice_overrides": {}
+      "voice_overrides": {},
+      "loop": false
     },
     "groove": {
       "bars": 16,
-      "voice_overrides": {}
+      "voice_overrides": {},
+      "loop": false
     },
     "main": {
       "bars": 32,
-      "voice_overrides": {}
+      "voice_overrides": {},
+      "loop": false
     },
     "breakdown": {
       "bars": 16,
-      "voice_overrides": {}
+      "voice_overrides": {},
+      "loop": false
     },
     "outro": {
       "bars": 16,
-      "voice_overrides": {}
+      "voice_overrides": {},
+      "loop": false
     }
   },
   "arrangement": [

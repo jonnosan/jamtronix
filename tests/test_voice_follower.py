@@ -187,7 +187,7 @@ def test_follower_transpose_octaves() -> None:
 def test_follower_chord_emits_one_note_per_interval() -> None:
     follower = VoiceFollower(midi_channel=5)
     src = _source_notes((0, 60, 100, 120))
-    events = follower.generate_bar(_ctx(source_events=src, pattern_knobs={"chord": [0, 4, 7]}))
+    events = follower.generate_bar(_ctx(source_events=src, pattern_knobs={"quality": "major"}))
     pitches = sorted(e.note for e in events if isinstance(e, NoteOn))
     assert pitches == [60, 64, 67]
 
@@ -195,7 +195,7 @@ def test_follower_chord_emits_one_note_per_interval() -> None:
 def test_follower_chord_default_zero_no_change() -> None:
     follower = VoiceFollower(midi_channel=5)
     src = _source_notes((0, 60, 100, 120))
-    events = follower.generate_bar(_ctx(source_events=src, pattern_knobs={"chord": [0]}))
+    events = follower.generate_bar(_ctx(source_events=src, pattern_knobs={"quality": "unison"}))
     assert _extract_notes(events) == [(0, 60, 100)]
 
 
@@ -385,7 +385,7 @@ def test_follower_full_pipeline_composes_correctly() -> None:
             pattern_knobs={
                 "latch": "first_per_bar",
                 "transpose_octaves": 1,
-                "chord": [0, 4, 7],
+                "quality": "major",
                 "ratchet": 2,
             },
         )

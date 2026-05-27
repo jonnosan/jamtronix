@@ -1,11 +1,22 @@
 {
   "title": "Submerged Dub",
   "setup_ref": "deep-techno-demo",
-  "key": {"tonic": "A", "scale": "dorian"},
+  "key": {
+    "tonic": "A",
+    "scale": "dorian"
+  },
   "seed_override": null,
   "meter": "4/4",
   "tempo": 122,
-  "chord_progression": {"degrees": ["i", "VII", "i", "iv"], "bars_per_chord": 4},
+  "chord_progression": {
+    "degrees": [
+      "i",
+      "VII",
+      "i",
+      "iv"
+    ],
+    "bars_per_chord": 4
+  },
   "voices": {
     "kick": {
       "algorithm": "drum_pattern",
@@ -27,7 +38,9 @@
         "vel_curve": "arc",
         "vel_curve_depth": 0.15
       },
-      "feel": {"humanize": 8}
+      "feel": {
+        "humanize": 8
+      }
     },
     "chh": {
       "algorithm": "drum_pattern",
@@ -49,7 +62,12 @@
     },
     "ride": {
       "algorithm": "drum_one_shot",
-      "pattern": {"steps": [14], "velocity": 60, "duration_ticks": 240},
+      "pattern": {
+        "velocity": 60,
+        "duration_ticks": 240,
+        "pulses": 1,
+        "offset": 14
+      },
       "feel": {}
     },
     "sub": {
@@ -68,24 +86,25 @@
     "pad": {
       "algorithm": "sustained_chord",
       "pattern": {
-        "intervals": [0, 3, 7, 10, 14],
         "gate": 0.97,
         "octave": 0,
         "base_vel": 60,
         "velocity_spread": 8,
-        "drift_prob": 0.35
+        "drift_prob": 0.35,
+        "quality": "min9"
       },
       "feel": {}
     },
     "stab": {
       "algorithm": "chord_stab",
       "pattern": {
-        "intervals": [0, 7, 10, 14],
-        "steps": [10],
         "gate": 0.5,
         "base_vel": 85,
         "velocity_spread": 4,
-        "drop_prob": 0.35
+        "drop_prob": 0.35,
+        "pulses": 1,
+        "offset": 10,
+        "quality": "min7"
       },
       "feel": {
         "sidechain_from": "kick",
@@ -99,19 +118,22 @@
         "source": "stab",
         "shift_bars": 1,
         "transpose_octaves": 1,
-        "chord": [0],
         "ratchet": 1,
-        "quantize": "nearest"
+        "quantize": "nearest",
+        "quality": "unison"
       },
-      "feel": {"fade_sustain_level": 0.55}
+      "feel": {
+        "fade_sustain_level": 0.55
+      }
     },
     "chord_ref": {
       "algorithm": "root_pulse",
       "pattern": {
         "octave": 0,
         "velocity": 70,
-        "steps": [0],
-        "duration_ticks": 1824
+        "duration_ticks": 1824,
+        "pulses": 1,
+        "offset": 0
       },
       "feel": {}
     },
@@ -120,8 +142,9 @@
       "pattern": {
         "octave": 1,
         "velocity": 60,
-        "steps": [0, 4, 8, 12],
-        "gate": 0.35
+        "gate": 0.35,
+        "pulses": 4,
+        "offset": 0
       },
       "feel": {}
     }
@@ -130,61 +153,237 @@
     "intro": {
       "bars": 8,
       "voice_overrides": {
-        "kick":      {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "snare":     {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "chh":       {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "ride":      {"pattern": {"steps": []}, "feel": {}},
-        "stab":      {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "stab_echo": {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "pad":       {"pattern": {}, "feel": {"evolution_start": 0.55, "evolution_end": 0.85}}
+        "kick": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "snare": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "chh": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "ride": {
+          "pattern": {
+            "pulses": 0,
+            "offset": 0
+          },
+          "feel": {}
+        },
+        "stab": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "stab_echo": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "pad": {
+          "pattern": {},
+          "feel": {
+            "evolution_start": 0.55,
+            "evolution_end": 0.85
+          }
+        }
       }
     },
     "build": {
       "bars": 8,
       "voice_overrides": {
-        "snare":     {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "chh":       {"pattern": {}, "feel": {"fade_in_at_bar": 0, "fade_in_beats": 16}},
-        "ride":      {"pattern": {"steps": []}, "feel": {}},
-        "stab":      {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "stab_echo": {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "kick":      {"pattern": {}, "feel": {"evolution_start": 0.85, "evolution_end": 1.0}},
-        "pad":       {"pattern": {}, "feel": {"evolution_start": 0.85, "evolution_end": 0.95}}
+        "snare": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "chh": {
+          "pattern": {},
+          "feel": {
+            "fade_in_at_bar": 0,
+            "fade_in_beats": 16
+          }
+        },
+        "ride": {
+          "pattern": {
+            "pulses": 0,
+            "offset": 0
+          },
+          "feel": {}
+        },
+        "stab": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "stab_echo": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "kick": {
+          "pattern": {},
+          "feel": {
+            "evolution_start": 0.85,
+            "evolution_end": 1.0
+          }
+        },
+        "pad": {
+          "pattern": {},
+          "feel": {
+            "evolution_start": 0.85,
+            "evolution_end": 0.95
+          }
+        }
       }
     },
     "drop": {
       "bars": 16,
       "voice_overrides": {
-        "ride": {"pattern": {"steps": [14]}, "feel": {"fade_in_at_bar": 8, "fade_in_beats": 8}},
-        "stab": {"pattern": {}, "feel": {"fade_in_at_bar": 0, "fade_in_beats": 8}},
-        "pad":  {"pattern": {}, "feel": {"evolution_start": 0.95, "evolution_end": 1.0}}
+        "ride": {
+          "pattern": {
+            "pulses": 1,
+            "offset": 14
+          },
+          "feel": {
+            "fade_in_at_bar": 8,
+            "fade_in_beats": 8
+          }
+        },
+        "stab": {
+          "pattern": {},
+          "feel": {
+            "fade_in_at_bar": 0,
+            "fade_in_beats": 8
+          }
+        },
+        "pad": {
+          "pattern": {},
+          "feel": {
+            "evolution_start": 0.95,
+            "evolution_end": 1.0
+          }
+        }
       }
     },
     "break": {
       "bars": 8,
       "voice_overrides": {
-        "kick":      {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "snare":     {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "chh":       {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "ride":      {"pattern": {"steps": []}, "feel": {}},
-        "stab_echo": {"pattern": {}, "feel": {}},
-        "pad":       {"pattern": {}, "feel": {"evolution_start": 1.0, "evolution_end": 0.9}}
+        "kick": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "snare": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "chh": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "ride": {
+          "pattern": {
+            "pulses": 0,
+            "offset": 0
+          },
+          "feel": {}
+        },
+        "stab_echo": {
+          "pattern": {},
+          "feel": {}
+        },
+        "pad": {
+          "pattern": {},
+          "feel": {
+            "evolution_start": 1.0,
+            "evolution_end": 0.9
+          }
+        }
       }
     },
     "outro": {
       "bars": 8,
       "voice_overrides": {
-        "kick":      {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "snare":     {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "chh":       {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "ride":      {"pattern": {"steps": []}, "feel": {}},
-        "stab":      {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "stab_echo": {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "sub":       {"pattern": {}, "feel": {"evolution_start": 1.0, "evolution_end": 0.5}},
-        "pad":       {"pattern": {}, "feel": {"evolution_start": 0.9, "evolution_end": 0.3}}
+        "kick": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "snare": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "chh": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "ride": {
+          "pattern": {
+            "pulses": 0,
+            "offset": 0
+          },
+          "feel": {}
+        },
+        "stab": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "stab_echo": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "sub": {
+          "pattern": {},
+          "feel": {
+            "evolution_start": 1.0,
+            "evolution_end": 0.5
+          }
+        },
+        "pad": {
+          "pattern": {},
+          "feel": {
+            "evolution_start": 0.9,
+            "evolution_end": 0.3
+          }
+        }
       }
     }
   },
-  "arrangement": ["intro", "build", "drop", "break", "outro"],
+  "arrangement": [
+    "intro",
+    "build",
+    "drop",
+    "break",
+    "outro"
+  ],
   "lfos": [],
   "schema_version": 1
 }

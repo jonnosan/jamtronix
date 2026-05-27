@@ -1,39 +1,81 @@
 {
   "title": "Engine Stress Test",
   "setup_ref": "ableton",
-  "key": {"tonic": "A", "scale": "minor"},
+  "key": {
+    "tonic": "A",
+    "scale": "minor"
+  },
   "seed_override": null,
   "meter": "4/4",
   "tempo": 124,
-  "chord_progression": {"degrees": ["i", "VI", "III", "VII"], "bars_per_chord": 4},
+  "chord_progression": {
+    "degrees": [
+      "i",
+      "VI",
+      "III",
+      "VII"
+    ],
+    "bars_per_chord": 4
+  },
   "voices": {
     "kick": {
       "algorithm": "drum_pattern",
-      "pattern": {"style": "four_floor", "velocity": 112},
+      "pattern": {
+        "style": "four_floor",
+        "velocity": 112
+      },
       "feel": {}
     },
     "snare": {
       "algorithm": "drum_pattern",
-      "pattern": {"style": "euclid", "pulses": 2, "offset": 4, "velocity": 100},
-      "feel": {"accent": 12, "accent_beats": [4, 12]}
+      "pattern": {
+        "style": "euclid",
+        "pulses": 2,
+        "offset": 4,
+        "velocity": 100
+      },
+      "feel": {
+        "accent": 12,
+        "accent_beats": [
+          4,
+          12
+        ]
+      }
     },
     "hat": {
       "algorithm": "drum_pattern",
-      "pattern": {"style": "euclid", "pulses": 8, "offset": 0, "velocity": 110, "ghost": 0.25},
+      "pattern": {
+        "style": "euclid",
+        "pulses": 8,
+        "offset": 0,
+        "velocity": 110,
+        "ghost": 0.25
+      },
       "feel": {
         "swing": 0.15,
         "fade_in_at_bar": 4,
         "fade_in_beats": 12,
         "fade_shape": "linear",
-        "sidechain_from": ["kick", "snare"],
+        "sidechain_from": [
+          "kick",
+          "snare"
+        ],
         "sidechain_floor": 50,
         "sidechain_release_beats": 0.4
       }
     },
     "crash": {
       "algorithm": "drum_one_shot",
-      "pattern": {"steps": [0], "velocity": 95, "duration_ticks": 480},
-      "feel": {"fade_in_at_bar": 12, "fade_in_beats": 4}
+      "pattern": {
+        "velocity": 95,
+        "duration_ticks": 480,
+        "pulses": 1,
+        "offset": 0
+      },
+      "feel": {
+        "fade_in_at_bar": 12,
+        "fade_in_beats": 4
+      }
     },
     "acid": {
       "algorithm": "acid_bass",
@@ -44,15 +86,18 @@
         "cycle": 0,
         "bend": 60
       },
-      "feel": {"humanize": 6}
+      "feel": {
+        "humanize": 6
+      }
     },
     "stab": {
       "algorithm": "chord_stab",
       "pattern": {
-        "intervals": [0, 3, 7, 10],
-        "steps": [2, 6, 10, 14],
         "gate": 0.35,
-        "base_vel": 95
+        "base_vel": 95,
+        "pulses": 4,
+        "offset": 2,
+        "quality": "min7"
       },
       "feel": {
         "sidechain_from": "kick",
@@ -65,10 +110,10 @@
       "pattern": {
         "mode": "up",
         "rate_steps": 2,
-        "chord_intervals": [0, 3, 7],
         "octaves": 2,
         "gate": 0.6,
-        "base_vel": 90
+        "base_vel": 90,
+        "quality": "minor"
       },
       "feel": {
         "vel_jitter": 8,
@@ -100,8 +145,8 @@
         "source": "stab",
         "transform": "invert",
         "invert_axis": 72,
-        "chord": [0, 4, 7, 10],
-        "quantize": "nearest"
+        "quantize": "nearest",
+        "quality": "dom7"
       },
       "feel": {
         "fade_in_at_bar": 4,
@@ -126,8 +171,9 @@
       "pattern": {
         "octave": 0,
         "velocity": 80,
-        "steps": [0],
-        "duration_ticks": 1824
+        "duration_ticks": 1824,
+        "pulses": 1,
+        "offset": 0
       },
       "feel": {}
     },
@@ -136,16 +182,22 @@
       "pattern": {
         "octave": 1,
         "velocity": 70,
-        "steps": [0, 4, 8, 12],
-        "gate": 0.4
+        "gate": 0.4,
+        "pulses": 4,
+        "offset": 0
       },
       "feel": {}
     }
   },
   "parts": {
-    "drop": {"bars": 16, "voice_overrides": {}}
+    "drop": {
+      "bars": 16,
+      "voice_overrides": {}
+    }
   },
-  "arrangement": ["drop"],
+  "arrangement": [
+    "drop"
+  ],
   "lfos": [],
   "schema_version": 1
 }

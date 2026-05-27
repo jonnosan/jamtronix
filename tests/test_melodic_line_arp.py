@@ -51,9 +51,9 @@ def test_scale_intervals_unknown_falls_back_to_minor() -> None:
 def test_melodic_line_pitches_within_scale() -> None:
     line = MelodicLine(midi_channel=3)
     events = line.generate_bar(_ctx(pattern_knobs={"drop_prob": 0.0}))
-    # A minor at octave 4: A4=69, then 71, 72, 74, 76, 77, 79, 81, …
-    # Default palette: degrees [0, 2, 4, 5] → +0, +3, +7, +8 → 69, 72, 76, 77.
-    expected = {69, 72, 76, 77}
+    # A minor at octave 4: A4=69. Default palette "tones_only" =
+    # (0, 2, 4, 5, 7) → +0, +3, +7, +8, +12 → 69, 72, 76, 77, 81.
+    expected = {69, 72, 76, 77, 81}
     note_ons = [e for e in events if isinstance(e, NoteOn)]
     assert all(e.note in expected for e in note_ons)
 
@@ -73,27 +73,28 @@ def test_melodic_line_drop_prob_zero_fills_all_steps() -> None:
 
 def test_melodic_line_palette_constrains_pitches() -> None:
     line = MelodicLine(midi_channel=3)
-    events = line.generate_bar(_ctx(pattern_knobs={"drop_prob": 0.0, "degree_palette": [0]}))
+    # "triad" palette = (0, 2, 4) → root + 3rd + 5th = {69, 72, 76}.
+    events = line.generate_bar(_ctx(pattern_knobs={"drop_prob": 0.0, "palette": "triad"}))
     note_ons = [e for e in events if isinstance(e, NoteOn)]
-    # Only root → A4 = 69.
-    assert all(e.note == 69 for e in note_ons)
+    assert all(e.note in {69, 72, 76} for e in note_ons)
 
 
-def test_melodic_line_negative_degrees_go_below_root() -> None:
+def test_melodic_line_low_palette_reaches_below_root() -> None:
     line = MelodicLine(midi_channel=3)
-    events = line.generate_bar(_ctx(pattern_knobs={"drop_prob": 0.0, "degree_palette": [-1]}))
-    # Degree -1 in minor = scale[-1] one octave down = 10 - 12 = -2 → A4 - 2 = 67.
+    # "low" palette = (-3, -1, 0, 2, 4) → {64, 67, 69, 72, 76}.
+    events = line.generate_bar(_ctx(pattern_knobs={"drop_prob": 0.0, "palette": "low"}))
     note_ons = [e for e in events if isinstance(e, NoteOn)]
-    assert all(e.note == 67 for e in note_ons)
+    assert any(e.note < 69 for e in note_ons)
 
 
 def test_melodic_line_chord_root_semitones_transposes() -> None:
     line = MelodicLine(midi_channel=3)
-    ctx = _ctx(pattern_knobs={"drop_prob": 0.0, "degree_palette": [0]})
+    ctx = _ctx(pattern_knobs={"drop_prob": 0.0, "palette": "triad"})
     ctx.chord_root_semitones = 5
     events = line.generate_bar(ctx)
     note_ons = [e for e in events if isinstance(e, NoteOn)]
-    assert all(e.note == 74 for e in note_ons)  # 69 + 5
+    # triad palette shifted by +5: {74, 77, 81}.
+    assert all(e.note in {74, 77, 81} for e in note_ons)
 
 
 def test_melodic_line_passing_tone_inserts_chromatic_neighbour() -> None:
@@ -102,18 +103,15 @@ def test_melodic_line_passing_tone_inserts_chromatic_neighbour() -> None:
         _ctx(
             pattern_knobs={
                 "drop_prob": 0.0,
-                # Big jump from root to fifth so passing tones can land.
-                "degree_palette": [0, 4],
+                "palette": "tones_only",
                 "passing_prob": 1.0,
             }
         )
     )
     note_ons = [e for e in events if isinstance(e, NoteOn)]
-    # Original notes are 69 (root) or 76 (fifth, +7). Passing tones land
-    # at 68 (between 69→76 going down) or 75 (between 76→69 going down).
     pitches_seen = {e.note for e in note_ons}
-    # At least one chromatic-neighbour pitch outside the palette set.
-    palette_pitches = {69, 76}
+    # tones_only palette pitches in A minor: {69, 72, 76, 77, 81}.
+    palette_pitches = {69, 72, 76, 77, 81}
     chromatic_neighbours = pitches_seen - palette_pitches
     assert chromatic_neighbours
 
@@ -131,12 +129,13 @@ def test_melodic_line_gate_controls_duration() -> None:
 
 def test_melodic_line_uses_key_scale() -> None:
     line = MelodicLine(midi_channel=3)
-    # Major scale, only root + 3rd palette → A4=69 + 4 = 73 (C#).
+    # Major scale at A: scale intervals (0,2,4,5,7,9,11). triad palette
+    # (0, 2, 4) → 69, 73, 76 (root + major 3rd + 5th).
     events = line.generate_bar(
-        _ctx(scale="major", pattern_knobs={"drop_prob": 0.0, "degree_palette": [2]})
+        _ctx(scale="major", pattern_knobs={"drop_prob": 0.0, "palette": "triad"})
     )
     note_ons = [e for e in events if isinstance(e, NoteOn)]
-    assert all(e.note == 73 for e in note_ons)
+    assert all(e.note in {69, 73, 76} for e in note_ons)
 
 
 # ---------------------------------------------------------------- arp
@@ -145,7 +144,7 @@ def test_melodic_line_uses_key_scale() -> None:
 def test_arp_up_climbs_chord_tones() -> None:
     arp = Arp(midi_channel=4)
     events = arp.generate_bar(
-        _ctx(pattern_knobs={"mode": "up", "chord_intervals": [0, 3, 7], "rate_steps": 4})
+        _ctx(pattern_knobs={"mode": "up", "quality": "minor", "rate_steps": 4})
     )
     note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
     # rate_steps=4 → 4 arp notes per bar; 1 octave × 3 intervals.
@@ -155,7 +154,7 @@ def test_arp_up_climbs_chord_tones() -> None:
 def test_arp_down_descends() -> None:
     arp = Arp(midi_channel=4)
     events = arp.generate_bar(
-        _ctx(pattern_knobs={"mode": "down", "chord_intervals": [0, 3, 7], "rate_steps": 4})
+        _ctx(pattern_knobs={"mode": "down", "quality": "minor", "rate_steps": 4})
     )
     note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
     # down starts at top of ladder (76, 72, 69) and wraps.
@@ -168,7 +167,7 @@ def test_arp_octaves_extends_range() -> None:
         _ctx(
             pattern_knobs={
                 "mode": "up",
-                "chord_intervals": [0],
+                "quality": "unison",
                 "octaves": 3,
                 "rate_steps": 8,
             }
@@ -182,7 +181,7 @@ def test_arp_octaves_extends_range() -> None:
 def test_arp_random_stays_within_ladder() -> None:
     arp = Arp(midi_channel=4)
     events = arp.generate_bar(
-        _ctx(pattern_knobs={"mode": "random", "chord_intervals": [0, 3, 7], "rate_steps": 1})
+        _ctx(pattern_knobs={"mode": "random", "quality": "minor", "rate_steps": 1})
     )
     ladder = {69, 72, 76}
     note_ons = [e for e in events if isinstance(e, NoteOn)]
@@ -192,7 +191,7 @@ def test_arp_random_stays_within_ladder() -> None:
 def test_arp_walk_takes_steps_of_one() -> None:
     arp = Arp(midi_channel=4)
     events = arp.generate_bar(
-        _ctx(pattern_knobs={"mode": "walk", "chord_intervals": [0, 3, 7], "rate_steps": 2})
+        _ctx(pattern_knobs={"mode": "walk", "quality": "minor", "rate_steps": 2})
     )
     ladder = [69, 72, 76]
     note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
@@ -235,7 +234,7 @@ def test_arp_unknown_mode_raises() -> None:
 
 def test_arp_chord_root_semitones_transposes() -> None:
     arp = Arp(midi_channel=4)
-    ctx = _ctx(pattern_knobs={"mode": "up", "chord_intervals": [0], "rate_steps": 4})
+    ctx = _ctx(pattern_knobs={"mode": "up", "quality": "unison", "rate_steps": 4})
     ctx.chord_root_semitones = 5
     events = arp.generate_bar(ctx)
     note_ons = [e for e in events if isinstance(e, NoteOn)]

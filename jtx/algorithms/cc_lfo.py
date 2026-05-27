@@ -10,8 +10,8 @@ in the song-level LFO system (issue #14). For raw CCs on a fixed channel,
 this algorithm is simpler than wiring a song-level LFO.
 
 ``cc_envelope`` is a triggered envelope: linear attack-decay-sustain
-shape, fired on the beats specified by ``trigger_steps``. Used for
-kick-synced filter sweeps.
+shape, retriggered on a euclid distribution of ``pulses`` + ``offset``
+across the 16-step bar. Used for kick-synced filter sweeps.
 """
 
 from __future__ import annotations
@@ -104,16 +104,16 @@ def _wave_sample(shape: str, phase: float, rng: object) -> float:
 class CCEnvelope(Algorithm):
     """Triggered envelope on a CC.
 
-    Linear A-D-S-R shape fired on each ``trigger_steps`` index. The
-    envelope ramps from ``sustain_value`` up to a peak (``peak_value``)
-    over ``attack_ticks``, decays to ``sustain_value`` over
+    Linear A-D-S-R shape retriggered on an even distribution of
+    ``pulses`` + ``offset`` across the 16-step bar. The envelope
+    ramps from rest up to a peak (``peak_value``) over
+    ``attack_ticks``, decays to ``sustain_value`` over
     ``decay_ticks``, holds, then releases to ``rest_value`` over
     ``release_ticks``.
 
     Knobs:
     * ``cc`` (74).
-    * ``trigger_steps`` — list of 16th-step indices to fire on.
-      Default ``[0, 4, 8, 12]`` (kick-synced four-on-floor).
+    * ``pulses`` (4) + ``offset`` (0) — euclid trigger distribution.
     * ``attack_ticks`` (40), ``decay_ticks`` (120),
       ``release_ticks`` (240).
     * ``peak_value`` (120), ``sustain_value`` (90), ``rest_value`` (40).
@@ -127,14 +127,13 @@ class CCEnvelope(Algorithm):
         self.midi_channel = midi_channel
 
     def generate_bar(self, ctx: BarContext) -> list[Event]:
+        from jtx.algorithms._euclid import euclid
+
         knobs = ctx.pattern_knobs
 
         cc = int(knobs.get("cc", 74))
-        raw_triggers = knobs.get("trigger_steps", [0, 4, 8, 12])
-        if not isinstance(raw_triggers, list):
-            raise TypeError(
-                f"cc_envelope: 'trigger_steps' must be a list, got {type(raw_triggers).__name__}"
-            )
+        pulses = int(knobs.get("pulses", 4))
+        offset = int(knobs.get("offset", 0))
 
         attack = max(1, int(knobs.get("attack_ticks", 40)))
         decay = max(1, int(knobs.get("decay_ticks", 120)))
@@ -148,11 +147,11 @@ class CCEnvelope(Algorithm):
         total_steps = steps_per_bar(ctx.ticks_per_bar, ctx.ppq)
         events: list[Event] = []
 
-        for raw in raw_triggers:
-            step = int(raw)
-            if not (0 <= step < total_steps):
+        pattern = euclid(pulses, total_steps, offset)
+        for step_idx, fires in enumerate(pattern):
+            if not fires:
                 continue
-            start = step * s
+            start = step_idx * s
             # Attack: rest → peak.
             events.extend(self._ramp(cc, start, attack, rest, peak, samples))
             # Decay: peak → sustain.

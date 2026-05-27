@@ -16,6 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
+from jtx.algorithms._chords import QUALITY_CHOICES
+from jtx.algorithms._palettes import PALETTE_CHOICES
 from jtx.model import VoiceType
 
 KnobKind = Literal["float", "int", "choice", "list_int", "list_str", "string"]
@@ -130,10 +132,20 @@ _DRUM_PATTERN = (
 
 _DRUM_ONE_SHOT = (
     KnobSpec(
-        "steps",
-        "list_int",
-        default=[0, 4, 8, 12],
-        description="16th-note positions to fire (0–15, comma-separated).",
+        "pulses",
+        "int",
+        default=1,
+        minimum=0,
+        maximum=16,
+        description="How many hits per bar (euclid-distributed across 16 steps).",
+    ),
+    KnobSpec(
+        "offset",
+        "int",
+        default=0,
+        minimum=0,
+        maximum=15,
+        description="Rotate the pattern N 16ths within the bar.",
     ),
     KnobSpec(
         "velocity",
@@ -152,10 +164,20 @@ _DRUM_ONE_SHOT = (
         description="Length of each hit in ticks (PPQ 480; a beat = 480 ticks).",
     ),
     KnobSpec(
-        "flam_ticks",
-        "list_int",
-        default=[],
-        description="Tick offsets before each hit to add as flam pre-hits (e.g. 12,24).",
+        "flam_count",
+        "int",
+        default=0,
+        minimum=0,
+        maximum=3,
+        description="Extra flam-cluster hits after each main hit (0 = no flam).",
+    ),
+    KnobSpec(
+        "flam_spacing_ticks",
+        "int",
+        default=12,
+        minimum=1,
+        maximum=60,
+        description="Ticks between successive flam hits (PPQ 480).",
     ),
     KnobSpec(
         "flam_decay",
@@ -344,10 +366,11 @@ _MELODIC_LINE = (
         description="Chance of inserting a chromatic passing tone between picks.",
     ),
     KnobSpec(
-        "degree_palette",
-        "list_int",
-        default=[],
-        description="Allowed scale degrees (0–6, comma-separated). Empty = full scale.",
+        "palette",
+        "choice",
+        default="tones_only",
+        choices=PALETTE_CHOICES,
+        description="Which scale degrees the line draws from (triad / pentatonic / full / …).",
     ),
 )
 
@@ -400,19 +423,21 @@ _ARP = (
         description="Transpose by N octaves.",
     ),
     KnobSpec(
-        "chord_intervals",
-        "list_int",
-        default=[0, 3, 7],
-        description="Semitone intervals defining the arpeggiated chord (0,3,7 = minor triad).",
+        "quality",
+        "choice",
+        default="minor",
+        choices=QUALITY_CHOICES,
+        description="Chord shape to arpeggiate (minor / major / sus4 / maj7 / …).",
     ),
 )
 
 _SUSTAINED_CHORD = (
     KnobSpec(
-        "intervals",
-        "list_int",
-        default=[0, 3, 7],
-        description="Semitone intervals stacked on the root (0,3,7 = minor triad).",
+        "quality",
+        "choice",
+        default="minor",
+        choices=QUALITY_CHOICES,
+        description="Chord voicing (minor / major / sus2 / maj7 / power / …).",
     ),
     KnobSpec(
         "gate",
@@ -458,16 +483,27 @@ _SUSTAINED_CHORD = (
 
 _CHORD_STAB = (
     KnobSpec(
-        "intervals",
-        "list_int",
-        default=[0, 3, 7],
-        description="Semitone intervals defining the chord voicing.",
+        "quality",
+        "choice",
+        default="minor",
+        choices=QUALITY_CHOICES,
+        description="Chord voicing (minor / major / sus4 / maj7 / …).",
     ),
     KnobSpec(
-        "steps",
-        "list_int",
-        default=[2, 6, 10, 14],
-        description="16th-note step positions where the stab fires (0–15).",
+        "pulses",
+        "int",
+        default=4,
+        minimum=0,
+        maximum=16,
+        description="How many stabs per bar (euclid-distributed).",
+    ),
+    KnobSpec(
+        "offset",
+        "int",
+        default=2,
+        minimum=0,
+        maximum=15,
+        description="Rotate the stab pattern N 16ths (offset 2 = classic off-beat).",
     ),
     KnobSpec(
         "gate",
@@ -581,10 +617,20 @@ _CC_ENVELOPE = (
         description="MIDI CC number to send the envelope on (74 = filter cutoff).",
     ),
     KnobSpec(
-        "trigger_steps",
-        "list_int",
-        default=[0, 4, 8, 12],
-        description="16th-note positions where the envelope retriggers.",
+        "pulses",
+        "int",
+        default=4,
+        minimum=0,
+        maximum=16,
+        description="How many envelope retriggers per bar (euclid-distributed).",
+    ),
+    KnobSpec(
+        "offset",
+        "int",
+        default=0,
+        minimum=0,
+        maximum=15,
+        description="Rotate the trigger pattern N 16ths.",
     ),
     KnobSpec(
         "attack_ticks",
@@ -646,10 +692,20 @@ _CC_ENVELOPE = (
 
 _ROOT_PULSE = (
     KnobSpec(
-        "steps",
-        "list_int",
-        default=[0, 4, 8, 12],
-        description="16th-note positions to fire the chord root on.",
+        "pulses",
+        "int",
+        default=4,
+        minimum=0,
+        maximum=16,
+        description="How many root-note pulses per bar (euclid-distributed).",
+    ),
+    KnobSpec(
+        "offset",
+        "int",
+        default=0,
+        minimum=0,
+        maximum=15,
+        description="Rotate the pulse pattern N 16ths within the bar.",
     ),
     KnobSpec(
         "velocity",
@@ -763,10 +819,11 @@ _VOICE_FOLLOWER = (
         description="Additional octave shift applied to every output note.",
     ),
     KnobSpec(
-        "chord",
-        "list_int",
-        default=[0],
-        description="Semitone offsets emitted per input note ([0]=unison, [0,4,7]=major triad).",
+        "quality",
+        "choice",
+        default="unison",
+        choices=QUALITY_CHOICES,
+        description="Stack a chord shape on every input note (unison = pass-through).",
     ),
     KnobSpec(
         "quantize",
