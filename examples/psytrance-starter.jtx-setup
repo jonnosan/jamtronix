@@ -1,0 +1,91 @@
+{
+  "id": "psytrance-starter",
+  "name": "Psytrance Starter Rig",
+  "default_midi_port": "IAC Driver Bus 1",
+  "daw_template_path": null,
+  "voices": [
+    {
+      "name": "kick",
+      "type": "drum",
+      "default_role": "drum",
+      "midi_channel": 10,
+      "midi_port": null,
+      "kit_map": {
+        "kick": 36
+      },
+      "cc_map": {}
+    },
+    {
+      "name": "snare",
+      "type": "drum",
+      "default_role": "drum",
+      "midi_channel": 10,
+      "midi_port": null,
+      "kit_map": {
+        "snare": 38
+      },
+      "cc_map": {}
+    },
+    {
+      "name": "chh",
+      "type": "drum",
+      "default_role": "drum",
+      "midi_channel": 10,
+      "midi_port": null,
+      "kit_map": {
+        "chh": 42
+      },
+      "cc_map": {}
+    },
+    {
+      "name": "ohh",
+      "type": "drum",
+      "default_role": "drum",
+      "midi_channel": 10,
+      "midi_port": null,
+      "kit_map": {
+        "ohh": 46
+      },
+      "cc_map": {}
+    },
+    {
+      "name": "acid",
+      "type": "mono",
+      "default_role": "bass",
+      "midi_channel": 1,
+      "midi_port": null,
+      "kit_map": {},
+      "cc_map": {}
+    },
+    {
+      "name": "stab",
+      "type": "poly",
+      "default_role": "stab",
+      "midi_channel": 2,
+      "midi_port": null,
+      "kit_map": {},
+      "cc_map": {}
+    },
+    {
+      "name": "lead",
+      "type": "mono",
+      "default_role": "lead",
+      "midi_channel": 3,
+      "midi_port": null,
+      "kit_map": {},
+      "cc_map": {}
+    },
+    {
+      "name": "filter",
+      "type": "modulator",
+      "default_role": "modulator",
+      "midi_channel": 1,
+      "midi_port": null,
+      "kit_map": {},
+      "cc_map": {}
+    }
+  ],
+  "clock_mode": "internal_master",
+  "midi_clock_in_port": null,
+  "schema_version": 1
+}
