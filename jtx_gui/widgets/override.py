@@ -80,8 +80,7 @@ class OverrideField(QFrame):
         self._checkbox = QCheckBox("OVERRIDE")
         self._checkbox.setChecked(is_overridden)
         self._checkbox.setStyleSheet(
-            f"QCheckBox {{ color: {theme.INK_DIM.name()}; "
-            "font-size: 8pt; letter-spacing: 1px; }}"
+            f"QCheckBox {{ color: {theme.INK_DIM.name()}; }} "
             f"QCheckBox:checked {{ color: {theme.INK_HOT.name()}; }}"
         )
         self._checkbox.toggled.connect(self._on_check_toggled)
