@@ -153,11 +153,12 @@ class OverrideField(QFrame):
         effect = QGraphicsOpacityEffect(self._editor)
         effect.setOpacity(opacity)
         self._editor.setGraphicsEffect(effect)
-        tip = (
-            f"{self._spec.name}: overriding"
-            if overridden
-            else f"{self._spec.name}: inheriting {_format_text_value(self._inherited)!s}"
-        )
+        if overridden:
+            state = "overriding"
+        else:
+            state = f"inheriting {_format_text_value(self._inherited)!s}"
+        desc = f"\n{self._spec.description}" if self._spec.description else ""
+        tip = f"{self._spec.name} — {state}{desc}"
         self._editor.setToolTip(tip)
         self._checkbox.setToolTip(tip)
 

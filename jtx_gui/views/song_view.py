@@ -691,6 +691,10 @@ class _ChoiceField(QWidget):
         layout.addWidget(self._combo)
         layout.addWidget(lbl)
         self.setMinimumWidth(110)
+        if spec.description:
+            tip = f"{spec.name}: {spec.description}"
+            self.setToolTip(tip)
+            self._combo.setToolTip(tip)
 
 
 class _TextField(QWidget):
@@ -722,6 +726,10 @@ class _TextField(QWidget):
         layout.addWidget(self._edit)
         layout.addWidget(lbl)
         self.setMinimumWidth(140)
+        if spec.description:
+            tip = f"{spec.name}: {spec.description}"
+            self.setToolTip(tip)
+            self._edit.setToolTip(tip)
 
     def _format_value(self, value: object) -> str:
         if value is None:
