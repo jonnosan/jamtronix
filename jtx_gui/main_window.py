@@ -27,6 +27,7 @@ from jtx.model import ValidationError
 from jtx_gui import theme
 from jtx_gui.state import AppState
 from jtx_gui.views.live_view import LiveView
+from jtx_gui.views.new_song_wizard import NewSongWizard
 from jtx_gui.views.parts_view import PartsView
 from jtx_gui.views.song_view import SongView
 
@@ -111,6 +112,11 @@ class MainWindow(QMainWindow):
     def _build_menu(self) -> None:
         file_menu = self.menuBar().addMenu("&File")
 
+        new_action = QAction("&New…", self)
+        new_action.setShortcut(QKeySequence.StandardKey.New)
+        new_action.triggered.connect(self.new_song_wizard)
+        file_menu.addAction(new_action)
+
         open_action = QAction("&Open…", self)
         open_action.setShortcut(QKeySequence.StandardKey.Open)
         open_action.triggered.connect(self.open_song_dialog)
@@ -133,6 +139,16 @@ class MainWindow(QMainWindow):
         file_menu.addAction(quit_action)
 
     # ----- file actions ----------------------------------------------------
+
+    def new_song_wizard(self) -> bool:
+        """Show the new-song wizard; if it produces a song, open it."""
+        wizard = NewSongWizard(self)
+        if wizard.exec() != NewSongWizard.DialogCode.Accepted:
+            return False
+        path = wizard.created_path()
+        if path is None:
+            return False
+        return self.open_song(path)
 
     def open_song_dialog(self) -> bool:
         settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
