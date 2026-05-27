@@ -31,10 +31,15 @@ from dataclasses import dataclass
 
 from PySide6.QtCore import QObject, QThread, Signal
 
-from jtx.engine.clock_source import InternalClock
+from jtx.engine.clock_source import (
+    AbletonLinkClock,
+    ClockSource,
+    InternalClock,
+    MidiClockSlaveClock,
+)
 from jtx.engine.events import Event
 from jtx.engine.sink import Sink
-from jtx.model import Setup, Song
+from jtx.model import ClockMode, Setup, Song
 from jtx.player import SongPlayer
 from jtx.sinks.realtime import RealtimeMidiSink
 
@@ -109,6 +114,8 @@ class TransportService(QObject):
         setup: Setup,
         part_name: str,
         port_name: str | None,
+        clock_mode: ClockMode | None = None,
+        clock_in_port: str | None = None,
     ) -> None:
         """Begin playback at ``part_name``. No-op if already running."""
         if self.is_running:
@@ -123,11 +130,20 @@ class TransportService(QObject):
             self.error.emit(f"Couldn't open MIDI port: {exc}")
             return
 
+        mode: ClockMode = clock_mode or setup.clock_mode
+        slave_port = clock_in_port or setup.midi_clock_in_port
+        try:
+            clock = _build_clock(mode, song_tempo=song.tempo, midi_clock_in_port=slave_port)
+        except Exception as exc:  # noqa: BLE001
+            self.error.emit(f"Couldn't start clock ({mode}): {exc}")
+            return
+
         worker = _PlaybackWorker(
             song=song,
             setup=setup,
             initial_part=part_name,
             sink=sink,
+            clock=clock,
         )
         thread = QThread(self)
         worker.moveToThread(thread)
@@ -207,6 +223,7 @@ class _PlaybackWorker(QObject):
         setup: Setup,
         initial_part: str,
         sink: Sink,
+        clock: ClockSource,
     ) -> None:
         super().__init__()
         self._song = song
@@ -215,7 +232,7 @@ class _PlaybackWorker(QObject):
         self._queued: str | None = None
         self._stop_requested = False
         self._sink = sink
-        self._clock = InternalClock(tempo_bpm=float(song.tempo))
+        self._clock = clock
 
     def request_stop(self) -> None:
         self._stop_requested = True
@@ -279,3 +296,20 @@ class _PlaybackWorker(QObject):
 
     def _build_player(self, part_name: str) -> SongPlayer:
         return SongPlayer(self._song, self._setup, part_name)
+
+
+def _build_clock(
+    mode: ClockMode,
+    *,
+    song_tempo: float,
+    midi_clock_in_port: str | None,
+) -> ClockSource:
+    if mode == "internal_master":
+        return InternalClock(tempo_bpm=float(song_tempo))
+    if mode == "midi_clock_slave":
+        if not midi_clock_in_port:
+            raise ValueError("midi_clock_slave requires an input port name")
+        return MidiClockSlaveClock(midi_clock_in_port)
+    if mode == "ableton_link":
+        return AbletonLinkClock()
+    raise ValueError(f"unknown clock mode: {mode!r}")
