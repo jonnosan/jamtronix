@@ -114,6 +114,14 @@ class MainWindow(QMainWindow):
             self._nav_buttons.append(btn)
 
         layout.addStretch(1)
+
+        # SETUP is an action, not a view, so it goes below the
+        # stretch (anchored to the bottom of the sidebar) and is
+        # not part of the checkable nav group.
+        setup_btn = QPushButton("SETUP", sidebar)
+        setup_btn.setObjectName("SidebarButton")
+        setup_btn.clicked.connect(self.edit_setup)
+        layout.addWidget(setup_btn)
         return sidebar
 
     def _switch_view(self, index: int) -> None:
@@ -143,11 +151,6 @@ class MainWindow(QMainWindow):
         save_as_action.setShortcut(QKeySequence.StandardKey.SaveAs)
         save_as_action.triggered.connect(self.save_song_as)
         file_menu.addAction(save_as_action)
-
-        file_menu.addSeparator()
-        edit_setup_action = QAction("&Edit Setup…", self)
-        edit_setup_action.triggered.connect(self.edit_setup)
-        file_menu.addAction(edit_setup_action)
 
         file_menu.addSeparator()
         quit_action = QAction("&Quit", self)
