@@ -13,8 +13,8 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 
-from jtx.model import Song
-from jtx.persist import load_song, save_song
+from jtx.model import Setup, Song, ValidationError
+from jtx.persist import load_setup, load_song, save_song
 
 
 class AppState(QObject):
@@ -29,6 +29,8 @@ class AppState(QObject):
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._song: Song | None = None
+        self._setup: Setup | None = None
+        self._setup_error: str | None = None
         self._path: Path | None = None
         self._dirty = False
 
@@ -37,6 +39,15 @@ class AppState(QObject):
     @property
     def song(self) -> Song | None:
         return self._song
+
+    @property
+    def setup(self) -> Setup | None:
+        return self._setup
+
+    @property
+    def setup_error(self) -> str | None:
+        """Reason the sibling .jtx-setup couldn't load, if any."""
+        return self._setup_error
 
     @property
     def path(self) -> Path | None:
@@ -61,9 +72,33 @@ class AppState(QObject):
         self._song = song
         self._path = p
         self._dirty = False
+        self._load_sibling_setup()
         self.song_changed.emit()
         self.path_changed.emit(self._path)
         self.dirty_changed.emit(False)
+
+    def _load_sibling_setup(self) -> None:
+        """Look for ``<song_dir>/<setup_ref>.jtx-setup`` next to the song.
+
+        On miss or validation error, ``setup`` stays ``None`` and
+        ``setup_error`` describes the problem. The Song view doesn't
+        need the setup; the Live view does and surfaces this state.
+        """
+        self._setup = None
+        self._setup_error = None
+        if self._song is None or self._path is None:
+            return
+        candidate = self._path.parent / f"{self._song.setup_ref}.jtx-setup"
+        if not candidate.exists():
+            self._setup_error = (
+                f"Setup file {candidate.name!r} not found next to song. "
+                "Live playback needs a sibling .jtx-setup."
+            )
+            return
+        try:
+            self._setup = load_setup(candidate)
+        except (ValidationError, OSError, ValueError) as exc:
+            self._setup_error = f"Failed to load {candidate.name}: {exc}"
 
     def save(self) -> None:
         if self._song is None or self._path is None:
