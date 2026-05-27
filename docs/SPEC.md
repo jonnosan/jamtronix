@@ -176,6 +176,7 @@ overridden per role.
 | mono | `acid_bass` | 303-style step sequencer (probabilistic note picks, octave jumps, slide, internal CC74/CC71 sweep, pitch-bend wobble, optional `triplet_prob` for breakdown rolls) — covers slackbeatz `acid_303` |
 | mono | `sub_drone` | Sustained drone, root/fifth alternation, optional progression follow, optional kick-locked filter envelope — covers slackbeatz `subdrone` (deep techno staple) |
 | mono | `melodic_line` | Step-sequenced riff with passing tones, configurable `subdivision` (incl. 8t/16t triplet grids) and per-beat `triplet_prob` rolls — covers `rolling`, `gallop`, `mellow_pick`, `rhodes_phrase`, `acid_lead`, `psy_lead` |
+| mono | `motif_phrase` | Structured A-A'-A-B lead: rhythm-template + pitch-contour cell tiled across a phrase, with slot-label transforms (transpose/octave/density/displacement/retrograde) and scale-step progression. Uses `ctx.rng_hold` to keep base motif content stable across the phrase. Built for psy / acid leads where the line *develops* rather than walking randomly. |
 | mono | `arp` | Up/down/random/walk arpeggio with `subdivision` (16/8/4/8t/16t/…), octaves, gate, hold — covers `sh101_arp`, `arp_walk` |
 | poly | `sustained_chord` | Long-gated chord voicing following the progression — covers `triad_sustain`, `pad_drift`, `sustained_dyad`, `atmos_pad` |
 | poly | `chord_stab` | Short-gated voicings on configurable steps — covers `offbeat_stab`, `acid_stab`, `wurli_chop` |
@@ -186,8 +187,7 @@ overridden per role.
 | modulator | `step_cc` | Step-sequenced CC modulator — knob-driven value curves on a configurable subdivision (rhythmic, not periodic) |
 | follower | `voice_follower` | Single algorithm, fixed pipeline (see Followers below) |
 
-13 algorithms. Future additions (e.g. `motif_phrase` for A-A'-A-B lead structure
-with motif memory — see GitHub issues) get added per-PR.
+14 algorithms. Future additions get added per-PR.
 
 ### Followers
 

@@ -44,6 +44,7 @@ from jtx.algorithms import (
     DrumOneShot,
     DrumPattern,
     MelodicLine,
+    MotifPhrase,
     NoiseRiser,
     ReeseBass,
     RootPulse,
@@ -92,6 +93,8 @@ def instantiate_algorithm(algorithm_name: str, voice_slot: VoiceSlot) -> Algorit
         return SubDrone(midi_channel=ch, cc_map=voice_slot.cc_map)
     if algorithm_name == "melodic_line":
         return MelodicLine(midi_channel=ch)
+    if algorithm_name == "motif_phrase":
+        return MotifPhrase(midi_channel=ch)
     if algorithm_name == "arp":
         return Arp(midi_channel=ch)
     if algorithm_name == "sustained_chord":

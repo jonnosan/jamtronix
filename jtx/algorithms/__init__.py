@@ -6,6 +6,7 @@ from jtx.algorithms.cc_lfo import CCLFO, CCEnvelope
 from jtx.algorithms.drum_one_shot import DrumOneShot
 from jtx.algorithms.drum_pattern import DrumPattern
 from jtx.algorithms.melodic_line import MelodicLine
+from jtx.algorithms.motif_phrase import MotifPhrase
 from jtx.algorithms.noise_riser import NoiseRiser
 from jtx.algorithms.reese_bass import ReeseBass
 from jtx.algorithms.reference import RootPulse
@@ -23,6 +24,7 @@ __all__ = [
     "DrumOneShot",
     "DrumPattern",
     "MelodicLine",
+    "MotifPhrase",
     "NoiseRiser",
     "ReeseBass",
     "RootPulse",
