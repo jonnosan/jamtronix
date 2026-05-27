@@ -61,6 +61,22 @@
       "midi_channel": 1,
       "midi_port": null,
       "kit_map": {}
+    },
+    {
+      "name": "chord_ref",
+      "type": "mono",
+      "default_role": "lead",
+      "midi_channel": 15,
+      "midi_port": null,
+      "kit_map": {}
+    },
+    {
+      "name": "tonic_ref",
+      "type": "mono",
+      "default_role": "lead",
+      "midi_channel": 16,
+      "midi_port": null,
+      "kit_map": {}
     }
   ],
   "schema_version": 1

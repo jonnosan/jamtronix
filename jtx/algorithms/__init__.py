@@ -6,6 +6,7 @@ from jtx.algorithms.cc_lfo import CCLFO, CCEnvelope
 from jtx.algorithms.drum_one_shot import DrumOneShot
 from jtx.algorithms.drum_pattern import DrumPattern
 from jtx.algorithms.melodic_line import MelodicLine
+from jtx.algorithms.reference import ChordPulse, TonicPulse
 from jtx.algorithms.sub_drone import SubDrone
 from jtx.algorithms.sustained_chord import ChordStab, SustainedChord
 from jtx.algorithms.voice_follower import VoiceFollower
@@ -15,11 +16,13 @@ __all__ = [
     "Arp",
     "CCEnvelope",
     "CCLFO",
+    "ChordPulse",
     "ChordStab",
     "DrumOneShot",
     "DrumPattern",
     "MelodicLine",
     "SubDrone",
     "SustainedChord",
+    "TonicPulse",
     "VoiceFollower",
 ]
