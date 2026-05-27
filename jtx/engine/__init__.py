@@ -6,7 +6,12 @@ from here, never the reverse.
 """
 
 from jtx.engine.algorithm import Algorithm
-from jtx.engine.clock_source import ClockSource, InternalClock
+from jtx.engine.clock_source import (
+    AbletonLinkClock,
+    ClockSource,
+    InternalClock,
+    MidiClockSlaveClock,
+)
 from jtx.engine.context import BarContext
 from jtx.engine.events import ControlChange, Event, NoteOff, NoteOn, PitchBend
 from jtx.engine.meter import parse_meter, ticks_per_bar, ticks_per_beat
@@ -14,6 +19,7 @@ from jtx.engine.scheduler import BarGenerator, Scheduler
 from jtx.engine.sink import MemorySink, Sink
 
 __all__ = [
+    "AbletonLinkClock",
     "Algorithm",
     "BarContext",
     "BarGenerator",
@@ -22,6 +28,7 @@ __all__ = [
     "Event",
     "InternalClock",
     "MemorySink",
+    "MidiClockSlaveClock",
     "NoteOff",
     "NoteOn",
     "PitchBend",
