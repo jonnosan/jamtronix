@@ -222,6 +222,11 @@ class SongPlayer:
 
             song_voice = self.song.voices[v.name]
             pattern_knobs, feel_knobs = self._resolve_knobs(v.name, song_voice)
+            # ``follow_progression`` lets a voice opt out of the chord
+            # progression resolver — useful for sub bass that drones
+            # on the root while pads/stabs cycle through changes.
+            follow = bool(pattern_knobs.get("follow_progression", True))
+            voice_chord_root = chord_root if follow else 0
             contexts[v.name] = BarContext(
                 bar_index=bar_idx,
                 tick_offset=bar_idx * self.ticks_per_bar,
@@ -229,7 +234,7 @@ class SongPlayer:
                 tempo_bpm=self.song.tempo,
                 ppq=self.ppq,
                 key=self.song.key,
-                chord_root_semitones=chord_root,
+                chord_root_semitones=voice_chord_root,
                 pattern_knobs=pattern_knobs,
                 feel_knobs=feel_knobs,
                 rng=_r.Random(bar_seed),
@@ -281,6 +286,7 @@ class SongPlayer:
             bar_idx,
             self.ticks_per_bar,
             self.ppq,
+            part_bars=self.part.bars,
         )
 
         # Feel post-emit pass per voice (bar-internal jitter/accent/swing).
