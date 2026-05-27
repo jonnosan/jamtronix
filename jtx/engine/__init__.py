@@ -23,6 +23,11 @@ from jtx.engine.lfo import (
     sample_lfo,
 )
 from jtx.engine.meter import parse_meter, ticks_per_bar, ticks_per_beat
+from jtx.engine.root_provider import (
+    ProgressionRootProvider,
+    RootProvider,
+    degree_to_semitones,
+)
 from jtx.engine.scheduler import BarGenerator, Scheduler
 from jtx.engine.sink import MemorySink, Sink
 
@@ -38,14 +43,17 @@ __all__ = [
     "MemorySink",
     "MidiClockSlaveClock",
     "NoteOff",
-    "ParsedTarget",
     "NoteOn",
+    "ParsedTarget",
     "PitchBend",
+    "ProgressionRootProvider",
+    "RootProvider",
     "Scheduler",
     "Sink",
     "applications_for_part",
     "apply_feel",
     "apply_lfos_to_bar",
+    "degree_to_semitones",
     "parse_meter",
     "parse_target",
     "sample_lfo",
