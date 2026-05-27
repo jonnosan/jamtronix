@@ -1,9 +1,13 @@
 """KnobWidget — rotary control with a 1950s sci-fi look.
 
 A custom-painted dial that rotates between ``min_value`` and ``max_value``.
-Vertical mouse drag and wheel both change the value; double-click opens a
-numeric editor. A small dot in the upper-right corner indicates that an
-LFO is bound to the knob (set via :meth:`set_modulated`).
+
+Interactions:
+* Click + drag (up/right increase, down/left decrease).
+* Click on the arc — jumps to the value at that angle.
+* Scroll wheel / two-finger trackpad scroll — step adjust.
+* Double-click — opens a numeric editor.
+* Hold Shift during any of the above for fine-tune (1/10th sensitivity).
 
 This widget knows nothing about the song model. Owners connect
 :attr:`value_changed` and write the new value back to the model.
@@ -31,8 +35,18 @@ from PySide6.QtWidgets import (
 
 from jtx_gui import theme
 
-# A drag of this many vertical pixels sweeps the whole knob range.
-_DRAG_PIXELS_FULL_SWEEP = 200
+# A drag of this many pixels (max of |dx|, |dy|) sweeps the whole knob range.
+# 100 px is roughly the height of one knob — a wrist-flick is enough to
+# go end-to-end without leaving the widget.
+_DRAG_PIXELS_FULL_SWEEP = 100
+
+# Trackpad pixel-scroll: how many pixels of scroll per knob step.
+_PIXELS_PER_STEP = 8
+
+# Click-to-set tolerance: how close (relative to radius) the click has to
+# be to the dial arc to count as a "jump to this angle" gesture. Clicks
+# inside the centre cap won't jump — only drag.
+_CLICK_TO_SET_RADIUS_FRAC = 0.35
 
 # Knob arc — slightly more than 3/4 of a circle, opening downward.
 # 0 deg = +x axis, counter-clockwise. Min is bottom-left, max bottom-right.
@@ -66,12 +80,20 @@ class KnobWidget(QWidget):
         self._integer = integer
         self._value = self._clamp(float(value))
         self._modulated = False
-        self._drag_anchor_y: float | None = None
+        self._drag_anchor: QPointF | None = None
         self._drag_anchor_value = 0.0
+        # Cached centre + radius from the last paint; click-to-set
+        # needs them in widget-local coords.
+        self._dial_centre = QPointF(0, 0)
+        self._dial_radius = 1.0
+        # Pixel-scroll accumulator so trackpad scroll feels stepped
+        # (pixelDelta() comes in granular ~1px increments per gesture).
+        self._wheel_pixel_accum = 0.0
 
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self.setMinimumSize(74, 96)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolTip(f"{label}\n[{self._min} … {self._max}]")
 
     # ----- public API ------------------------------------------------------
@@ -98,29 +120,45 @@ class KnobWidget(QWidget):
     # ----- input -----------------------------------------------------------
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._drag_anchor_y = event.position().y()
-            self._drag_anchor_value = self._value
-            self.setCursor(Qt.CursorShape.SizeVerCursor)
-            event.accept()
+        if event.button() != Qt.MouseButton.LeftButton:
+            super().mousePressEvent(event)
             return
-        super().mousePressEvent(event)
+        pos = event.position()
+        # If the click landed on the dial arc, jump to that angle first
+        # so the drag continues from the clicked position. Clicks well
+        # inside the centre cap just start a drag without a jump.
+        dx = pos.x() - self._dial_centre.x()
+        dy = pos.y() - self._dial_centre.y()
+        dist = math.hypot(dx, dy)
+        radius = max(1.0, self._dial_radius)
+        if dist > radius * _CLICK_TO_SET_RADIUS_FRAC:
+            self.set_value(self._value_for_angle(dx, dy))
+        self._drag_anchor = QPointF(pos)
+        self._drag_anchor_value = self._value
+        self.setCursor(Qt.CursorShape.ClosedHandCursor)
+        event.accept()
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        if self._drag_anchor_y is None:
-            return super().mouseMoveEvent(event)
-        dy = self._drag_anchor_y - event.position().y()
+        if self._drag_anchor is None:
+            super().mouseMoveEvent(event)
+            return
+        pos = event.position()
+        dx = pos.x() - self._drag_anchor.x()
+        dy = self._drag_anchor.y() - pos.y()  # up = positive
+        # Combine X + Y so the drag works in any direction. Use the
+        # larger absolute component so diagonal drags don't double up.
+        delta_px = dy if abs(dy) >= abs(dx) else dx
         span = self._max - self._min
-        delta = (dy / _DRAG_PIXELS_FULL_SWEEP) * span
-        # Hold Shift for a fine-tune drag.
+        delta = (delta_px / _DRAG_PIXELS_FULL_SWEEP) * span
         if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
             delta *= 0.1
         self.set_value(self._drag_anchor_value + delta)
+        event.accept()
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.LeftButton and self._drag_anchor_y is not None:
-            self._drag_anchor_y = None
-            self.unsetCursor()
+        if event.button() == Qt.MouseButton.LeftButton and self._drag_anchor is not None:
+            self._drag_anchor = None
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
             event.accept()
             return
         super().mouseReleaseEvent(event)
@@ -130,17 +168,51 @@ class KnobWidget(QWidget):
         event.accept()
 
     def wheelEvent(self, event: QWheelEvent) -> None:
+        # macOS trackpad sends pixelDelta (granular px); classic mouse
+        # wheel sends angleDelta in 1/8°-detents (120 per notch).
+        # Handle both.
+        step = max(1.0, self._step) if self._integer else self._step
+        if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+            step *= 0.1
+
+        pixel_dy = event.pixelDelta().y()
+        if pixel_dy != 0:
+            self._wheel_pixel_accum += pixel_dy
+            steps = int(self._wheel_pixel_accum / _PIXELS_PER_STEP)
+            if steps:
+                self._wheel_pixel_accum -= steps * _PIXELS_PER_STEP
+                self.set_value(self._value + steps * step)
+            event.accept()
+            return
+
         notches = event.angleDelta().y() / 120.0
         if notches == 0:
             return
-        if self._integer:
-            step = max(1.0, self._step)
-        else:
-            step = self._step
-        if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
-            step *= 0.1
         self.set_value(self._value + notches * step)
         event.accept()
+
+    # ----- click-to-angle resolution -------------------------------------
+
+    def _value_for_angle(self, dx: float, dy: float) -> float:
+        """Return the knob value that would put the pointer under (dx, dy)."""
+        # math.atan2 returns radians in (-pi, pi], measured from +x with
+        # +y going *up*. Qt has +y going *down*, so negate dy. Then
+        # convert to degrees in [0, 360) and project onto the arc.
+        angle_deg = math.degrees(math.atan2(-dy, dx)) % 360.0
+        # Find fraction along the arc from start (225°) sweeping by
+        # -270° (i.e. clockwise to -45° / 315°).
+        # Convert click angle into "degrees clockwise from arc start".
+        clockwise_from_start = (_ARC_START_DEG - angle_deg) % 360.0
+        # Arc spans 270° clockwise; clicks outside the arc gap (the
+        # bottom 90° between 315° and 225°) snap to the nearest end.
+        if clockwise_from_start > 270.0:
+            # Closer to min (0) if past min side; max otherwise.
+            mid_gap = 270.0 + 45.0  # 315° from start = bottom of arc gap
+            frac = 0.0 if clockwise_from_start > mid_gap else 1.0
+        else:
+            frac = clockwise_from_start / 270.0
+        span = self._max - self._min
+        return self._min + frac * span
 
     # ----- painting --------------------------------------------------------
 
@@ -159,6 +231,9 @@ class KnobWidget(QWidget):
         cx = w / 2.0
         cy = dial_top + dial_side / 2.0
         radius = dial_side / 2.0 - 4
+        # Cache for click-to-set hit testing.
+        self._dial_centre = QPointF(cx, cy)
+        self._dial_radius = radius
 
         # ----- label (uppercase, stencil) ------------------------------------
         painter.setFont(theme.label_font(size=9))

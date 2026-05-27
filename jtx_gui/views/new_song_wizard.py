@@ -11,6 +11,7 @@ to compose entirely from scratch in the Song view.
 
 from __future__ import annotations
 
+import random
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -33,6 +34,54 @@ from jtx_gui import theme
 from jtx_gui.bundles import bundled_setups
 from templates import STYLES
 from templates import build as build_song
+
+_TITLE_FIRST = (
+    "Phuture",
+    "Acid",
+    "Sub",
+    "Deep",
+    "Strobe",
+    "Neon",
+    "Helix",
+    "Vapor",
+    "Voltage",
+    "Lunar",
+    "Solar",
+    "Astral",
+    "Magnet",
+    "Cipher",
+    "Mirage",
+    "Pulse",
+)
+_TITLE_SECOND = (
+    "Lines",
+    "Drift",
+    "Field",
+    "Engine",
+    "Storm",
+    "Tower",
+    "Mirror",
+    "Loop",
+    "Rapture",
+    "Tide",
+    "Bloom",
+    "Maze",
+    "Cycle",
+    "Static",
+    "Bloom",
+    "Garden",
+)
+
+
+def random_title() -> str:
+    """Pick a fresh two-word jam-tool title."""
+    return f"{random.choice(_TITLE_FIRST)} {random.choice(_TITLE_SECOND)}"
+
+
+def random_non_blank_style() -> str:
+    """Pick a random style excluding 'blank'."""
+    non_blank = [s for s in STYLES.keys() if s != "blank"]
+    return random.choice(non_blank) if non_blank else next(iter(STYLES.keys()))
 
 
 class NewSongWizard(QDialog):
@@ -62,6 +111,8 @@ class NewSongWizard(QDialog):
         # ----- title input -----
         self._title_edit = QLineEdit()
         self._title_edit.setPlaceholderText("e.g. Phuture Lines")
+        self._title_edit.setText(random_title())
+        self._title_edit.selectAll()
 
         # ----- style picker -----
         self._style_combo = QComboBox()
@@ -70,6 +121,10 @@ class NewSongWizard(QDialog):
         for style in STYLES.keys():
             label = style.replace("_", " ").title()
             self._style_combo.addItem(label, style)
+        default_style = random_non_blank_style()
+        default_index = self._style_combo.findData(default_style)
+        if default_index >= 0:
+            self._style_combo.setCurrentIndex(default_index)
         self._style_blurb = QLabel("")
         self._style_blurb.setWordWrap(True)
         self._style_blurb.setStyleSheet(f"color: {theme.INK_DIM.name()}; padding: 4px 0;")
