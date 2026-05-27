@@ -126,7 +126,11 @@ class PartsView(QWidget):
         self._detail.setWidget(self._detail_inner)
 
         # ----- splitter for list + detail -----
-        splitter = QSplitter(Qt.Orientation.Horizontal)
+        # Parent passed at construction so PySide6 hands lifetime to Qt
+        # immediately. Without it, the Python wrapper retains C++ ownership
+        # and a later GC pass can re-fire the C++ destructor → segfault
+        # (typically when the toolbar's beat timer keeps the event loop hot).
+        splitter = QSplitter(Qt.Orientation.Horizontal, self)
         splitter.addWidget(list_widget)
         splitter.addWidget(self._detail)
         splitter.setStretchFactor(0, 0)

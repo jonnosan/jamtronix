@@ -86,6 +86,12 @@ class SetupEditor(QDialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
+        # Have Qt destroy the dialog (and its whole widget tree) as soon
+        # as it closes. Otherwise PySide6's Python wrappers linger until
+        # GC, and the next ev-loop pending-calls flush can re-fire C++
+        # destructors on already-freed children — segfaults during
+        # playback when the beat timer keeps the loop hot.
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self._setup = setup
         self._setup_path = setup_path
         self._audition_fn = audition_fn or _default_audition
@@ -212,7 +218,10 @@ class SetupEditor(QDialog):
     # ----- Voices tab -----------------------------------------------------
 
     def _build_voices_tab(self) -> QWidget:
-        splitter = QSplitter(Qt.Orientation.Horizontal)
+        # Parent passed at construction so PySide6 hands lifetime to Qt
+        # immediately. Without it, the Python wrapper retains C++ ownership
+        # and a later GC pass can re-fire the C++ destructor → segfault.
+        splitter = QSplitter(Qt.Orientation.Horizontal, self)
 
         # Left: voice list + add/remove/rename buttons.
         left = QWidget()
