@@ -1,18 +1,17 @@
-"""``tonic_pulse`` + ``chord_pulse`` — reference clicks for tonal context.
+"""``root_pulse`` — current chord-root reference voice.
 
-These two small algorithms are intended as **monitoring voices** during
-a jam — you route them to a dedicated synth channel to hear the song
-tonic / current chord root as a click track alongside the music.
+Emits the **current chord root** (``ctx.key.tonic`` shifted by
+``ctx.chord_root_semitones``) at configured 16th-step positions.
+Designed to drive arps and other MIDI effects in a DAW that need a
+moving root-note stream:
 
-* :class:`TonicPulse` emits the song tonic (``ctx.key.tonic``) at
-  configured 16th-step positions. **Ignores ``chord_root_semitones``**
-  so the tonic stays constant even when the chord progression moves
-  underneath.
-* :class:`ChordPulse` emits the current chord root (tonic +
-  ``chord_root_semitones``) once per bar as a held note. This is the
-  pitch you'd hum to *follow* the progression.
+* Default ``steps=[0, 4, 8, 12]`` → quarter-note pulse. Feed into
+  Ableton's Arpeggiator / Chord / Pitch effects to lock the effect's
+  output to the current chord.
+* ``steps=[0]`` with high ``gate`` → one held note per bar — useful as
+  a sustained chord-root reference next to the rhythmic stream.
 
-Both are deterministic (no RNG use) and stateless across bars.
+Deterministic (no RNG), stateless across bars.
 """
 
 from __future__ import annotations
@@ -25,43 +24,59 @@ from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
 from jtx.engine.events import Event, NoteOff, NoteOn
 
-_DEFAULT_TONIC_STEPS: tuple[int, ...] = (0, 4, 8, 12)  # quarter notes in 4/4
+_DEFAULT_STEPS: tuple[int, ...] = (0, 4, 8, 12)  # quarter notes in 4/4
 
 
-class TonicPulse(Algorithm):
-    """Song-tonic reference click at configured 16th-step positions.
+class RootPulse(Algorithm):
+    """Current chord root at configured 16th-step positions.
+
+    Pitch = ``note_to_midi(ctx.key.tonic, register) + ctx.chord_root_semitones``,
+    so the emitted note follows the macro chord progression bar-to-bar.
 
     Knobs:
 
     * ``steps`` — list of 16th-step indices to fire on. Default
-      ``[0, 4, 8, 12]`` (quarter notes in 4/4).
+      ``[0, 4, 8, 12]`` (quarter notes in 4/4). Use ``[0]`` for one
+      whole note per bar.
     * ``velocity`` (90).
     * ``octave`` (0) — register shift; default 0 = octave 4 (A4 ≈ 440 Hz
       for an A-key song).
-    * ``gate`` (0.5) — fraction of step the note holds.
+    * ``gate`` (0.5) — fraction of *step* the note holds. With
+      ``steps=[0]`` and ``gate=0.95`` you get a near-whole-note hold
+      relative to the step grid; for a true full-bar hold set
+      ``duration_ticks`` explicitly.
+    * ``duration_ticks`` — explicit note-off offset from note-on,
+      overrides ``gate`` if set.
     """
 
-    name: ClassVar[str] = "tonic_pulse"
+    name: ClassVar[str] = "root_pulse"
 
     def __init__(self, *, midi_channel: int) -> None:
         self.midi_channel = midi_channel
 
     def generate_bar(self, ctx: BarContext) -> list[Event]:
         knobs = ctx.pattern_knobs
-        raw_steps = knobs.get("steps", list(_DEFAULT_TONIC_STEPS))
+        raw_steps = knobs.get("steps", list(_DEFAULT_STEPS))
         if not isinstance(raw_steps, list):
-            raise TypeError(f"tonic_pulse: 'steps' must be a list, got {type(raw_steps).__name__}")
+            raise TypeError(f"root_pulse: 'steps' must be a list, got {type(raw_steps).__name__}")
 
         velocity = max(1, min(127, int(knobs.get("velocity", 90))))
         octave_shift = int(knobs.get("octave", 0))
         gate = float(knobs.get("gate", 0.5))
 
         register_octave = 4 + octave_shift
-        pitch = max(0, min(127, note_to_midi(ctx.key.tonic, register_octave)))
+        pitch = max(
+            0,
+            min(127, note_to_midi(ctx.key.tonic, register_octave) + ctx.chord_root_semitones),
+        )
 
         s = step_ticks(ctx.ppq)
         total_steps = steps_per_bar(ctx.ticks_per_bar, ctx.ppq)
-        duration = max(1, int(s * gate))
+
+        if "duration_ticks" in knobs:
+            duration = max(1, int(knobs["duration_ticks"]))
+        else:
+            duration = max(1, int(s * gate))
 
         events: list[Event] = []
         for raw in raw_steps:
@@ -74,41 +89,3 @@ class TonicPulse(Algorithm):
             )
             events.append(NoteOff(tick=tick + duration, channel=self.midi_channel, note=pitch))
         return events
-
-
-class ChordPulse(Algorithm):
-    """Current chord-root reference, one whole note per bar.
-
-    Pitch = ``note_to_midi(ctx.key.tonic, register) + ctx.chord_root_semitones``.
-    Honours ``ctx.chord_root_semitones`` so the held note follows the
-    progression's chord changes (unlike :class:`TonicPulse`).
-
-    Knobs:
-
-    * ``velocity`` (90).
-    * ``octave`` (0) — register shift; default 0 = octave 4.
-    * ``gate`` (0.95) — fraction of bar the note holds. Slightly under
-      1 so consecutive bars have a clean retrigger boundary.
-    """
-
-    name: ClassVar[str] = "chord_pulse"
-
-    def __init__(self, *, midi_channel: int) -> None:
-        self.midi_channel = midi_channel
-
-    def generate_bar(self, ctx: BarContext) -> list[Event]:
-        knobs = ctx.pattern_knobs
-        velocity = max(1, min(127, int(knobs.get("velocity", 90))))
-        octave_shift = int(knobs.get("octave", 0))
-        gate = float(knobs.get("gate", 0.95))
-
-        register_octave = 4 + octave_shift
-        pitch = max(
-            0,
-            min(127, note_to_midi(ctx.key.tonic, register_octave) + ctx.chord_root_semitones),
-        )
-        duration = max(1, int(ctx.ticks_per_bar * gate))
-        return [
-            NoteOn(tick=0, channel=self.midi_channel, note=pitch, velocity=velocity),
-            NoteOff(tick=duration, channel=self.midi_channel, note=pitch),
-        ]

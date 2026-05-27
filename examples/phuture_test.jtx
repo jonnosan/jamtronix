@@ -68,13 +68,23 @@
       "feel": {}
     },
     "chord_ref": {
-      "algorithm": "chord_pulse",
-      "pattern": {"octave": 0, "velocity": 80, "gate": 0.95},
+      "algorithm": "root_pulse",
+      "pattern": {
+        "octave": 0,
+        "velocity": 80,
+        "steps": [0],
+        "duration_ticks": 1824
+      },
       "feel": {}
     },
-    "tonic_ref": {
-      "algorithm": "tonic_pulse",
-      "pattern": {"octave": 1, "velocity": 70, "gate": 0.4, "steps": [0, 4, 8, 12]},
+    "root_ref": {
+      "algorithm": "root_pulse",
+      "pattern": {
+        "octave": 1,
+        "velocity": 70,
+        "steps": [0, 4, 8, 12],
+        "gate": 0.4
+      },
       "feel": {}
     }
   },
