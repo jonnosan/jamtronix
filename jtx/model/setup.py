@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from jtx.model.types import ROLES_BY_TYPE, SCHEMA_VERSION, Role, VoiceType
+from jtx.model.types import ROLES_BY_TYPE, SCHEMA_VERSION, ClockMode, Role, VoiceType
 
 
 @dataclass
@@ -48,6 +48,10 @@ class Setup:
     default_midi_port: str
     daw_template_path: str | None = None
     voices: list[VoiceSlot] = field(default_factory=list)
+    clock_mode: ClockMode = "internal_master"
+    """Default clock source the GUI/CLI selects unless overridden."""
+    midi_clock_in_port: str | None = None
+    """MIDI-in port name to listen on when ``clock_mode == midi_clock_slave``."""
     schema_version: int = SCHEMA_VERSION
 
     def validate(self) -> list[str]:
@@ -56,6 +60,10 @@ class Setup:
             errors.append(
                 f"setup {self.id!r}: schema_version {self.schema_version} != "
                 f"supported {SCHEMA_VERSION}"
+            )
+        if self.clock_mode == "midi_clock_slave" and not self.midi_clock_in_port:
+            errors.append(
+                f"setup {self.id!r}: clock_mode 'midi_clock_slave' requires midi_clock_in_port"
             )
         names: set[str] = set()
         for slot in self.voices:

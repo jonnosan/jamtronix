@@ -26,7 +26,7 @@ from jtx.model.song import (
     VoiceConfig,
     VoiceOverride,
 )
-from jtx.model.types import LFOShape, Role, VoiceType
+from jtx.model.types import ClockMode, LFOShape, Role, VoiceType
 from jtx.model.validate import ValidationError, validate_song
 
 # ---------------------------------------------------------------- setup
@@ -50,6 +50,8 @@ def setup_from_dict(d: dict[str, Any]) -> Setup:
         default_midi_port=d["default_midi_port"],
         daw_template_path=d.get("daw_template_path"),
         voices=[_voice_slot_from_dict(v) for v in d.get("voices", [])],
+        clock_mode=cast(ClockMode, d.get("clock_mode", "internal_master")),
+        midi_clock_in_port=d.get("midi_clock_in_port"),
         schema_version=d.get("schema_version", 1),
     )
     errors = setup.validate()

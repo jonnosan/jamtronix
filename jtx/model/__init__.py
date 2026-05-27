@@ -20,6 +20,7 @@ from jtx.model.song import (
 from jtx.model.types import (
     ROLES_BY_TYPE,
     SCHEMA_VERSION,
+    ClockMode,
     LFOShape,
     Role,
     VoiceType,
@@ -28,6 +29,7 @@ from jtx.model.validate import ValidationError, cross_validate, validate_song
 
 __all__ = [
     "ChordProgression",
+    "ClockMode",
     "Key",
     "KnobDict",
     "KnobValue",
