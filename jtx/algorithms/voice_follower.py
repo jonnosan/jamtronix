@@ -36,6 +36,16 @@ Knobs:
 * ``quantize`` — ``off`` (default) / ``nearest`` / ``up`` / ``down``.
 * ``quantize_scale`` — override scale; default = ``ctx.key.scale``.
 * ``ratchet`` (1) — number of evenly-spaced retriggers per output note.
+* ``shift_bars`` (0) — read the source from N bars in the past instead of
+  the current bar. ``shift_bars=1`` produces a one-bar echo: bar N
+  outputs whatever the source did in bar N-1. v1 supports values 0 and
+  1 (the SongPlayer caches only the immediately previous bar); values
+  >1 silently fall back to using whatever history is available
+  (typically none, so the follower emits nothing).
+
+The first bar of a part with ``shift_bars > 0`` is silent (no history
+yet); subsequent bars echo. Under the CLI's ``--loop``, wraparound
+after a full pass restores history so the loop is seamless.
 """
 
 from __future__ import annotations
@@ -58,13 +68,26 @@ class VoiceFollower(Algorithm):
         self.midi_channel = midi_channel
 
     def generate_bar(self, ctx: BarContext) -> list[Event]:
-        if not ctx.source_events:
-            return []
-
         knobs = ctx.pattern_knobs
         rng = ctx.rng
 
-        notes = _pair_notes(ctx.source_events)
+        shift_bars = int(knobs.get("shift_bars", 0))
+        if shift_bars < 0:
+            raise ValueError(f"voice_follower: 'shift_bars' must be >= 0, got {shift_bars}")
+        if shift_bars == 0:
+            chosen_source = ctx.source_events
+        elif shift_bars == 1:
+            # One-bar echo: read from the cached previous-bar events.
+            chosen_source = ctx.prev_source_events
+        else:
+            # v1 only caches one bar of history; deeper shifts return
+            # nothing rather than silently using the wrong source.
+            chosen_source = None
+
+        if not chosen_source:
+            return []
+
+        notes = _pair_notes(chosen_source)
         notes = _latch(notes, knobs)
         notes = _pattern_transform(notes, knobs, ctx.ticks_per_bar, rng)
         notes = _transpose(notes, knobs)
