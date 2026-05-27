@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from jtx.algorithms._chords import QUALITY_CHOICES
+from jtx.algorithms._cycle import CYCLE_BARS_CHOICES
 from jtx.algorithms._palettes import PALETTE_CHOICES
 from jtx.model import VoiceType
 
@@ -337,6 +338,24 @@ _ACID_BASS = (
         choices=TRIPLET_SUBDIV_CHOICES,
         description="Subdivision used when triplet_prob fires.",
     ),
+    KnobSpec(
+        "pitch_cycle_bars",
+        "choice",
+        default="off",
+        choices=CYCLE_BARS_CHOICES,
+        description=(
+            "Loop the root/octave/third pitch picks (and pitch-bend) on an N-bar cycle. "
+            "Combine with rhythm_cycle_bars for a fully repeating acid line. "
+            "Not v1 LFO target."
+        ),
+    ),
+    KnobSpec(
+        "rhythm_cycle_bars",
+        "choice",
+        default="off",
+        choices=CYCLE_BARS_CHOICES,
+        description=("Loop drop / triplet / slide rolls on an N-bar cycle. Not v1 LFO target."),
+    ),
 )
 
 _SUB_DRONE = (
@@ -387,6 +406,17 @@ _SUB_DRONE = (
         minimum=-3,
         maximum=3,
         description="Transpose the drone by N octaves (default is register 1, ≈A1).",
+    ),
+    KnobSpec(
+        "fifth_cycle_bars",
+        "choice",
+        default="off",
+        choices=CYCLE_BARS_CHOICES,
+        description=(
+            "Loop the fifth_prob override roll on an N-bar cycle. "
+            "With '4' the per-bar 'force fifth?' coin flip becomes a 4-bar pattern. "
+            "Not v1 LFO target."
+        ),
     ),
 )
 
@@ -468,6 +498,28 @@ _MELODIC_LINE = (
         choices=TRIPLET_SUBDIV_CHOICES,
         description="Triplet subdivision used inside the inserted rolls.",
     ),
+    KnobSpec(
+        "pitch_cycle_bars",
+        "choice",
+        default="off",
+        choices=CYCLE_BARS_CHOICES,
+        description=(
+            "Loop palette-degree picks on an N-bar cycle. "
+            "'off' = bar-fresh; '4' = 4-bar phrase repeats; 'part' = same across part. "
+            "Not v1 LFO target."
+        ),
+    ),
+    KnobSpec(
+        "rhythm_cycle_bars",
+        "choice",
+        default="off",
+        choices=CYCLE_BARS_CHOICES,
+        description=(
+            "Loop drop / triplet rolls on an N-bar cycle. "
+            "Compose with pitch_cycle_bars for a fully looping phrase. "
+            "Not v1 LFO target."
+        ),
+    ),
 )
 
 _ARP = (
@@ -523,6 +575,17 @@ _ARP = (
         default="minor",
         choices=QUALITY_CHOICES,
         description="Chord shape to arpeggiate (minor / major / sus4 / maj7 / …).",
+    ),
+    KnobSpec(
+        "pitch_cycle_bars",
+        "choice",
+        default="off",
+        choices=CYCLE_BARS_CHOICES,
+        description=(
+            "Loop the random / walk pitch picks on an N-bar cycle. "
+            "No effect on deterministic up / down / up_down modes. "
+            "Not v1 LFO target."
+        ),
     ),
 )
 

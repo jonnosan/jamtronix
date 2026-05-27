@@ -330,6 +330,18 @@ clock per part.
 - Per-bar seed (for LFOs and bar-by-bar regen): combines the above with
   `bar_index`.
 
+Cyclic PRNG streams (`derive_loop_seed` / `derive_hold_seed`) layer on top of the
+per-(part, voice) seed so any algorithm can ask for *repeating* randomness
+without breaking the bar-stateless contract. `BarContext.rng_loop(period)` returns
+an RNG that loops on an N-bar period (`bar_index % period` — bars at the same
+slot share the seed, so a 4-bar phrase repeats forever). `BarContext.rng_hold(period)`
+returns an RNG that holds for N bars before changing (`bar_index // period` — used
+by `motif_phrase` to keep base motif content stable across a phrase). Both accept
+`period=0` (off-sentinel — returns the bar-fresh `ctx.rng`), `period=1`
+(loop-only — every bar identical), and `period="part"` (constant across the
+part). A `salt` argument keeps multiple cyclic streams in the same algorithm
+distinct.
+
 Guarantees:
 - Same (title, seed, song state) always plays the same notes.
 - Repeated parts in the arrangement (`drop drop`) play identically by default.

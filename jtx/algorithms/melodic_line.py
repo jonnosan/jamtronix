@@ -30,6 +30,12 @@ Knobs:
 * ``intensity`` (1.0).
 * ``passing_prob`` (0.0) — chance of inserting a chromatic neighbour
   between consecutive notes (acid / psy lead flavour).
+* ``pitch_cycle_bars`` (``"off"``) — loop the palette-degree picks
+  (and passing-tone roll) on an N-bar cycle. ``"4"`` makes a 4-bar
+  pitch phrase that repeats; ``"part"`` locks pitches across the part.
+* ``rhythm_cycle_bars`` (``"off"``) — loop the drop / triplet rolls on
+  an N-bar cycle. Compose with ``pitch_cycle_bars`` for a fully looping
+  phrase or split them for evolving texture.
 """
 
 from __future__ import annotations
@@ -37,6 +43,7 @@ from __future__ import annotations
 import random
 from typing import ClassVar
 
+from jtx.algorithms._cycle import parse_cycle_bars
 from jtx.algorithms._palettes import palette_for
 from jtx.algorithms._subdivision import subdivision_grid
 from jtx.algorithms._theory import note_to_midi, scale_intervals
@@ -55,7 +62,7 @@ class MelodicLine(Algorithm):
 
     def generate_bar(self, ctx: BarContext) -> list[Event]:
         knobs = ctx.pattern_knobs
-        rng = ctx.rng
+        jitter_rng = ctx.rng
 
         drop_prob = float(knobs.get("drop_prob", 0.5))
         octave_shift = int(knobs.get("octave", 0))
@@ -69,6 +76,9 @@ class MelodicLine(Algorithm):
         triplet_subdiv = str(knobs.get("triplet_subdiv", "16t"))
 
         palette = palette_for(str(knobs.get("palette", "tones_only")))
+
+        pitch_rng = ctx.rng_loop(parse_cycle_bars(knobs.get("pitch_cycle_bars", "off")))
+        rhythm_rng = ctx.rng_loop(parse_cycle_bars(knobs.get("rhythm_cycle_bars", "off")))
 
         base_spacing, base_positions = subdivision_grid(subdivision, ctx.ticks_per_bar, ctx.ppq)
         duration = max(1, int(base_spacing * gate))
@@ -87,7 +97,7 @@ class MelodicLine(Algorithm):
         if triplet_prob > 0:
             beats_per_bar = ctx.ticks_per_bar // ctx.ppq
             for beat in range(beats_per_bar):
-                if rng.random() < triplet_prob:
+                if rhythm_rng.random() < triplet_prob:
                     triplet_starts.append(beat * ctx.ppq)
                     triplet_end_ticks.append((beat + 1) * ctx.ppq)
 
@@ -103,7 +113,9 @@ class MelodicLine(Algorithm):
             if _inside_triplet(tick):
                 continue
             note = _roll_note(
-                rng=rng,
+                pitch_rng=pitch_rng,
+                rhythm_rng=rhythm_rng,
+                jitter_rng=jitter_rng,
                 drop_prob=drop_prob,
                 palette=palette,
                 scale=scale,
@@ -125,7 +137,7 @@ class MelodicLine(Algorithm):
                 passing_prob=passing_prob,
                 base_spacing=base_spacing,
                 prev_pitch=prev_pitch,
-                rng=rng,
+                pitch_rng=pitch_rng,
             )
             prev_pitch = pitch
 
@@ -139,7 +151,9 @@ class MelodicLine(Algorithm):
                     if tick >= ctx.ticks_per_bar:
                         break
                     note = _roll_note(
-                        rng=rng,
+                        pitch_rng=pitch_rng,
+                        rhythm_rng=rhythm_rng,
+                        jitter_rng=jitter_rng,
                         drop_prob=drop_prob,
                         palette=palette,
                         scale=scale,
@@ -162,7 +176,7 @@ class MelodicLine(Algorithm):
                         passing_prob=0.0,  # no passing tones inside triplet bursts
                         base_spacing=triplet_spacing,
                         prev_pitch=prev_pitch,
-                        rng=rng,
+                        pitch_rng=pitch_rng,
                     )
                     prev_pitch = pitch
 
@@ -172,7 +186,9 @@ class MelodicLine(Algorithm):
 
 def _roll_note(
     *,
-    rng: random.Random,
+    pitch_rng: random.Random,
+    rhythm_rng: random.Random,
+    jitter_rng: random.Random,
     drop_prob: float,
     palette: tuple[int, ...] | list[int],
     scale: tuple[int, ...],
@@ -180,13 +196,20 @@ def _roll_note(
     base_vel: int,
     intensity: float,
 ) -> tuple[int, int] | None:
-    """One roll against drop_prob + palette; ``None`` on a rest."""
-    if rng.random() < drop_prob:
+    """One roll against drop_prob + palette; ``None`` on a rest.
+
+    Note: the rhythm roll (drop_prob) is consumed unconditionally so the
+    rhythm stream advances in lock-step with the position grid even when
+    the pitch / jitter streams differ in cycle length.
+    """
+    fires = rhythm_rng.random() >= drop_prob
+    degree_index = pitch_rng.randrange(len(palette))
+    jitter = jitter_rng.randint(-5, 5)
+    if not fires:
         return None
-    degree = palette[rng.randrange(len(palette))]
+    degree = palette[degree_index]
     pitch = tonic_midi + _degree_to_semitones(degree, scale)
     pitch = max(0, min(127, pitch))
-    jitter = rng.randint(-5, 5)
     vel = max(1, min(127, int(base_vel * intensity) + jitter))
     return pitch, vel
 
@@ -202,13 +225,13 @@ def _emit_note(
     passing_prob: float,
     base_spacing: int,
     prev_pitch: int | None,
-    rng: random.Random,
+    pitch_rng: random.Random,
 ) -> None:
     if (
         passing_prob > 0
         and prev_pitch is not None
         and abs(pitch - prev_pitch) >= 2
-        and rng.random() < passing_prob
+        and pitch_rng.random() < passing_prob
     ):
         direction = 1 if pitch > prev_pitch else -1
         passing_pitch = max(0, min(127, pitch - direction))

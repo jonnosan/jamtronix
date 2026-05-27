@@ -59,3 +59,68 @@ def derive_bar_seed(part_voice_seed: int, bar_index: int) -> int:
             str(bar_index).encode("utf-8"),
         ]
     )
+
+
+def derive_loop_seed(
+    part_voice_seed: int, period: int | str, bar_index: int, salt: str = ""
+) -> int:
+    """N-bar loop seed: bars at the same ``bar_index % period`` share it.
+
+    ``period == 0`` is the off-sentinel and falls through to the bar-fresh
+    seed (caller usually returns ``ctx.rng`` directly instead of calling
+    this). ``period == "part"`` yields a single seed used for the whole
+    part regardless of ``bar_index``. The ``b"loop"`` tag keeps this
+    stream distinct from :func:`derive_hold_seed` at the same period.
+    """
+    if period == 0:
+        return derive_bar_seed(part_voice_seed, bar_index)
+    if period == "part":
+        return _digest63(
+            [
+                str(part_voice_seed).encode("utf-8"),
+                b"loop:part",
+                salt.encode("utf-8"),
+            ]
+        )
+    slot = bar_index % int(period)
+    return _digest63(
+        [
+            str(part_voice_seed).encode("utf-8"),
+            b"loop",
+            str(int(period)).encode("utf-8"),
+            str(slot).encode("utf-8"),
+            salt.encode("utf-8"),
+        ]
+    )
+
+
+def derive_hold_seed(
+    part_voice_seed: int, period: int | str, bar_index: int, salt: str = ""
+) -> int:
+    """Hold-for-N-bars seed: bars in the same ``bar_index // period`` epoch share it.
+
+    ``period == 0`` is the off-sentinel and falls through to the bar-fresh
+    seed. ``period == "part"`` yields a single seed for the whole part.
+    The ``b"hold"`` tag keeps this stream distinct from
+    :func:`derive_loop_seed` at the same period.
+    """
+    if period == 0:
+        return derive_bar_seed(part_voice_seed, bar_index)
+    if period == "part":
+        return _digest63(
+            [
+                str(part_voice_seed).encode("utf-8"),
+                b"hold:part",
+                salt.encode("utf-8"),
+            ]
+        )
+    epoch = bar_index // int(period)
+    return _digest63(
+        [
+            str(part_voice_seed).encode("utf-8"),
+            b"hold",
+            str(int(period)).encode("utf-8"),
+            str(epoch).encode("utf-8"),
+            salt.encode("utf-8"),
+        ]
+    )

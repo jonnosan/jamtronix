@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from jtx.seed import (
     derive_bar_seed,
+    derive_hold_seed,
+    derive_loop_seed,
     derive_part_voice_seed,
     seed_from_title,
 )
@@ -82,3 +84,86 @@ def test_full_chain_known_vector() -> None:
     bar = derive_bar_seed(pv, 0)
     assert pv == 3823166437560449937
     assert bar == 852521614396855364
+
+
+def test_derive_loop_seed_off_falls_back_to_bar_seed() -> None:
+    pv = derive_part_voice_seed(seed_from_title("Phuture"), "drop", "acid")
+    for bar in [0, 3, 7, 16]:
+        assert derive_loop_seed(pv, 0, bar) == derive_bar_seed(pv, bar)
+
+
+def test_derive_loop_seed_period_groups_by_slot() -> None:
+    pv = derive_part_voice_seed(seed_from_title("Phuture"), "drop", "acid")
+    # period=4: bars 0/4/8 share a slot, bars 1/5 share a different slot.
+    assert derive_loop_seed(pv, 4, 0) == derive_loop_seed(pv, 4, 4)
+    assert derive_loop_seed(pv, 4, 0) == derive_loop_seed(pv, 4, 8)
+    assert derive_loop_seed(pv, 4, 1) == derive_loop_seed(pv, 4, 5)
+    assert derive_loop_seed(pv, 4, 0) != derive_loop_seed(pv, 4, 1)
+    assert derive_loop_seed(pv, 4, 0) != derive_loop_seed(pv, 4, 2)
+
+
+def test_derive_loop_seed_period_1_means_every_bar_identical() -> None:
+    pv = derive_part_voice_seed(seed_from_title("Phuture"), "drop", "acid")
+    seeds = {derive_loop_seed(pv, 1, b) for b in range(16)}
+    assert len(seeds) == 1
+
+
+def test_derive_loop_seed_part_constant_across_bars() -> None:
+    pv = derive_part_voice_seed(seed_from_title("Phuture"), "drop", "acid")
+    seeds = {derive_loop_seed(pv, "part", b) for b in range(32)}
+    assert len(seeds) == 1
+
+
+def test_derive_hold_seed_groups_by_epoch() -> None:
+    pv = derive_part_voice_seed(seed_from_title("Phuture"), "drop", "acid")
+    # period=4: bars 0..3 share an epoch, bars 4..7 share a different epoch.
+    s_epoch0 = derive_hold_seed(pv, 4, 0)
+    assert derive_hold_seed(pv, 4, 1) == s_epoch0
+    assert derive_hold_seed(pv, 4, 2) == s_epoch0
+    assert derive_hold_seed(pv, 4, 3) == s_epoch0
+    s_epoch1 = derive_hold_seed(pv, 4, 4)
+    assert s_epoch1 != s_epoch0
+    assert derive_hold_seed(pv, 4, 5) == s_epoch1
+
+
+def test_derive_hold_seed_off_falls_back_to_bar_seed() -> None:
+    pv = derive_part_voice_seed(seed_from_title("Phuture"), "drop", "acid")
+    for bar in [0, 3, 7, 16]:
+        assert derive_hold_seed(pv, 0, bar) == derive_bar_seed(pv, bar)
+
+
+def test_derive_hold_seed_part_constant_across_bars() -> None:
+    pv = derive_part_voice_seed(seed_from_title("Phuture"), "drop", "acid")
+    seeds = {derive_hold_seed(pv, "part", b) for b in range(32)}
+    assert len(seeds) == 1
+
+
+def test_loop_and_hold_are_distinct_streams() -> None:
+    # Same period, same bar → different seeds because of the loop/hold tag.
+    pv = derive_part_voice_seed(seed_from_title("Phuture"), "drop", "acid")
+    for bar in range(8):
+        assert derive_loop_seed(pv, 4, bar) != derive_hold_seed(pv, 4, bar)
+    assert derive_loop_seed(pv, "part", 0) != derive_hold_seed(pv, "part", 0)
+
+
+def test_loop_and_hold_salt_separates_streams() -> None:
+    pv = derive_part_voice_seed(seed_from_title("Phuture"), "drop", "acid")
+    assert derive_loop_seed(pv, 4, 0, salt="a") != derive_loop_seed(pv, 4, 0, salt="b")
+    assert derive_hold_seed(pv, 4, 0, salt="a") != derive_hold_seed(pv, 4, 0, salt="b")
+
+
+def test_loop_hold_seeds_are_63_bit_positive() -> None:
+    pv = derive_part_voice_seed(seed_from_title("Phuture"), "drop", "acid")
+    for period in [1, 2, 4, 8, 16, "part"]:
+        for bar in [0, 1, 100, 9999]:
+            assert 0 <= derive_loop_seed(pv, period, bar) < (1 << 63)
+            assert 0 <= derive_hold_seed(pv, period, bar) < (1 << 63)
+
+
+def test_loop_seed_period_2_alternates() -> None:
+    pv = derive_part_voice_seed(seed_from_title("Phuture"), "drop", "acid")
+    even = {derive_loop_seed(pv, 2, b) for b in [0, 2, 4, 6, 8]}
+    odd = {derive_loop_seed(pv, 2, b) for b in [1, 3, 5, 7, 9]}
+    assert len(even) == 1
+    assert len(odd) == 1
+    assert even != odd

@@ -24,12 +24,17 @@ Knobs:
   (default 0 = off). 1.0 = full 20→120 swing per beat.
 * ``base_vel`` — default 85.
 * ``octave`` — register shift; default 0 (= register 1 sub-bass A1 ≈ 55 Hz).
+* ``fifth_cycle_bars`` (``"off"``) — loop the ``fifth_prob`` override on
+  an N-bar cycle. With ``"4"`` the per-bar "force fifth?" coin flip
+  produces a 4-bar pattern that repeats; ``"part"`` locks it across
+  the part.
 """
 
 from __future__ import annotations
 
 from typing import ClassVar
 
+from jtx.algorithms._cycle import parse_cycle_bars
 from jtx.algorithms._theory import note_to_midi
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
@@ -58,7 +63,8 @@ class SubDrone(Algorithm):
 
     def generate_bar(self, ctx: BarContext) -> list[Event]:
         knobs = ctx.pattern_knobs
-        rng = ctx.rng
+        jitter_rng = ctx.rng
+        fifth_rng = ctx.rng_loop(parse_cycle_bars(knobs.get("fifth_cycle_bars", "off")))
 
         gate = float(knobs.get("gate", 0.95))
         fifth_prob = float(knobs.get("fifth_prob", 0.0))
@@ -76,12 +82,12 @@ class SubDrone(Algorithm):
         # cell_idx 0 → root, cell_idx 1 → fifth, alternating every
         # ``bars_per_chord`` bars.
         cell_position = (ctx.bar_index // bars_per_chord) % 2
-        if fifth_prob > 0 and rng.random() < fifth_prob:
+        if fifth_prob > 0 and fifth_rng.random() < fifth_prob:
             pitch = fifth_raw
         else:
             pitch = fifth_raw if cell_position == 1 else root_raw
 
-        jitter = rng.randint(-3, 3)
+        jitter = jitter_rng.randint(-3, 3)
         vel = max(1, min(127, base_vel + jitter))
         duration = max(1, int(ctx.ticks_per_bar * gate))
         clamped_pitch = max(0, min(127, pitch))

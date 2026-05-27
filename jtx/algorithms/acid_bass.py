@@ -30,6 +30,12 @@ Slides land within the same bar only: the algorithm is stateless across
 bars so it can't see the last note of the previous bar. In practice
 that's fine — slide is most musical between consecutive close notes
 and almost all acid lines have plenty of those inside one bar.
+
+Cycle knobs (``pitch_cycle_bars`` / ``rhythm_cycle_bars``) loop the
+respective random decisions on an N-bar period. With both at ``"4"`` an
+acid line repeats every 4 bars verbatim (minus velocity jitter); with
+only ``pitch_cycle_bars`` set, the *pitch alphabet* repeats while drop
+patterns stay bar-fresh.
 """
 
 from __future__ import annotations
@@ -39,6 +45,7 @@ import random
 from collections.abc import Callable
 from typing import ClassVar
 
+from jtx.algorithms._cycle import parse_cycle_bars
 from jtx.algorithms._steps import step_ticks, steps_per_bar
 from jtx.algorithms._subdivision import subdivision_grid
 from jtx.algorithms._theory import note_to_midi
@@ -82,7 +89,9 @@ class AcidBass(Algorithm):
 
     def generate_bar(self, ctx: BarContext) -> list[Event]:
         knobs = ctx.pattern_knobs
-        rng = ctx.rng
+        jitter_rng = ctx.rng
+        pitch_rng = ctx.rng_loop(parse_cycle_bars(knobs.get("pitch_cycle_bars", "off")))
+        rhythm_rng = ctx.rng_loop(parse_cycle_bars(knobs.get("rhythm_cycle_bars", "off")))
 
         drop_prob = float(knobs.get("drop_prob", 0.35))
         slide_prob = float(knobs.get("slide_prob", 0.0))
@@ -167,7 +176,7 @@ class AcidBass(Algorithm):
         triplet_beats: set[int] = set()
         if triplet_prob > 0:
             for beat in range(beats_per_bar):
-                if rng.random() < triplet_prob:
+                if rhythm_rng.random() < triplet_prob:
                     triplet_beats.add(beat)
 
         triplet_spacing = 0
@@ -181,9 +190,9 @@ class AcidBass(Algorithm):
                 # Skip the base 16ths for this beat; the triplet loop
                 # below fills it in.
                 continue
-            if rng.random() < drop_prob:
+            if rhythm_rng.random() < drop_prob:
                 continue
-            pitch = _roll_pitch(rng, root_pitch, octave_pitch, minor_third_pitch)
+            pitch = _roll_pitch(pitch_rng, root_pitch, octave_pitch, minor_third_pitch)
             tick = step * s
             is_accent = step % 4 == 0
             prev_pitch = _emit_acid_note(
@@ -199,7 +208,9 @@ class AcidBass(Algorithm):
                 bend_amount=bend_amount,
                 slide_prob=slide_prob,
                 prev_pitch=prev_pitch,
-                rng=rng,
+                pitch_rng=pitch_rng,
+                rhythm_rng=rhythm_rng,
+                jitter_rng=jitter_rng,
             )
 
         # Triplet insertions — each fired beat gets 3 independent rolls.
@@ -210,9 +221,9 @@ class AcidBass(Algorithm):
                 tick = beat_start + i * triplet_spacing
                 if tick >= ctx.ticks_per_bar:
                     break
-                if rng.random() < drop_prob:
+                if rhythm_rng.random() < drop_prob:
                     continue
-                pitch = _roll_pitch(rng, root_pitch, octave_pitch, minor_third_pitch)
+                pitch = _roll_pitch(pitch_rng, root_pitch, octave_pitch, minor_third_pitch)
                 tri_duration = max(1, int(triplet_spacing * gate))
                 beat_prev_pitch = _emit_acid_note(
                     events,
@@ -227,7 +238,9 @@ class AcidBass(Algorithm):
                     bend_amount=bend_amount,
                     slide_prob=slide_prob,
                     prev_pitch=beat_prev_pitch,
-                    rng=rng,
+                    pitch_rng=pitch_rng,
+                    rhythm_rng=rhythm_rng,
+                    jitter_rng=jitter_rng,
                 )
             prev_pitch = beat_prev_pitch
 
@@ -258,15 +271,17 @@ def _emit_acid_note(
     bend_amount: int,
     slide_prob: float,
     prev_pitch: int | None,
-    rng: random.Random,
+    pitch_rng: random.Random,
+    rhythm_rng: random.Random,
+    jitter_rng: random.Random,
 ) -> int:
     """Append one acid-bass note (with slide/bend) and return its pitch."""
     accent = 15 if is_accent else 0
-    jitter = rng.randint(-4, 4)
+    jitter = jitter_rng.randint(-4, 4)
     vel = max(1, min(127, int(base_vel * intensity) + jitter + accent))
 
     if slide_prob > 0 and prev_pitch is not None and prev_pitch != pitch:
-        glide = 30 if rng.random() < slide_prob else 0
+        glide = 30 if rhythm_rng.random() < slide_prob else 0
         events.append(
             ControlChange(
                 tick=max(0, tick - 2),
@@ -281,7 +296,7 @@ def _emit_acid_note(
             PitchBend(
                 tick=max(0, tick - 1),
                 channel=channel,
-                value=rng.randint(-bend_amount, bend_amount),
+                value=pitch_rng.randint(-bend_amount, bend_amount),
             )
         )
     clamped_pitch = max(0, min(127, pitch))

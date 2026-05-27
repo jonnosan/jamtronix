@@ -19,6 +19,7 @@ def _ctx(
     bar_index: int = 0,
     seed: int = 0,
     scale: str = "minor",
+    part_voice_seed: int = 99,
 ) -> BarContext:
     return BarContext(
         bar_index=bar_index,
@@ -29,6 +30,7 @@ def _ctx(
         key=Key(tonic="A", scale=scale),
         pattern_knobs=pattern_knobs or {},
         rng=random.Random(seed),
+        part_voice_seed=part_voice_seed,
     )
 
 
@@ -181,6 +183,74 @@ def test_melodic_line_uses_key_scale() -> None:
     )
     note_ons = [e for e in events if isinstance(e, NoteOn)]
     assert all(e.note in {69, 73, 76} for e in note_ons)
+
+
+# ---------------------------------------------------- cycle knobs
+
+
+def _pitch_seq(line: MelodicLine, *, bar: int, knobs: dict[str, object]) -> tuple[int, ...]:
+    # Pass a bar-specific seed so ctx.rng (used when cycles are "off") varies
+    # across bars — that's the per-bar-fresh property the cycle knobs override.
+    events = line.generate_bar(_ctx(bar_index=bar, seed=bar, pattern_knobs=knobs))
+    return tuple(e.note for e in events if isinstance(e, NoteOn))
+
+
+def test_melodic_line_pitch_cycle_4_repeats_every_4_bars() -> None:
+    line = MelodicLine(midi_channel=3)
+    knobs = {"drop_prob": 0.0, "pitch_cycle_bars": "4"}
+    seqs = {b: _pitch_seq(line, bar=b, knobs=knobs) for b in range(8)}
+    assert seqs[0] == seqs[4]
+    assert seqs[1] == seqs[5]
+    assert seqs[2] == seqs[6]
+    assert seqs[3] == seqs[7]
+    assert seqs[0] != seqs[1]
+
+
+def test_melodic_line_pitch_cycle_1_makes_every_bar_identical() -> None:
+    line = MelodicLine(midi_channel=3)
+    knobs = {"drop_prob": 0.0, "pitch_cycle_bars": "1"}
+    seqs = {_pitch_seq(line, bar=b, knobs=knobs) for b in range(8)}
+    assert len(seqs) == 1
+
+
+def test_melodic_line_pitch_cycle_off_varies_every_bar() -> None:
+    line = MelodicLine(midi_channel=3)
+    knobs = {"drop_prob": 0.0, "pitch_cycle_bars": "off"}
+    # With part_voice_seed pinned, bar-seeded ctx.rng differs per bar;
+    # generated pitch sequences should not be uniform.
+    seqs = {_pitch_seq(line, bar=b, knobs=knobs) for b in range(8)}
+    assert len(seqs) > 1
+
+
+def test_melodic_line_combined_cycle_locks_full_bar() -> None:
+    line = MelodicLine(midi_channel=3)
+    # Both cycles at 4 → bar 0 and bar 4 should have identical pitches AND
+    # identical drop patterns (only velocity jitter still varies).
+    knobs = {
+        "drop_prob": 0.5,
+        "pitch_cycle_bars": "4",
+        "rhythm_cycle_bars": "4",
+        "intensity": 0.0,  # zeroes velocity contribution; jitter still ±5 ticks
+    }
+    # Compare pitches at the same tick positions across bar 0 vs bar 4.
+    e0 = sorted(
+        line.generate_bar(_ctx(bar_index=0, seed=0, pattern_knobs=knobs)),
+        key=lambda e: (e.tick, isinstance(e, NoteOff)),
+    )
+    e4 = sorted(
+        line.generate_bar(_ctx(bar_index=4, seed=4, pattern_knobs=knobs)),
+        key=lambda e: (e.tick, isinstance(e, NoteOff)),
+    )
+    pitches_0 = [(e.tick, e.note) for e in e0 if isinstance(e, NoteOn)]
+    pitches_4 = [(e.tick, e.note) for e in e4 if isinstance(e, NoteOn)]
+    assert pitches_0 == pitches_4
+
+
+def test_melodic_line_pitch_cycle_part_locks_across_part() -> None:
+    line = MelodicLine(midi_channel=3)
+    knobs = {"drop_prob": 0.0, "pitch_cycle_bars": "part"}
+    seqs = {_pitch_seq(line, bar=b, knobs=knobs) for b in [0, 3, 7, 17, 65]}
+    assert len(seqs) == 1
 
 
 # ---------------------------------------------------------------- arp

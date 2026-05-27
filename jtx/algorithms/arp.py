@@ -21,6 +21,10 @@ Knobs:
 * ``gate`` (0.7) — note length as a fraction of the chosen subdivision.
 * ``base_vel`` (95).
 * ``octave`` (0) — register shift; default 0 = octave 4.
+* ``pitch_cycle_bars`` (``"off"``) — loop the random pitch picks in
+  ``random`` / ``walk`` modes on an N-bar cycle. No effect on the
+  deterministic ``up`` / ``down`` / ``up_down`` modes. ``"4"`` makes a
+  random-mode arp repeat as a 4-bar pattern.
 """
 
 from __future__ import annotations
@@ -28,6 +32,7 @@ from __future__ import annotations
 from typing import ClassVar
 
 from jtx.algorithms._chords import intervals_for
+from jtx.algorithms._cycle import parse_cycle_bars
 from jtx.algorithms._subdivision import subdivision_grid
 from jtx.algorithms._theory import note_to_midi
 from jtx.engine.algorithm import Algorithm
@@ -45,7 +50,8 @@ class Arp(Algorithm):
 
     def generate_bar(self, ctx: BarContext) -> list[Event]:
         knobs = ctx.pattern_knobs
-        rng = ctx.rng
+        jitter_rng = ctx.rng
+        pitch_rng = ctx.rng_loop(parse_cycle_bars(knobs.get("pitch_cycle_bars", "off")))
 
         mode = str(knobs.get("mode", "up"))
         subdivision = str(knobs.get("subdivision", "16"))
@@ -71,13 +77,13 @@ class Arp(Algorithm):
         if not ladder:
             return []
 
-        sequence = _build_sequence(mode, ladder, positions, rng)
+        sequence = _build_sequence(mode, ladder, positions, pitch_rng)
 
         events: list[Event] = []
         for arp_idx in range(positions):
             pitch = max(0, min(127, sequence[arp_idx]))
             tick = arp_idx * spacing
-            jitter = rng.randint(-3, 3)
+            jitter = jitter_rng.randint(-3, 3)
             vel = max(1, min(127, base_vel + jitter))
             events.append(NoteOn(tick=tick, channel=self.midi_channel, note=pitch, velocity=vel))
             events.append(NoteOff(tick=tick + duration, channel=self.midi_channel, note=pitch))
