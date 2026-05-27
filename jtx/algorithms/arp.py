@@ -25,13 +25,12 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from jtx.algorithms._chords import intervals_for
 from jtx.algorithms._steps import step_ticks, steps_per_bar
 from jtx.algorithms._theory import note_to_midi
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
 from jtx.engine.events import Event, NoteOff, NoteOn
-
-_DEFAULT_INTERVALS: tuple[int, ...] = (0, 3, 7)
 
 
 class Arp(Algorithm):
@@ -53,11 +52,8 @@ class Arp(Algorithm):
         base_vel = int(knobs.get("base_vel", 95))
         octave_shift = int(knobs.get("octave", 0))
 
-        raw_intervals = knobs.get("chord_intervals", list(_DEFAULT_INTERVALS))
-        if not isinstance(raw_intervals, list) or not raw_intervals:
-            intervals: tuple[int, ...] = _DEFAULT_INTERVALS
-        else:
-            intervals = tuple(int(i) for i in raw_intervals)
+        quality = str(knobs.get("quality", "minor"))
+        intervals = intervals_for(quality)
 
         s = step_ticks(ctx.ppq)
         total_steps = steps_per_bar(ctx.ticks_per_bar, ctx.ppq)

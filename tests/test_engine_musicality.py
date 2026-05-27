@@ -118,13 +118,15 @@ def _ctx_for_drum() -> BarContext:
     )
 
 
-def test_flam_ticks_emit_extra_hits() -> None:
+def test_flam_count_emits_extra_hits() -> None:
     clap = DrumOneShot(midi_channel=10, midi_note=39)
     ctx = _ctx_for_drum()
     ctx.pattern_knobs = {
-        "steps": [4],
+        "pulses": 1,
+        "offset": 4,
         "velocity": 100,
-        "flam_ticks": [12, 24],
+        "flam_count": 2,
+        "flam_spacing_ticks": 12,
     }
     events = clap.generate_bar(ctx)
     note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
@@ -134,13 +136,15 @@ def test_flam_ticks_emit_extra_hits() -> None:
     assert [e.tick for e in note_ons] == [main_tick, main_tick + 12, main_tick + 24]
 
 
-def test_flam_ticks_velocity_decays() -> None:
+def test_flam_count_velocity_decays() -> None:
     clap = DrumOneShot(midi_channel=10, midi_note=39)
     ctx = _ctx_for_drum()
     ctx.pattern_knobs = {
-        "steps": [0],
+        "pulses": 1,
+        "offset": 0,
         "velocity": 100,
-        "flam_ticks": [12, 24],
+        "flam_count": 2,
+        "flam_spacing_ticks": 12,
         "flam_decay": 0.5,
     }
     events = clap.generate_bar(ctx)
@@ -149,20 +153,12 @@ def test_flam_ticks_velocity_decays() -> None:
     assert [e.velocity for e in note_ons] == [100, 50, 25]
 
 
-def test_flam_ticks_empty_is_default() -> None:
+def test_flam_count_zero_means_no_flam() -> None:
     clap = DrumOneShot(midi_channel=10, midi_note=39)
     ctx = _ctx_for_drum()
-    ctx.pattern_knobs = {"steps": [0]}
+    ctx.pattern_knobs = {"pulses": 1, "offset": 0}
     events = clap.generate_bar(ctx)
     assert len([e for e in events if isinstance(e, NoteOn)]) == 1
-
-
-def test_flam_ticks_non_list_raises() -> None:
-    clap = DrumOneShot(midi_channel=10, midi_note=39)
-    ctx = _ctx_for_drum()
-    ctx.pattern_knobs = {"steps": [0], "flam_ticks": "12,24"}
-    with pytest.raises(TypeError, match="must be a list"):
-        clap.generate_bar(ctx)
 
 
 # --------------------------------------- drum_pattern vel_curve

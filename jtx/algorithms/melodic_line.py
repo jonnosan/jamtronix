@@ -29,13 +29,12 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from jtx.algorithms._palettes import palette_for
 from jtx.algorithms._steps import step_ticks, steps_per_bar
 from jtx.algorithms._theory import note_to_midi, scale_intervals
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
 from jtx.engine.events import Event, NoteOff, NoteOn
-
-_DEFAULT_PALETTE: tuple[int, ...] = (0, 2, 4, 5)
 
 
 class MelodicLine(Algorithm):
@@ -57,11 +56,7 @@ class MelodicLine(Algorithm):
         intensity = float(knobs.get("intensity", 1.0))
         passing_prob = float(knobs.get("passing_prob", 0.0))
 
-        raw_palette = knobs.get("degree_palette", list(_DEFAULT_PALETTE))
-        if not isinstance(raw_palette, list) or not raw_palette:
-            palette: tuple[int, ...] = _DEFAULT_PALETTE
-        else:
-            palette = tuple(int(d) for d in raw_palette)
+        palette = palette_for(str(knobs.get("palette", "tones_only")))
 
         s = step_ticks(ctx.ppq)
         total_steps = steps_per_bar(ctx.ticks_per_bar, ctx.ppq)

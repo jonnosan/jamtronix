@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import random
 
-import pytest
-
 from jtx.algorithms import RootPulse
 from jtx.engine.context import BarContext
 from jtx.engine.events import NoteOff, NoteOn
@@ -61,10 +59,12 @@ def test_root_pulse_follows_song_key() -> None:
     assert all(e.note == 60 for e in events if isinstance(e, NoteOn))  # C4
 
 
-def test_root_pulse_steps_one_emits_one_whole_note() -> None:
+def test_root_pulse_one_pulse_emits_one_whole_note() -> None:
     """Useful as a sustained chord-root reference next to the rhythmic stream."""
     pulse = RootPulse(midi_channel=15)
-    events = pulse.generate_bar(_ctx(pattern_knobs={"steps": [0], "duration_ticks": 1824}))
+    events = pulse.generate_bar(
+        _ctx(pattern_knobs={"pulses": 1, "offset": 0, "duration_ticks": 1824})
+    )
     ons = [e for e in events if isinstance(e, NoteOn)]
     offs = [e for e in events if isinstance(e, NoteOff)]
     assert len(ons) == 1 and len(offs) == 1
@@ -90,20 +90,13 @@ def test_root_pulse_gate_controls_step_relative_duration() -> None:
 def test_root_pulse_duration_ticks_overrides_gate() -> None:
     pulse = RootPulse(midi_channel=16)
     events = pulse.generate_bar(
-        _ctx(pattern_knobs={"steps": [0], "duration_ticks": 1000, "gate": 0.01})
+        _ctx(pattern_knobs={"pulses": 1, "offset": 0, "duration_ticks": 1000, "gate": 0.01})
     )
     off = next(e for e in events if isinstance(e, NoteOff))
     assert off.tick == 1000
 
 
-def test_root_pulse_rejects_non_list_steps() -> None:
+def test_root_pulse_zero_pulses_emits_nothing() -> None:
     pulse = RootPulse(midi_channel=16)
-    with pytest.raises(TypeError, match="must be a list"):
-        pulse.generate_bar(_ctx(pattern_knobs={"steps": "0,4"}))
-
-
-def test_root_pulse_ignores_out_of_range_steps() -> None:
-    pulse = RootPulse(midi_channel=16)
-    events = pulse.generate_bar(_ctx(pattern_knobs={"steps": [-1, 0, 16, 100]}))
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    assert [e.tick for e in note_ons] == [0]
+    events = pulse.generate_bar(_ctx(pattern_knobs={"pulses": 0}))
+    assert [e for e in events if isinstance(e, NoteOn)] == []

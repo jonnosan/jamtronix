@@ -137,7 +137,8 @@ def test_cc_envelope_starts_from_rest_peaks_returns_to_rest() -> None:
     events = env.generate_bar(
         _ctx(
             pattern_knobs={
-                "trigger_steps": [0],
+                "pulses": 1,
+                "offset": 0,
                 "attack_ticks": 60,
                 "decay_ticks": 120,
                 "release_ticks": 120,
@@ -155,26 +156,18 @@ def test_cc_envelope_starts_from_rest_peaks_returns_to_rest() -> None:
     assert ccs[-1].value == 30
 
 
-def test_cc_envelope_trigger_steps_drive_count() -> None:
+def test_cc_envelope_pulses_drive_trigger_count() -> None:
     env = CCEnvelope(midi_channel=2)
-    events = env.generate_bar(_ctx(pattern_knobs={"trigger_steps": [0, 8], "samples": 4}))
+    events = env.generate_bar(_ctx(pattern_knobs={"pulses": 2, "offset": 0, "samples": 4}))
     ccs = [e for e in events if isinstance(e, ControlChange)]
     # 2 triggers × 3 segments × 4 samples = 24.
     assert len(ccs) == 24
 
 
-def test_cc_envelope_rejects_non_list_trigger_steps() -> None:
+def test_cc_envelope_zero_pulses_emits_nothing() -> None:
     env = CCEnvelope(midi_channel=2)
-    with pytest.raises(TypeError, match="must be a list"):
-        env.generate_bar(_ctx(pattern_knobs={"trigger_steps": "0,4"}))
-
-
-def test_cc_envelope_ignores_out_of_range_triggers() -> None:
-    env = CCEnvelope(midi_channel=2)
-    events = env.generate_bar(_ctx(pattern_knobs={"trigger_steps": [-1, 0, 16, 100], "samples": 2}))
-    ccs = [e for e in events if isinstance(e, ControlChange)]
-    # Only step 0 valid: 1 trigger × 3 segments × 2 samples = 6 CCs.
-    assert len(ccs) == 6
+    events = env.generate_bar(_ctx(pattern_knobs={"pulses": 0, "samples": 2}))
+    assert [e for e in events if isinstance(e, ControlChange)] == []
 
 
 def test_cc_envelope_cc_knob_changes_controller() -> None:

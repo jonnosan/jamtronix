@@ -19,7 +19,7 @@ def build(title: str, setup_ref: str) -> Song:
         ),
         "snare": VoiceConfig(
             algorithm="drum_one_shot",
-            pattern={"steps": [4, 12], "velocity": 92, "duration_ticks": 50},
+            pattern={"pulses": 2, "offset": 4, "velocity": 92, "duration_ticks": 50},
             feel={"humanize": 6},
         ),
         "chh": VoiceConfig(
@@ -34,7 +34,7 @@ def build(title: str, setup_ref: str) -> Song:
         ),
         "ohh": VoiceConfig(
             algorithm="drum_one_shot",
-            pattern={"steps": [6], "velocity": 84, "duration_ticks": 220},
+            pattern={"pulses": 1, "offset": 6, "velocity": 84, "duration_ticks": 220},
         ),
         "acid": VoiceConfig(
             algorithm="sub_drone",
@@ -50,8 +50,9 @@ def build(title: str, setup_ref: str) -> Song:
         "stab": VoiceConfig(
             algorithm="chord_stab",
             pattern={
-                "intervals": [0, 3, 10],
-                "steps": [6, 14],
+                "quality": "min7",
+                "pulses": 2,
+                "offset": 6,
                 "base_vel": 78,
                 "gate": 0.35,
                 "drop_prob": 0.4,
@@ -65,6 +66,7 @@ def build(title: str, setup_ref: str) -> Song:
                 "octave": 0,
                 "base_vel": 80,
                 "passing_prob": 0.25,
+                "palette": "pentatonic",
             },
         ),
         "filter": VoiceConfig(

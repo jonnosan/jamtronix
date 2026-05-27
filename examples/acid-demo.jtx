@@ -1,11 +1,19 @@
 {
   "title": "Phuture Lines",
   "setup_ref": "acid-demo",
-  "key": {"tonic": "A", "scale": "minor"},
+  "key": {
+    "tonic": "A",
+    "scale": "minor"
+  },
   "seed_override": null,
   "meter": "4/4",
   "tempo": 126,
-  "chord_progression": {"degrees": ["i"], "bars_per_chord": 16},
+  "chord_progression": {
+    "degrees": [
+      "i"
+    ],
+    "bars_per_chord": 16
+  },
   "voices": {
     "kick": {
       "algorithm": "drum_pattern",
@@ -20,13 +28,17 @@
     "clap": {
       "algorithm": "drum_one_shot",
       "pattern": {
-        "steps": [4, 12],
         "velocity": 100,
         "duration_ticks": 60,
-        "flam_ticks": [12, 24],
-        "flam_decay": 0.65
+        "flam_decay": 0.65,
+        "pulses": 2,
+        "offset": 4,
+        "flam_count": 2,
+        "flam_spacing_ticks": 12
       },
-      "feel": {"humanize": 4}
+      "feel": {
+        "humanize": 4
+      }
     },
     "chh": {
       "algorithm": "drum_pattern",
@@ -47,7 +59,12 @@
     },
     "ohh": {
       "algorithm": "drum_one_shot",
-      "pattern": {"steps": [2, 10], "velocity": 90, "duration_ticks": 180},
+      "pattern": {
+        "velocity": 90,
+        "duration_ticks": 180,
+        "pulses": 2,
+        "offset": 2
+      },
       "feel": {
         "sidechain_from": "kick",
         "sidechain_floor": 40,
@@ -57,20 +74,27 @@
     "conga_hi": {
       "algorithm": "drum_one_shot",
       "pattern": {
-        "steps": [2, 6, 10, 14],
         "velocity": 92,
-        "duration_ticks": 60
+        "duration_ticks": 60,
+        "pulses": 4,
+        "offset": 2
       },
-      "feel": {"humanize": 3, "swing": 0.12}
+      "feel": {
+        "humanize": 3,
+        "swing": 0.12
+      }
     },
     "conga_lo": {
       "algorithm": "drum_one_shot",
       "pattern": {
-        "steps": [7, 15],
         "velocity": 96,
-        "duration_ticks": 60
+        "duration_ticks": 60,
+        "pulses": 2,
+        "offset": 7
       },
-      "feel": {"humanize": 4}
+      "feel": {
+        "humanize": 4
+      }
     },
     "maracas": {
       "algorithm": "drum_pattern",
@@ -83,7 +107,10 @@
         "vel_curve_depth": 0.3,
         "duration_ticks": 30
       },
-      "feel": {"swing": 0.18, "humanize": 2}
+      "feel": {
+        "swing": 0.18,
+        "humanize": 2
+      }
     },
     "acid": {
       "algorithm": "acid_bass",
@@ -97,16 +124,19 @@
         "cycle": 4,
         "resonance": 110
       },
-      "feel": {"humanize": 6}
+      "feel": {
+        "humanize": 6
+      }
     },
     "stab": {
       "algorithm": "chord_stab",
       "pattern": {
-        "intervals": [0, 7],
-        "steps": [4],
         "gate": 0.25,
         "base_vel": 75,
-        "velocity_spread": 4
+        "velocity_spread": 4,
+        "pulses": 1,
+        "offset": 4,
+        "quality": "power"
       },
       "feel": {
         "sidechain_from": "kick",
@@ -131,8 +161,9 @@
       "pattern": {
         "octave": 0,
         "velocity": 70,
-        "steps": [0],
-        "duration_ticks": 1824
+        "duration_ticks": 1824,
+        "pulses": 1,
+        "offset": 0
       },
       "feel": {}
     },
@@ -141,8 +172,9 @@
       "pattern": {
         "octave": 1,
         "velocity": 65,
-        "steps": [0, 4, 8, 12],
-        "gate": 0.35
+        "gate": 0.35,
+        "pulses": 4,
+        "offset": 0
       },
       "feel": {}
     }
@@ -151,56 +183,236 @@
     "intro": {
       "bars": 8,
       "voice_overrides": {
-        "chh":  {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "ohh":  {"pattern": {"steps": []}, "feel": {}},
-        "clap": {"pattern": {"steps": []}, "feel": {}},
-        "stab": {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "conga_hi": {"pattern": {"steps": []}, "feel": {}},
-        "conga_lo": {"pattern": {"steps": []}, "feel": {}},
-        "maracas":  {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "acid": {"pattern": {}, "feel": {"evolution_start": 0.7, "evolution_end": 0.95}}
+        "chh": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "ohh": {
+          "pattern": {
+            "pulses": 0,
+            "offset": 0
+          },
+          "feel": {}
+        },
+        "clap": {
+          "pattern": {
+            "pulses": 0,
+            "offset": 0
+          },
+          "feel": {}
+        },
+        "stab": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "conga_hi": {
+          "pattern": {
+            "pulses": 0,
+            "offset": 0
+          },
+          "feel": {}
+        },
+        "conga_lo": {
+          "pattern": {
+            "pulses": 0,
+            "offset": 0
+          },
+          "feel": {}
+        },
+        "maracas": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "acid": {
+          "pattern": {},
+          "feel": {
+            "evolution_start": 0.7,
+            "evolution_end": 0.95
+          }
+        }
       }
     },
     "drop": {
       "bars": 16,
       "voice_overrides": {
-        "chh":  {"pattern": {}, "feel": {"fade_in_at_bar": 0, "fade_in_beats": 8}},
-        "stab": {"pattern": {}, "feel": {"fade_in_at_bar": 2, "fade_in_beats": 8}},
-        "maracas":  {"pattern": {}, "feel": {"fade_in_at_bar": 1, "fade_in_beats": 8}},
-        "conga_hi": {"pattern": {}, "feel": {"fade_in_at_bar": 4, "fade_in_beats": 8}},
-        "conga_lo": {"pattern": {}, "feel": {"fade_in_at_bar": 8, "fade_in_beats": 8}}
+        "chh": {
+          "pattern": {},
+          "feel": {
+            "fade_in_at_bar": 0,
+            "fade_in_beats": 8
+          }
+        },
+        "stab": {
+          "pattern": {},
+          "feel": {
+            "fade_in_at_bar": 2,
+            "fade_in_beats": 8
+          }
+        },
+        "maracas": {
+          "pattern": {},
+          "feel": {
+            "fade_in_at_bar": 1,
+            "fade_in_beats": 8
+          }
+        },
+        "conga_hi": {
+          "pattern": {},
+          "feel": {
+            "fade_in_at_bar": 4,
+            "fade_in_beats": 8
+          }
+        },
+        "conga_lo": {
+          "pattern": {},
+          "feel": {
+            "fade_in_at_bar": 8,
+            "fade_in_beats": 8
+          }
+        }
       }
     },
     "break": {
       "bars": 8,
       "voice_overrides": {
-        "kick": {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "chh":  {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "ohh":  {"pattern": {"steps": []}, "feel": {}},
-        "clap": {"pattern": {"steps": []}, "feel": {}},
-        "stab": {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "conga_hi": {"pattern": {}, "feel": {}},
-        "conga_lo": {"pattern": {"steps": []}, "feel": {}},
-        "maracas":  {"pattern": {}, "feel": {}},
-        "acid": {"pattern": {"resonance": 120}, "feel": {"evolution_start": 1.0, "evolution_end": 1.1}}
+        "kick": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "chh": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "ohh": {
+          "pattern": {
+            "pulses": 0,
+            "offset": 0
+          },
+          "feel": {}
+        },
+        "clap": {
+          "pattern": {
+            "pulses": 0,
+            "offset": 0
+          },
+          "feel": {}
+        },
+        "stab": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "conga_hi": {
+          "pattern": {},
+          "feel": {}
+        },
+        "conga_lo": {
+          "pattern": {
+            "pulses": 0,
+            "offset": 0
+          },
+          "feel": {}
+        },
+        "maracas": {
+          "pattern": {},
+          "feel": {}
+        },
+        "acid": {
+          "pattern": {
+            "resonance": 120
+          },
+          "feel": {
+            "evolution_start": 1.0,
+            "evolution_end": 1.1
+          }
+        }
       }
     },
     "outro": {
       "bars": 8,
       "voice_overrides": {
-        "chh":  {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "ohh":  {"pattern": {"steps": []}, "feel": {}},
-        "clap": {"pattern": {"steps": []}, "feel": {}},
-        "stab": {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "conga_hi": {"pattern": {"steps": []}, "feel": {}},
-        "conga_lo": {"pattern": {"steps": []}, "feel": {}},
-        "maracas":  {"pattern": {}, "feel": {"mute_prob": 1.0}},
-        "kick": {"pattern": {"velocity": 95}, "feel": {"evolution_start": 1.0, "evolution_end": 0.5}},
-        "acid": {"pattern": {}, "feel": {"evolution_start": 1.0, "evolution_end": 0.55}}
+        "chh": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "ohh": {
+          "pattern": {
+            "pulses": 0,
+            "offset": 0
+          },
+          "feel": {}
+        },
+        "clap": {
+          "pattern": {
+            "pulses": 0,
+            "offset": 0
+          },
+          "feel": {}
+        },
+        "stab": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "conga_hi": {
+          "pattern": {
+            "pulses": 0,
+            "offset": 0
+          },
+          "feel": {}
+        },
+        "conga_lo": {
+          "pattern": {
+            "pulses": 0,
+            "offset": 0
+          },
+          "feel": {}
+        },
+        "maracas": {
+          "pattern": {},
+          "feel": {
+            "mute_prob": 1.0
+          }
+        },
+        "kick": {
+          "pattern": {
+            "velocity": 95
+          },
+          "feel": {
+            "evolution_start": 1.0,
+            "evolution_end": 0.5
+          }
+        },
+        "acid": {
+          "pattern": {},
+          "feel": {
+            "evolution_start": 1.0,
+            "evolution_end": 0.55
+          }
+        }
       }
     }
   },
-  "arrangement": ["intro", "drop", "break", "outro"],
+  "arrangement": [
+    "intro",
+    "drop",
+    "break",
+    "outro"
+  ],
   "lfos": [],
   "schema_version": 1
 }

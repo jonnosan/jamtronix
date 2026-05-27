@@ -169,30 +169,16 @@ def test_drum_pattern_emits_in_step_order() -> None:
 # --------------------------------------------------------- drum_one_shot
 
 
-def test_drum_one_shot_emits_on_configured_steps() -> None:
+def test_drum_one_shot_emits_on_euclid_distribution() -> None:
     clap = DrumOneShot(midi_channel=10, midi_note=39)
-    events = clap.generate_bar(_ctx({"steps": [4, 12], "velocity": 100}))
+    events = clap.generate_bar(_ctx({"pulses": 2, "offset": 4, "velocity": 100}))
 
     note_ons = [e for e in events if isinstance(e, NoteOn)]
+    # euclid(2, 16, offset=4) lands hits on 4 and 12.
     assert [e.tick for e in note_ons] == [4 * 120, 12 * 120]
     assert all(e.note == 39 and e.channel == 10 for e in note_ons)
 
 
-def test_drum_one_shot_ignores_out_of_range_steps() -> None:
+def test_drum_one_shot_zero_pulses_emits_nothing() -> None:
     crash = DrumOneShot(midi_channel=10, midi_note=49)
-    events = crash.generate_bar(_ctx({"steps": [-1, 0, 16, 100]}))
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    assert [e.tick for e in note_ons] == [0]
-
-
-def test_drum_one_shot_empty_steps_emits_nothing() -> None:
-    crash = DrumOneShot(midi_channel=10, midi_note=49)
-    assert crash.generate_bar(_ctx({"steps": []})) == []
-
-
-def test_drum_one_shot_rejects_non_list_steps() -> None:
-    import pytest
-
-    crash = DrumOneShot(midi_channel=10, midi_note=49)
-    with pytest.raises(TypeError, match="must be a list"):
-        crash.generate_bar(_ctx({"steps": "0,4"}))
+    assert crash.generate_bar(_ctx({"pulses": 0})) == []

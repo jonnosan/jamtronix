@@ -182,11 +182,11 @@ def _transpose(notes: list[_Note], knobs: KnobDict) -> list[_Note]:
 
 
 def _chord(notes: list[_Note], knobs: KnobDict) -> list[_Note]:
-    raw = knobs.get("chord", [0])
-    if not isinstance(raw, list) or not raw:
-        return notes
-    intervals = [int(i) for i in raw]
-    if intervals == [0]:
+    from jtx.algorithms._chords import intervals_for
+
+    quality = str(knobs.get("quality", "unison"))
+    intervals = intervals_for(quality)
+    if intervals == (0,):
         return notes
     chorded: list[_Note] = []
     for t, p, v, d in notes:

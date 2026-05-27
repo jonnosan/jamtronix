@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import random
 
-import pytest
-
 from jtx.algorithms import ChordStab, SustainedChord
 from jtx.engine.context import BarContext
 from jtx.engine.events import NoteOff, NoteOn
@@ -40,7 +38,7 @@ def test_sustained_chord_default_minor_triad() -> None:
 
 def test_sustained_chord_intervals_override() -> None:
     voice = SustainedChord(midi_channel=5)
-    events = voice.generate_bar(_ctx(pattern_knobs={"intervals": [0, 4, 7, 11]}))
+    events = voice.generate_bar(_ctx(pattern_knobs={"quality": "maj7"}))
     note_ons = [e for e in events if isinstance(e, NoteOn)]
     # Maj7: 69, 73, 76, 80.
     assert sorted(e.note for e in note_ons) == [69, 73, 76, 80]
@@ -73,7 +71,7 @@ def test_sustained_chord_drift_drops_one_voice_octave() -> None:
 
 def test_sustained_chord_chord_root_semitones_transposes() -> None:
     voice = SustainedChord(midi_channel=5)
-    ctx = _ctx(pattern_knobs={"intervals": [0]})
+    ctx = _ctx(pattern_knobs={"quality": "unison"})
     ctx.chord_root_semitones = 5
     events = voice.generate_bar(ctx)
     note_ons = [e for e in events if isinstance(e, NoteOn)]
@@ -85,22 +83,23 @@ def test_sustained_chord_chord_root_semitones_transposes() -> None:
 
 def test_chord_stab_default_steps_are_off_beat_16ths() -> None:
     voice = ChordStab(midi_channel=6)
-    events = voice.generate_bar(_ctx(pattern_knobs={"intervals": [0]}))  # one note for clarity
+    events = voice.generate_bar(_ctx(pattern_knobs={"quality": "unison"}))  # one note for clarity
     note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
-    # Default steps [2, 6, 10, 14] × step_ticks 120 = [240, 720, 1200, 1680].
+    # Default pulses=4, offset=2 → euclid steps [2, 6, 10, 14]
+    # × step_ticks 120 = [240, 720, 1200, 1680].
     assert [e.tick for e in note_ons] == [240, 720, 1200, 1680]
 
 
-def test_chord_stab_steps_knob_overrides() -> None:
+def test_chord_stab_pulses_knob_overrides() -> None:
     voice = ChordStab(midi_channel=6)
-    events = voice.generate_bar(_ctx(pattern_knobs={"intervals": [0], "steps": [0, 8]}))
+    events = voice.generate_bar(_ctx(pattern_knobs={"quality": "unison", "pulses": 2, "offset": 0}))
     note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
     assert [e.tick for e in note_ons] == [0, 960]
 
 
 def test_chord_stab_emits_full_chord_at_each_step() -> None:
     voice = ChordStab(midi_channel=6)
-    events = voice.generate_bar(_ctx(pattern_knobs={"intervals": [0, 3, 7], "steps": [4]}))
+    events = voice.generate_bar(_ctx(pattern_knobs={"quality": "minor", "pulses": 1, "offset": 4}))
     note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.note)
     assert [e.note for e in note_ons] == [69, 72, 76]
     assert all(e.tick == 480 for e in note_ons)
@@ -108,7 +107,7 @@ def test_chord_stab_emits_full_chord_at_each_step() -> None:
 
 def test_chord_stab_gate_controls_duration() -> None:
     voice = ChordStab(midi_channel=6)
-    events = voice.generate_bar(_ctx(pattern_knobs={"intervals": [0], "gate": 0.25}))
+    events = voice.generate_bar(_ctx(pattern_knobs={"quality": "unison", "gate": 0.25}))
     durations = []
     note_ons = [e for e in events if isinstance(e, NoteOn)]
     for on in note_ons:
@@ -126,14 +125,7 @@ def test_chord_stab_drop_prob_one_emits_nothing() -> None:
     assert not any(isinstance(e, NoteOn) for e in events)
 
 
-def test_chord_stab_rejects_non_list_steps() -> None:
+def test_chord_stab_zero_pulses_emits_nothing() -> None:
     voice = ChordStab(midi_channel=6)
-    with pytest.raises(TypeError, match="must be a list"):
-        voice.generate_bar(_ctx(pattern_knobs={"steps": "0,4"}))
-
-
-def test_chord_stab_ignores_out_of_range_steps() -> None:
-    voice = ChordStab(midi_channel=6)
-    events = voice.generate_bar(_ctx(pattern_knobs={"intervals": [0], "steps": [-1, 0, 16, 100]}))
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    assert [e.tick for e in note_ons] == [0]
+    events = voice.generate_bar(_ctx(pattern_knobs={"quality": "unison", "pulses": 0}))
+    assert not [e for e in events if isinstance(e, NoteOn)]
