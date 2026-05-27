@@ -14,6 +14,7 @@ from jtx.engine.clock_source import (
 )
 from jtx.engine.context import BarContext
 from jtx.engine.events import ControlChange, Event, NoteOff, NoteOn, PitchBend
+from jtx.engine.feel import apply_feel
 from jtx.engine.lfo import (
     ParsedTarget,
     applications_for_part,
@@ -43,6 +44,7 @@ __all__ = [
     "Scheduler",
     "Sink",
     "applications_for_part",
+    "apply_feel",
     "apply_lfos_to_bar",
     "parse_meter",
     "parse_target",
