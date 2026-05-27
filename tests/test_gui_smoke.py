@@ -185,6 +185,20 @@ def test_transport_starts_and_stops_with_fake_sink(qapp: QApplication) -> None:
     assert len(received) >= 1
 
 
+def test_bundled_example_starter_songs_open() -> None:
+    """Every shipped starter .jtx loads + has its sibling setup."""
+    from jtx_gui.state import AppState
+
+    for stem in ("acid-starter", "deep_techno-starter", "psytrance-starter"):
+        path = REPO_ROOT / "examples" / f"{stem}.jtx"
+        assert path.exists(), f"missing example: {path}"
+        state = AppState()
+        state.open(path)
+        assert state.song is not None
+        assert state.setup is not None, f"sibling setup missing for {stem}"
+        assert state.setup_error is None
+
+
 def test_style_templates_build_valid_songs() -> None:
     """Each style template produces a song that round-trips through persist."""
     from jtx.persist import save_song

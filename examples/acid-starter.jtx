@@ -1,0 +1,153 @@
+{
+  "title": "Acid Starter",
+  "setup_ref": "acid-starter",
+  "key": {
+    "tonic": "A",
+    "scale": "minor"
+  },
+  "seed_override": null,
+  "meter": "4/4",
+  "tempo": 126,
+  "chord_progression": {
+    "degrees": [
+      "i",
+      "VI",
+      "III",
+      "VII"
+    ],
+    "bars_per_chord": 4
+  },
+  "voices": {
+    "kick": {
+      "algorithm": "drum_pattern",
+      "pattern": {
+        "style": "four_floor",
+        "velocity": 118
+      },
+      "feel": {}
+    },
+    "snare": {
+      "algorithm": "drum_one_shot",
+      "pattern": {
+        "steps": [
+          4,
+          12
+        ],
+        "velocity": 100,
+        "duration_ticks": 60
+      },
+      "feel": {}
+    },
+    "chh": {
+      "algorithm": "drum_pattern",
+      "pattern": {
+        "style": "euclid",
+        "pulses": 8,
+        "offset": 0,
+        "velocity": 92,
+        "vel_curve": "pulse",
+        "vel_curve_depth": 0.25
+      },
+      "feel": {
+        "swing": 0.18
+      }
+    },
+    "ohh": {
+      "algorithm": "drum_one_shot",
+      "pattern": {
+        "steps": [
+          2,
+          10
+        ],
+        "velocity": 88,
+        "duration_ticks": 180
+      },
+      "feel": {}
+    },
+    "acid": {
+      "algorithm": "acid_bass",
+      "pattern": {
+        "drop_prob": 0.25,
+        "slide_prob": 0.3,
+        "base_vel": 96,
+        "intensity": 1.1,
+        "gate": 0.6,
+        "cycle": 2,
+        "resonance": 105
+      },
+      "feel": {}
+    },
+    "stab": {
+      "algorithm": "chord_stab",
+      "pattern": {
+        "intervals": [
+          0,
+          3,
+          7
+        ],
+        "steps": [
+          2,
+          6,
+          10,
+          14
+        ],
+        "base_vel": 88,
+        "gate": 0.3
+      },
+      "feel": {}
+    },
+    "lead": {
+      "algorithm": "melodic_line",
+      "pattern": {
+        "drop_prob": 0.55,
+        "octave": 1,
+        "base_vel": 90,
+        "passing_prob": 0.15
+      },
+      "feel": {}
+    },
+    "filter": {
+      "algorithm": "cc_lfo",
+      "pattern": {
+        "cc": 74,
+        "shape": "sine",
+        "period_bars": 8,
+        "depth": 0.85,
+        "offset": 0.55
+      },
+      "feel": {}
+    }
+  },
+  "parts": {
+    "intro": {
+      "bars": 8,
+      "voice_overrides": {}
+    },
+    "build": {
+      "bars": 8,
+      "voice_overrides": {}
+    },
+    "drop": {
+      "bars": 16,
+      "voice_overrides": {}
+    },
+    "drop2": {
+      "bars": 16,
+      "voice_overrides": {}
+    },
+    "outro": {
+      "bars": 8,
+      "voice_overrides": {}
+    }
+  },
+  "arrangement": [
+    "intro",
+    "build",
+    "drop",
+    "build",
+    "drop2",
+    "outro"
+  ],
+  "lfos": [],
+  "schema_version": 1
+}
