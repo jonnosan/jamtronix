@@ -44,7 +44,10 @@ from jtx.algorithms import (
     DrumOneShot,
     DrumPattern,
     MelodicLine,
+    NoiseRiser,
+    ReeseBass,
     RootPulse,
+    StepCC,
     SubDrone,
     SustainedChord,
     VoiceFollower,
@@ -99,6 +102,12 @@ def instantiate_algorithm(algorithm_name: str, voice_slot: VoiceSlot) -> Algorit
         return CCLFO(midi_channel=ch)
     if algorithm_name == "cc_envelope":
         return CCEnvelope(midi_channel=ch)
+    if algorithm_name == "step_cc":
+        return StepCC(midi_channel=ch)
+    if algorithm_name == "noise_riser":
+        return NoiseRiser(midi_channel=ch, cc_map=voice_slot.cc_map)
+    if algorithm_name == "reese_bass":
+        return ReeseBass(midi_channel=ch, cc_map=voice_slot.cc_map)
     if algorithm_name == "voice_follower":
         return VoiceFollower(midi_channel=ch)
     if algorithm_name == "root_pulse":

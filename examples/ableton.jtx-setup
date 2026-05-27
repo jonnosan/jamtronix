@@ -95,10 +95,50 @@
       "kit_map": {"tom": 45}
     },
     {
+      "name": "clave",
+      "type": "drum",
+      "default_role": "drum",
+      "midi_channel": 10,
+      "midi_port": null,
+      "kit_map": {"clave": 75}
+    },
+    {
+      "name": "shaker",
+      "type": "drum",
+      "default_role": "drum",
+      "midi_channel": 10,
+      "midi_port": null,
+      "kit_map": {"shaker": 70}
+    },
+    {
       "name": "riff",
       "type": "mono",
       "default_role": "lead",
       "midi_channel": 6,
+      "midi_port": null,
+      "kit_map": {}
+    },
+    {
+      "name": "reese",
+      "type": "mono",
+      "default_role": "bass",
+      "midi_channel": 7,
+      "midi_port": null,
+      "kit_map": {}
+    },
+    {
+      "name": "riser",
+      "type": "mono",
+      "default_role": "lead",
+      "midi_channel": 8,
+      "midi_port": null,
+      "kit_map": {}
+    },
+    {
+      "name": "filt_step",
+      "type": "modulator",
+      "default_role": "modulator",
+      "midi_channel": 1,
       "midi_port": null,
       "kit_map": {}
     },
