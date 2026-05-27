@@ -30,6 +30,43 @@ build progress.
 - **Setup includes a DAW template path** — one button opens the matching
   `.als` (or any) file via macOS `open`.
 
+## Development setup
+
+Requires Python 3.12+ on macOS.
+
+```sh
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -e '.[dev]'
+```
+
+Lint + type-check (both gate pre-push):
+
+```sh
+ruff check .
+ruff format --check .
+mypy jtx
+```
+
+Run tests (none yet; the testing posture is minimal pytest + manual
+verification via the GUI):
+
+```sh
+pytest
+```
+
+## Layout
+
+- `jtx/` — engine library. **No Qt imports.** Will hold the data model,
+  algorithms, scheduler, sinks, and persistence.
+- `jtx_gui/` — PySide6 front end. May import from `jtx`; the reverse is
+  forbidden so a future headless CLI can sit on the same engine.
+- `templates/` — hardcoded style templates (acid / deep_techno / psytrance)
+  used by the new-song wizard.
+- `setups/` — bundled starter setups (IAC, Ableton).
+- `examples/` — one starter `.jtx` per template.
+- `tests/` — smoke + golden-fixture tests.
+
 ## Links
 
 - Spec: [`docs/SPEC.md`](docs/SPEC.md)
