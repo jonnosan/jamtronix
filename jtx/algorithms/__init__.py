@@ -3,5 +3,6 @@
 from jtx.algorithms.acid_bass import AcidBass
 from jtx.algorithms.drum_one_shot import DrumOneShot
 from jtx.algorithms.drum_pattern import DrumPattern
+from jtx.algorithms.sub_drone import SubDrone
 
-__all__ = ["AcidBass", "DrumOneShot", "DrumPattern"]
+__all__ = ["AcidBass", "DrumOneShot", "DrumPattern", "SubDrone"]
