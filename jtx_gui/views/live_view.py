@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from jtx.model import Part, VoiceConfig, VoiceOverride
+from jtx.model import ClockMode, Part, VoiceConfig, VoiceOverride
 from jtx_gui import theme
 from jtx_gui.algorithm_meta import FEEL_KNOBS, SCHEMAS, KnobSpec
 from jtx_gui.state import AppState
@@ -40,6 +40,9 @@ from jtx_gui.transport import BarTick, TransportService
 from jtx_gui.views.song_view import _clear_layout, _infer_voice_type  # noqa: F401
 from jtx_gui.widgets.collapsible import CollapsibleSection
 from jtx_gui.widgets.knob import KnobWidget
+
+PlaybackPrefsFn = Callable[[], tuple["ClockMode | None", str | None]]
+"""Return ``(clock_mode_or_None, port_override_or_None)``."""
 
 _KNOBS_PER_ROW = 4
 
@@ -51,11 +54,14 @@ class LiveView(QWidget):
         self,
         state: AppState,
         transport: TransportService | None = None,
+        *,
+        playback_prefs: PlaybackPrefsFn | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._state = state
         self._transport = transport or TransportService(parent=self)
+        self._playback_prefs: PlaybackPrefsFn = playback_prefs or (lambda: (None, None))
         self._current_bar: int = 0
         self._part_bars: int = 1
         self._active_part: str | None = None
@@ -149,12 +155,13 @@ class LiveView(QWidget):
                     self._state.setup_error or "Setup not loaded — can't play."
                 )
                 return
-            port = setup.default_midi_port
+            clock_mode, port_override = self._playback_prefs()
             self._transport.start(
                 song=song,
                 setup=setup,
                 part_name=part_name,
-                port_name=port,
+                port_name=port_override or setup.default_midi_port,
+                clock_mode=clock_mode,
             )
             self._active_part = part_name
             self._parts_strip.set_active(part_name)

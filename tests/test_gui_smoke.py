@@ -216,6 +216,37 @@ def test_bundled_setups_discovered_and_loadable() -> None:
         assert setup.voices
 
 
+def test_render_song_to_midi_writes_file(tmp_path: Path, qapp: QApplication) -> None:
+    """Offline render walks the arrangement and produces a real .mid file."""
+    from jtx_gui.render import render_song_to_midi
+
+    state = AppState()
+    state.open(ACID_DEMO)
+    assert state.song is not None
+    assert state.setup is not None
+    out = tmp_path / "rendered.mid"
+    render_song_to_midi(state.song, state.setup, out)
+    assert out.exists()
+    assert out.stat().st_size > 0
+
+
+def test_toolbar_clock_mode_disables_during_play(qapp: QApplication) -> None:
+    """Clock combobox should disable on `started`, re-enable on `stopped`."""
+    from jtx_gui.transport import TransportService
+    from jtx_gui.views.toolbar import TopToolbar
+
+    state = AppState()
+    state.open(ACID_DEMO)
+    transport = TransportService()
+    bar = TopToolbar(state=state, transport=transport, port_factory=lambda: ["A", "B"])
+    assert bar._clock_combo.isEnabled()  # type: ignore[attr-defined]
+    transport.started.emit()
+    assert not bar._clock_combo.isEnabled()  # type: ignore[attr-defined]
+    transport.stopped.emit()
+    assert bar._clock_combo.isEnabled()  # type: ignore[attr-defined]
+    bar.deleteLater()
+
+
 def test_voice_slot_cc_map_persists(tmp_path: Path) -> None:
     """cc_map round-trips through save_setup / load_setup."""
     from jtx.model import Setup, VoiceSlot

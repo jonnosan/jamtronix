@@ -26,11 +26,13 @@ from PySide6.QtWidgets import (
 from jtx.model import ValidationError
 from jtx_gui import theme
 from jtx_gui.state import AppState
+from jtx_gui.transport import TransportService
 from jtx_gui.views.live_view import LiveView
 from jtx_gui.views.new_song_wizard import NewSongWizard
 from jtx_gui.views.parts_view import PartsView
 from jtx_gui.views.setup_editor import SetupEditor
 from jtx_gui.views.song_view import SongView
+from jtx_gui.views.toolbar import TopToolbar
 
 SETTINGS_ORG = "Jamtronix"
 SETTINGS_APP = "Jamtronix"
@@ -50,22 +52,39 @@ class MainWindow(QMainWindow):
         self._state.dirty_changed.connect(lambda _v: self._sync_title())
         self._state.path_changed.connect(lambda _p: self._sync_title())
 
+        # Build a shared transport service first so the toolbar and the
+        # Live view both see the same state.
+        self._transport = TransportService(parent=self)
+
         self._stack = QStackedWidget(self)
         self._song_view = SongView(self._state, self)
         self._parts_view = PartsView(self._state, self)
-        self._live_view = LiveView(self._state, parent=self)
+        self._live_view = LiveView(
+            self._state,
+            transport=self._transport,
+            playback_prefs=lambda: (self._toolbar.clock_mode, self._toolbar.port_override),
+            parent=self,
+        )
         self._stack.addWidget(self._song_view)
         self._stack.addWidget(self._parts_view)
         self._stack.addWidget(self._live_view)
 
         sidebar = self._build_sidebar()
+        self._toolbar = TopToolbar(state=self._state, transport=self._transport, parent=self)
 
         central = QWidget(self)
-        layout = QHBoxLayout(central)
+        outer = QVBoxLayout(central)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        outer.addWidget(self._toolbar)
+
+        body = QWidget()
+        layout = QHBoxLayout(body)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(sidebar)
         layout.addWidget(self._stack, 1)
+        outer.addWidget(body, 1)
         self.setCentralWidget(central)
 
         self._build_menu()
