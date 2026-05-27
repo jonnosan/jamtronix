@@ -1,0 +1,131 @@
+{
+  "title": "Submerged Dub",
+  "setup_ref": "deep-techno-demo",
+  "key": {"tonic": "A", "scale": "dorian"},
+  "seed_override": null,
+  "meter": "4/4",
+  "tempo": 122,
+  "chord_progression": {"degrees": ["i", "VII", "i", "iv"], "bars_per_chord": 4},
+  "voices": {
+    "kick": {
+      "algorithm": "drum_pattern",
+      "pattern": {"style": "four_floor", "velocity": 100},
+      "feel": {}
+    },
+    "snare": {
+      "algorithm": "drum_pattern",
+      "pattern": {"style": "euclid", "pulses": 2, "offset": 4, "velocity": 75},
+      "feel": {
+        "humanize": 8,
+        "fade_in_at_bar": 8,
+        "fade_in_beats": 8
+      }
+    },
+    "chh": {
+      "algorithm": "drum_pattern",
+      "pattern": {"style": "euclid", "pulses": 4, "offset": 2, "velocity": 65, "ghost": 0.15},
+      "feel": {
+        "swing": 0.22,
+        "fade_in_at_bar": 4,
+        "fade_in_beats": 12,
+        "sidechain_from": "kick",
+        "sidechain_floor": 35,
+        "sidechain_release_beats": 0.5
+      }
+    },
+    "ride": {
+      "algorithm": "drum_one_shot",
+      "pattern": {"steps": [14], "velocity": 60, "duration_ticks": 240},
+      "feel": {"fade_in_at_bar": 16, "fade_in_beats": 4}
+    },
+    "sub": {
+      "algorithm": "sub_drone",
+      "pattern": {
+        "gate": 0.92,
+        "fifth_prob": 0.0,
+        "bars_per_chord": 2,
+        "kick_env": 0.55,
+        "base_vel": 100,
+        "octave": 0
+      },
+      "feel": {}
+    },
+    "pad": {
+      "algorithm": "sustained_chord",
+      "pattern": {
+        "intervals": [0, 3, 7, 10, 14],
+        "gate": 0.97,
+        "octave": 0,
+        "base_vel": 60,
+        "velocity_spread": 8,
+        "drift_prob": 0.35
+      },
+      "feel": {
+        "fade_in_at_bar": 2,
+        "fade_in_beats": 16,
+        "fade_sustain_level": 0.85,
+        "fade_shape": "exp"
+      }
+    },
+    "stab": {
+      "algorithm": "chord_stab",
+      "pattern": {
+        "intervals": [0, 7, 10, 14],
+        "steps": [10],
+        "gate": 0.5,
+        "base_vel": 85,
+        "velocity_spread": 4,
+        "drop_prob": 0.35
+      },
+      "feel": {
+        "fade_in_at_bar": 12,
+        "fade_in_beats": 8,
+        "sidechain_from": "kick",
+        "sidechain_floor": 55,
+        "sidechain_release_beats": 0.7
+      }
+    },
+    "stab_echo": {
+      "algorithm": "voice_follower",
+      "pattern": {
+        "source": "stab",
+        "shift_bars": 1,
+        "transpose_octaves": 1,
+        "chord": [0],
+        "ratchet": 1,
+        "quantize": "nearest"
+      },
+      "feel": {
+        "fade_in_at_bar": 16,
+        "fade_in_beats": 8,
+        "fade_sustain_level": 0.55
+      }
+    },
+    "chord_ref": {
+      "algorithm": "root_pulse",
+      "pattern": {
+        "octave": 0,
+        "velocity": 70,
+        "steps": [0],
+        "duration_ticks": 1824
+      },
+      "feel": {}
+    },
+    "root_ref": {
+      "algorithm": "root_pulse",
+      "pattern": {
+        "octave": 1,
+        "velocity": 60,
+        "steps": [0, 4, 8, 12],
+        "gate": 0.35
+      },
+      "feel": {}
+    }
+  },
+  "parts": {
+    "drop": {"bars": 32, "voice_overrides": {}}
+  },
+  "arrangement": ["drop"],
+  "lfos": [],
+  "schema_version": 1
+}
