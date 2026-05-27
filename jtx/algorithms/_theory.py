@@ -32,6 +32,34 @@ _NOTE_SEMITONES: dict[str, int] = {
 }
 
 
+# Scale → semitone offsets from the tonic (ascending one octave).
+# Add new modes here as needed; the algorithms fall back to "minor"
+# when a song requests an unknown scale.
+_SCALES: dict[str, tuple[int, ...]] = {
+    "major": (0, 2, 4, 5, 7, 9, 11),
+    "ionian": (0, 2, 4, 5, 7, 9, 11),
+    "minor": (0, 2, 3, 5, 7, 8, 10),
+    "aeolian": (0, 2, 3, 5, 7, 8, 10),
+    "natural_minor": (0, 2, 3, 5, 7, 8, 10),
+    "harmonic_minor": (0, 2, 3, 5, 7, 8, 11),
+    "dorian": (0, 2, 3, 5, 7, 9, 10),
+    "phrygian": (0, 1, 3, 5, 7, 8, 10),
+    "lydian": (0, 2, 4, 6, 7, 9, 11),
+    "mixolydian": (0, 2, 4, 5, 7, 9, 10),
+    "locrian": (0, 1, 3, 5, 6, 8, 10),
+}
+
+
+def scale_intervals(scale: str) -> tuple[int, ...]:
+    """Semitone offsets for *scale* ascending one octave.
+
+    Unknown scales fall back to natural minor (the safest acid/techno
+    default). To extend, edit ``_SCALES`` above — the algorithms read
+    from it directly.
+    """
+    return _SCALES.get(scale.lower(), _SCALES["minor"])
+
+
 def note_to_midi(tonic: str, octave: int) -> int:
     """``("C", 4) → 60``. ``("A", 2) → 45``. ``("F#", 3) → 54``.
 
