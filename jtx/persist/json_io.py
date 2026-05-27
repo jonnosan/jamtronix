@@ -40,6 +40,7 @@ def _voice_slot_from_dict(d: dict[str, Any]) -> VoiceSlot:
         midi_channel=d["midi_channel"],
         midi_port=d.get("midi_port"),
         kit_map=dict(d.get("kit_map", {})),
+        cc_map={k: int(v) for k, v in d.get("cc_map", {}).items()},
     )
 
 

@@ -23,6 +23,20 @@ class VoiceSlot:
     midi_port: str | None = None  # None = inherit setup default
     kit_map: dict[str, int] = field(default_factory=dict)
     """For drum voices: piece name → MIDI note. Ignored for other types."""
+    cc_map: dict[str, int] = field(default_factory=dict)
+    """Function-name → CC number override.
+
+    Algorithms that emit standard-MIDI CCs (filter_cutoff, resonance,
+    portamento_time, portamento_on_off, ...) look up their CC numbers
+    via :meth:`cc_for`. The default mapping lives on each algorithm
+    class; ``cc_map`` overrides individual entries so Ableton macro
+    mappings can pick whatever CC numbers the user assigns during
+    MIDI Learn.
+    """
+
+    def cc_for(self, function: str, default: int) -> int:
+        """Return the mapped CC number for ``function``, or ``default``."""
+        return self.cc_map.get(function, default)
 
     def validate(self) -> list[str]:
         errors: list[str] = []
@@ -36,6 +50,9 @@ class VoiceSlot:
             )
         if self.type != "drum" and self.kit_map:
             errors.append(f"voice {self.name!r}: kit_map is only meaningful for drum voices")
+        for func, cc in self.cc_map.items():
+            if not (0 <= int(cc) <= 127):
+                errors.append(f"voice {self.name!r}: cc_map[{func!r}] = {cc} not in 0..127")
         return errors
 
 

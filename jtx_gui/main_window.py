@@ -29,6 +29,7 @@ from jtx_gui.state import AppState
 from jtx_gui.views.live_view import LiveView
 from jtx_gui.views.new_song_wizard import NewSongWizard
 from jtx_gui.views.parts_view import PartsView
+from jtx_gui.views.setup_editor import SetupEditor
 from jtx_gui.views.song_view import SongView
 
 SETTINGS_ORG = "Jamtronix"
@@ -133,6 +134,11 @@ class MainWindow(QMainWindow):
         file_menu.addAction(save_as_action)
 
         file_menu.addSeparator()
+        edit_setup_action = QAction("&Edit Setup…", self)
+        edit_setup_action.triggered.connect(self.edit_setup)
+        file_menu.addAction(edit_setup_action)
+
+        file_menu.addSeparator()
         quit_action = QAction("&Quit", self)
         quit_action.setShortcut(QKeySequence.StandardKey.Quit)
         quit_action.triggered.connect(self.close)
@@ -185,6 +191,34 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Save failed", str(exc))
             return False
         return True
+
+    def edit_setup(self) -> bool:
+        """Open the setup editor for the currently-loaded setup."""
+        if self._state.song is None:
+            QMessageBox.information(
+                self,
+                "Edit Setup",
+                "Open a song first — the setup is loaded alongside it.",
+            )
+            return False
+        if self._state.setup is None:
+            QMessageBox.warning(
+                self,
+                "Edit Setup",
+                self._state.setup_error or "No setup loaded for this song.",
+            )
+            return False
+        setup_path = (
+            self._state.path.parent / f"{self._state.setup.id}.jtx-setup"
+            if self._state.path is not None
+            else None
+        )
+        editor = SetupEditor(
+            setup=self._state.setup,
+            setup_path=setup_path,
+            parent=self,
+        )
+        return editor.exec() == SetupEditor.DialogCode.Accepted
 
     def save_song_as(self) -> bool:
         if self._state.song is None:

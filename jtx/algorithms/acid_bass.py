@@ -38,20 +38,35 @@ from jtx.engine.events import ControlChange, Event, NoteOff, NoteOn, PitchBend
 _OCTAVE_UP_PROB = 0.20
 _MINOR_THIRD_PROB = 0.10
 
-# CC controller numbers (MIDI standard).
-_CC_PORTAMENTO_TIME = 5
-_CC_FILTER_CUTOFF = 74
-_CC_RESONANCE = 71
-_CC_PORTAMENTO_ON_OFF = 65
+# CC controller numbers (MIDI standard defaults). A voice slot's
+# ``cc_map`` can remap any of these by function name — useful when the
+# DAW target wants a different CC number on a specific instrument.
+_DEFAULT_CC: dict[str, int] = {
+    "portamento_time": 5,
+    "filter_cutoff": 74,
+    "resonance": 71,
+    "portamento_on_off": 65,
+}
 
 
 class AcidBass(Algorithm):
     """TB-303 line: 16-step probabilistic, with CC74/71 + pitch-bend."""
 
     name: ClassVar[str] = "acid_bass"
+    DEFAULT_CC: ClassVar[dict[str, int]] = dict(_DEFAULT_CC)
+    """Function → CC number; mirrored on the class for setup-editor lookup."""
 
-    def __init__(self, *, midi_channel: int) -> None:
+    def __init__(
+        self,
+        *,
+        midi_channel: int,
+        cc_map: dict[str, int] | None = None,
+    ) -> None:
         self.midi_channel = midi_channel
+        self._cc_map = dict(cc_map) if cc_map else {}
+
+    def _cc(self, function: str) -> int:
+        return int(self._cc_map.get(function, _DEFAULT_CC[function]))
 
     def generate_bar(self, ctx: BarContext) -> list[Event]:
         knobs = ctx.pattern_knobs
@@ -87,7 +102,7 @@ class AcidBass(Algorithm):
                 ControlChange(
                     tick=0,
                     channel=self.midi_channel,
-                    cc=_CC_PORTAMENTO_ON_OFF,
+                    cc=self._cc("portamento_on_off"),
                     value=127,
                 )
             )
@@ -95,7 +110,7 @@ class AcidBass(Algorithm):
                 ControlChange(
                     tick=0,
                     channel=self.midi_channel,
-                    cc=_CC_PORTAMENTO_TIME,
+                    cc=self._cc("portamento_time"),
                     value=0,
                 )
             )
@@ -114,7 +129,7 @@ class AcidBass(Algorithm):
                     ControlChange(
                         tick=tick,
                         channel=self.midi_channel,
-                        cc=_CC_FILTER_CUTOFF,
+                        cc=self._cc("filter_cutoff"),
                         value=max(0, min(127, cutoff)),
                     )
                 )
@@ -125,7 +140,7 @@ class AcidBass(Algorithm):
                         ControlChange(
                             tick=tick,
                             channel=self.midi_channel,
-                            cc=_CC_RESONANCE,
+                            cc=self._cc("resonance"),
                             value=max(0, min(127, resonance)),
                         )
                     )
@@ -156,7 +171,7 @@ class AcidBass(Algorithm):
                     ControlChange(
                         tick=max(0, tick - 2),
                         channel=self.midi_channel,
-                        cc=_CC_PORTAMENTO_TIME,
+                        cc=self._cc("portamento_time"),
                         value=glide,
                     )
                 )
