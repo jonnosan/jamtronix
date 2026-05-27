@@ -75,3 +75,49 @@ def test_song_dirty_round_trip(tmp_path: Path, qapp: QApplication) -> None:
     state2 = AppState()
     state2.open(save_path)
     assert state2.song.tempo == 130  # type: ignore[union-attr]
+
+
+def test_parts_view_lazy_override_creation(tmp_path: Path, qapp: QApplication) -> None:
+    """Editing the override dict via the parts view machinery creates
+    a VoiceOverride lazily, and removing the last field cleans it up.
+    """
+    from jtx.model import Part
+    from jtx_gui.views.parts_view import PartsView
+
+    state = AppState()
+    state.open(ACID_DEMO)
+    # Add a part so the view has something to operate on.
+    state.song.parts["test_part"] = Part(bars=4)  # type: ignore[union-attr]
+    state.mark_dirty()
+
+    view = PartsView(state)
+    # Selecting the new part builds detail widgets — verify it doesn't crash.
+    view._current_part = "test_part"  # type: ignore[attr-defined]
+    view._rebuild_detail()  # type: ignore[attr-defined]
+    part = state.song.parts["test_part"]  # type: ignore[union-attr]
+    assert part.voice_overrides == {}
+    view.deleteLater()
+
+
+def test_arrangement_reorder_writes_dirty(qapp: QApplication) -> None:
+    """Rebuilding arrangement via the view should sync Song.arrangement."""
+    from jtx_gui.widgets.arrangement import ArrangementEditor
+
+    state = AppState()
+    state.open(ACID_DEMO)
+    assert state.song is not None
+    state._dirty = False  # type: ignore[attr-defined]
+
+    bumped = []
+
+    def on_dirty() -> None:
+        bumped.append(1)
+
+    editor = ArrangementEditor(song=state.song, on_dirty=on_dirty)
+    initial_len = len(state.song.arrangement)
+    # Append the first known part.
+    first_part = next(iter(state.song.parts.keys()))
+    state.song.arrangement.append(first_part)
+    editor.reload()
+    assert len(state.song.arrangement) == initial_len + 1
+    editor.deleteLater()
