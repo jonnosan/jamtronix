@@ -168,14 +168,14 @@ QLabel#SectionTitle {{
     color: {INK_HOT.name()};
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 1.4px;
+    letter-spacing: 1px;
     padding: 6px 0;
     border-bottom: 1px solid {PANEL_BORDER.name()};
 }}
 QLabel#FieldLabel {{
     color: {INK_DIM.name()};
     text-transform: uppercase;
-    letter-spacing: 1.1px;
+    letter-spacing: 1px;
     font-weight: 700;
     font-size: 9pt;
 }}
@@ -194,7 +194,7 @@ QGroupBox::title {{
     padding: 0 4px;
     background-color: {PANEL_BG.name()};
     text-transform: uppercase;
-    letter-spacing: 1.2px;
+    letter-spacing: 1px;
 }}
 
 QScrollArea {{

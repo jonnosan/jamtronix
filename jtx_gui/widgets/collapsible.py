@@ -34,7 +34,7 @@ class CollapsibleSection(QFrame):
                 color: {theme.INK_HOT.name()};
                 font-weight: 700;
                 text-transform: uppercase;
-                letter-spacing: 1.3px;
+                letter-spacing: 1px;
                 padding: 4px 0;
             }}
             QToolButton:hover {{
