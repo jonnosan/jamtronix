@@ -256,24 +256,27 @@ class MainWindow(QMainWindow):
     # ----- close-with-dirty prompt -----------------------------------------
 
     def closeEvent(self, event) -> None:  # type: ignore[no-untyped-def]
-        if not self._state.dirty:
-            event.accept()
-            return
-        reply = QMessageBox.question(
-            self,
-            "Unsaved changes",
-            "The current song has unsaved changes. Save before closing?",
-            QMessageBox.StandardButton.Save
-            | QMessageBox.StandardButton.Discard
-            | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Save,
-        )
-        if reply == QMessageBox.StandardButton.Cancel:
-            event.ignore()
-            return
-        if reply == QMessageBox.StandardButton.Save and not self.save_song():
-            event.ignore()
-            return
+        if self._state.dirty:
+            reply = QMessageBox.question(
+                self,
+                "Unsaved changes",
+                "The current song has unsaved changes. Save before closing?",
+                QMessageBox.StandardButton.Save
+                | QMessageBox.StandardButton.Discard
+                | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Save,
+            )
+            if reply == QMessageBox.StandardButton.Cancel:
+                event.ignore()
+                return
+            if reply == QMessageBox.StandardButton.Save and not self.save_song():
+                event.ignore()
+                return
+        # Synchronously stop the worker so its sink.stop() (which fires
+        # all-notes-off on every channel) runs before the QThread is
+        # destroyed. Otherwise Qt aborts with "QThread: Destroyed while
+        # thread is still running" and notes linger in the DAW.
+        self._transport.stop_and_wait()
         event.accept()
 
     # ----- helpers ---------------------------------------------------------
