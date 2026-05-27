@@ -81,7 +81,7 @@ class _StylePage(QWizardPage):
         for index, style in enumerate(STYLES.keys()):
             btn = QRadioButton(style.replace("_", " ").upper())
             btn.setStyleSheet(
-                f"QRadioButton {{ color: {theme.INK.name()}; font-weight: 800;"
+                f"QRadioButton {{ color: {theme.INK.name()}; font-weight: bold;"
                 "letter-spacing: 1px; padding: 4px 0; }}"
             )
             blurb = QLabel(descriptions.get(style, ""))
@@ -120,7 +120,7 @@ class _SetupPage(QWizardPage):
             label = f"BUNDLED  ·  {path.stem.upper()}  ·  {path.name}"
             btn = QRadioButton(label)
             btn.setStyleSheet(
-                f"QRadioButton {{ color: {theme.INK.name()}; font-weight: 700;"
+                f"QRadioButton {{ color: {theme.INK.name()}; font-weight: bold;"
                 "letter-spacing: 1px; padding: 4px 0; }}"
             )
             self._radios[path.stem] = btn
@@ -132,7 +132,7 @@ class _SetupPage(QWizardPage):
         custom_row = QHBoxLayout()
         self._custom_radio = QRadioButton("CUSTOM .jtx-setup")
         self._custom_radio.setStyleSheet(
-            f"QRadioButton {{ color: {theme.INK.name()}; font-weight: 700;"
+            f"QRadioButton {{ color: {theme.INK.name()}; font-weight: bold;"
             "letter-spacing: 1px; padding: 4px 0; }}"
         )
         browse_btn = QPushButton("BROWSE…")

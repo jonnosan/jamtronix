@@ -31,7 +31,7 @@ class SplashDialog(QDialog):
         title = QLabel("JAMTRONIX")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setStyleSheet(
-            f"color: {theme.INK_HOT.name()}; font-size: 28pt; font-weight: 800;"
+            f"color: {theme.INK_HOT.name()}; font-size: 28pt; font-weight: bold;"
             "letter-spacing: 6px; padding-top: 8px;"
         )
         subtitle = QLabel("MIDI JAM TOOL — V1")

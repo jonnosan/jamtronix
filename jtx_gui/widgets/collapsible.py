@@ -32,8 +32,7 @@ class CollapsibleSection(QFrame):
                 background: transparent;
                 border: none;
                 color: {theme.INK_HOT.name()};
-                font-weight: 700;
-                text-transform: uppercase;
+                font-weight: bold;
                 letter-spacing: 1px;
                 padding: 4px 0;
             }}

@@ -104,7 +104,7 @@ class MainWindow(QMainWindow):
         brand = QLabel("JTX")
         brand.setAlignment(Qt.AlignmentFlag.AlignCenter)
         brand.setStyleSheet(
-            f"color: {theme.INK_HOT.name()}; font-size: 22pt; font-weight: 800;"
+            f"color: {theme.INK_HOT.name()}; font-size: 22pt; font-weight: bold;"
             "letter-spacing: 5px; padding-bottom: 18px;"
         )
         layout.addWidget(brand)
@@ -296,7 +296,8 @@ class _Placeholder(QWidget):
         title_lbl = QLabel(title)
         title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_lbl.setStyleSheet(
-            f"color: {theme.INK_HOT.name()}; font-size: 24pt; font-weight: 800;letter-spacing: 6px;"
+            f"color: {theme.INK_HOT.name()}; font-size: 24pt;"
+            "font-weight: bold; letter-spacing: 6px;"
         )
         msg = QLabel(message)
         msg.setWordWrap(True)

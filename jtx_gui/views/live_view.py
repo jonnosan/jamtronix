@@ -260,11 +260,12 @@ class _TransportPanel(QFrame):
 
         self._part_label = QLabel("—")
         self._part_label.setStyleSheet(
-            f"color: {theme.INK_HOT.name()}; font-size: 14pt; font-weight: 800;letter-spacing: 1px;"
+            f"color: {theme.INK_HOT.name()}; font-size: 14pt;"
+            "font-weight: bold; letter-spacing: 1px;"
         )
         self._queue_label = QLabel("")
         self._queue_label.setStyleSheet(
-            f"color: {theme.ACCENT_AMBER.name()}; font-size: 10pt;letter-spacing: 1px;"
+            f"color: {theme.ACCENT_AMBER.name()}; font-size: 10pt; letter-spacing: 1px;"
         )
         self._status_label = QLabel("")
         self._status_label.setStyleSheet(f"color: {theme.ACCENT_RED.name()}; font-size: 10pt;")

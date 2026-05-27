@@ -98,8 +98,7 @@ QPushButton {{
     border: 1px solid {BRASS_MID.name()};
     border-radius: 2px;
     padding: 6px 14px;
-    font-weight: 700;
-    text-transform: uppercase;
+    font-weight: bold;
     letter-spacing: 1px;
 }}
 QPushButton:hover {{
@@ -166,17 +165,15 @@ QLabel {{
 }}
 QLabel#SectionTitle {{
     color: {INK_HOT.name()};
-    font-weight: 700;
-    text-transform: uppercase;
+    font-weight: bold;
     letter-spacing: 1px;
     padding: 6px 0;
     border-bottom: 1px solid {PANEL_BORDER.name()};
 }}
 QLabel#FieldLabel {{
     color: {INK_DIM.name()};
-    text-transform: uppercase;
     letter-spacing: 1px;
-    font-weight: 700;
+    font-weight: bold;
     font-size: 9pt;
 }}
 
@@ -193,7 +190,6 @@ QGroupBox::title {{
     left: 8px;
     padding: 0 4px;
     background-color: {PANEL_BG.name()};
-    text-transform: uppercase;
     letter-spacing: 1px;
 }}
 
