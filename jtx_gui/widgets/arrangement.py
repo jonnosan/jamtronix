@@ -168,7 +168,7 @@ class _PartCell(QFrame):
 
         name_lbl = QLabel(part_name.upper())
         name_lbl.setStyleSheet(
-            f"color: {theme.INK_HOT.name()}; font-weight: 800; letter-spacing: 1px;"
+            f"color: {theme.INK_HOT.name()}; font-weight: bold; letter-spacing: 1px;"
         )
         name_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
