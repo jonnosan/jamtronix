@@ -75,7 +75,12 @@ def _seed_from_title(title: str) -> int:
 
 
 class VoicePanel(QFrame):
-    """One row in the voice list — algorithm picker + collapsible knobs."""
+    """One voice in the Song view — collapsed by default; expand to edit.
+
+    The outer ``CollapsibleSection`` shows ``name · type · algorithm``
+    so all voices fit on one screen at a glance. Expanding reveals the
+    algorithm picker plus the pattern + feel knob sections.
+    """
 
     dirty = Signal()
 
@@ -93,8 +98,10 @@ class VoicePanel(QFrame):
         self._voice_type = voice_type
         self._config = config
 
-        title = QLabel(f"{voice_name.upper()}  ·  {voice_type}")
-        title.setObjectName("SectionTitle")
+        self._outer_section = CollapsibleSection(
+            self._header_title(config.algorithm),
+            expanded=False,
+        )
 
         self._algo_combo = QComboBox(self)
         for meta in algorithms_for(voice_type):
@@ -109,24 +116,25 @@ class VoicePanel(QFrame):
         algo_label.setObjectName("FieldLabel")
         algo_row.addWidget(algo_label)
         algo_row.addWidget(self._algo_combo, 1)
-
-        header = QVBoxLayout()
-        header.setContentsMargins(0, 0, 0, 0)
-        header.setSpacing(6)
-        header.addWidget(title)
-        header.addLayout(algo_row)
+        algo_row_widget = QWidget()
+        algo_row_widget.setLayout(algo_row)
 
         self._pattern_section = CollapsibleSection("Pattern Knobs", expanded=True)
         self._feel_section = CollapsibleSection("Feel Knobs", expanded=False)
 
+        self._outer_section.add_widget(algo_row_widget)
+        self._outer_section.add_widget(self._pattern_section)
+        self._outer_section.add_widget(self._feel_section)
+
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 12)
-        root.setSpacing(8)
-        root.addLayout(header)
-        root.addWidget(self._pattern_section)
-        root.addWidget(self._feel_section)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        root.addWidget(self._outer_section)
 
         self._rebuild_knob_panels()
+
+    def _header_title(self, algorithm: str) -> str:
+        return f"{self._voice_name.upper()}  ·  {self._voice_type}  ·  {algorithm}"
 
     def _rebuild_knob_panels(self) -> None:
         _clear_layout(self._pattern_section.body_layout())
@@ -216,6 +224,7 @@ class VoicePanel(QFrame):
                 for k, v in self._config.pattern.items()
                 if k in new_schema or k not in _ALL_KNOWN_PATTERN_KEYS
             }
+        self._outer_section.set_title(self._header_title(new_algo))
         self._rebuild_knob_panels()
         self.dirty.emit()
 
@@ -682,6 +691,10 @@ class _ChoiceField(QWidget):
         layout.addWidget(self._combo)
         layout.addWidget(lbl)
         self.setMinimumWidth(110)
+        if spec.description:
+            tip = f"{spec.name}: {spec.description}"
+            self.setToolTip(tip)
+            self._combo.setToolTip(tip)
 
 
 class _TextField(QWidget):
@@ -713,6 +726,10 @@ class _TextField(QWidget):
         layout.addWidget(self._edit)
         layout.addWidget(lbl)
         self.setMinimumWidth(140)
+        if spec.description:
+            tip = f"{spec.name}: {spec.description}"
+            self.setToolTip(tip)
+            self._edit.setToolTip(tip)
 
     def _format_value(self, value: object) -> str:
         if value is None:

@@ -71,6 +71,9 @@ class CollapsibleSection(QFrame):
     def set_header_hint(self, text: str) -> None:
         self._header_label.setText(text)
 
+    def set_title(self, title: str) -> None:
+        self._toggle.setText(title)
+
     def body_layout(self) -> QVBoxLayout:
         return self._body_layout
 
