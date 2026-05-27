@@ -6,5 +6,15 @@ from jtx.algorithms.drum_one_shot import DrumOneShot
 from jtx.algorithms.drum_pattern import DrumPattern
 from jtx.algorithms.melodic_line import MelodicLine
 from jtx.algorithms.sub_drone import SubDrone
+from jtx.algorithms.sustained_chord import ChordStab, SustainedChord
 
-__all__ = ["AcidBass", "Arp", "DrumOneShot", "DrumPattern", "MelodicLine", "SubDrone"]
+__all__ = [
+    "AcidBass",
+    "Arp",
+    "ChordStab",
+    "DrumOneShot",
+    "DrumPattern",
+    "MelodicLine",
+    "SubDrone",
+    "SustainedChord",
+]
