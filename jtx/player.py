@@ -249,6 +249,7 @@ class SongPlayer:
                 pattern_knobs=pattern_knobs,
                 feel_knobs=feel_knobs,
                 rng=_r.Random(bar_seed),
+                part_voice_seed=pv_seed,
             )
 
         # LFO application — runs on a song-level RNG so its randomness
