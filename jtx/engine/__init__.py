@@ -14,6 +14,13 @@ from jtx.engine.clock_source import (
 )
 from jtx.engine.context import BarContext
 from jtx.engine.events import ControlChange, Event, NoteOff, NoteOn, PitchBend
+from jtx.engine.lfo import (
+    ParsedTarget,
+    applications_for_part,
+    apply_lfos_to_bar,
+    parse_target,
+    sample_lfo,
+)
 from jtx.engine.meter import parse_meter, ticks_per_bar, ticks_per_beat
 from jtx.engine.scheduler import BarGenerator, Scheduler
 from jtx.engine.sink import MemorySink, Sink
@@ -30,11 +37,16 @@ __all__ = [
     "MemorySink",
     "MidiClockSlaveClock",
     "NoteOff",
+    "ParsedTarget",
     "NoteOn",
     "PitchBend",
     "Scheduler",
     "Sink",
+    "applications_for_part",
+    "apply_lfos_to_bar",
     "parse_meter",
+    "parse_target",
+    "sample_lfo",
     "ticks_per_bar",
     "ticks_per_beat",
 ]
