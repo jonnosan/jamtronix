@@ -42,6 +42,16 @@ notes are emitted, not *what* notes:
 Multiple sources are unioned (strongest duck wins). Triggers from the
 previous bar carry over: a kick on tick 1840 of bar N still ducks the
 first events of bar N+1 if the release window extends that far.
+
+**Evolution** (slow velocity ramp across the *part*):
+
+* ``evolution_start`` (1.0) — velocity multiplier at bar 0 of the part.
+* ``evolution_end`` (1.0) — velocity multiplier at the last bar of
+  the part. Linear interpolation in between.
+
+Used to bake "this voice builds intensity across the section" into a
+single voice config without needing explicit fade boundaries. Defaults
+to a no-op (1.0 → 1.0). Applied after the fade pass.
 """
 
 from __future__ import annotations
@@ -64,11 +74,15 @@ def apply_mix_pass(
     bar_index: int,
     ticks_per_bar: int,
     ppq: int,
+    part_bars: int = 1,
 ) -> dict[str, list[Event]]:
-    """Apply sidechain ducking + fade envelope to each voice's events.
+    """Apply sidechain ducking + fade envelope + evolution ramp.
 
     Returns a fresh dict; input collections are not mutated. The order
     of voices in the returned dict matches *voice_events*.
+
+    ``part_bars`` is the total bar count of the active part; used by
+    the evolution ramp to compute progress (0..1) across the part.
     """
     out: dict[str, list[Event]] = {}
     for voice_name, events in voice_events.items():
@@ -77,7 +91,8 @@ def apply_mix_pass(
             events, knobs, voice_events, prev_voice_events, ticks_per_bar, ppq
         )
         faded = _apply_fade(ducked, knobs, bar_index, ticks_per_bar, ppq)
-        out[voice_name] = faded
+        evolved = _apply_evolution(faded, knobs, bar_index, part_bars)
+        out[voice_name] = evolved
     return out
 
 
@@ -263,6 +278,42 @@ def _fade_scale_at_beat(
 
     # Sustain plateau (no fade configured or between fade-in and fade-out).
     return sustain
+
+
+def _apply_evolution(
+    events: list[Event],
+    knobs: KnobDict,
+    bar_index: int,
+    part_bars: int,
+) -> list[Event]:
+    """Linear velocity ramp from ``evolution_start`` (at bar 0) to
+    ``evolution_end`` (at the last bar of the part).
+
+    Defaults to (1.0, 1.0) which is a no-op. NoteOn velocities are
+    scaled; other events pass through. Velocities clamp to 1..127.
+    """
+    start = float(knobs.get("evolution_start", 1.0))
+    end = float(knobs.get("evolution_end", 1.0))
+    if start == 1.0 and end == 1.0:
+        return events
+
+    if part_bars <= 1:
+        progress = 1.0
+    else:
+        progress = bar_index / (part_bars - 1)
+    progress = max(0.0, min(1.0, progress))
+    scale = start + (end - start) * progress
+    if scale == 1.0:
+        return events
+
+    out: list[Event] = []
+    for ev in events:
+        if isinstance(ev, NoteOn):
+            new_vel = max(1, min(127, int(round(ev.velocity * scale))))
+            out.append(NoteOn(tick=ev.tick, channel=ev.channel, note=ev.note, velocity=new_vel))
+        else:
+            out.append(ev)
+    return out
 
 
 def _ramp(progress: float, shape: str) -> float:
