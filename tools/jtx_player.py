@@ -154,6 +154,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Loop the arrangement (or --part) until Ctrl-C (ignored with --render)",
     )
     parser.add_argument(
+        "--open-daw",
+        action="store_true",
+        help="Open setup.daw_template_path via macOS 'open' before playback",
+    )
+    parser.add_argument(
         "--clock",
         choices=_CLOCK_CHOICES,
         default=None,
@@ -249,6 +254,18 @@ def main(argv: list[str] | None = None) -> int:
 
     port_name = args.port or setup.default_midi_port
     _preflight_midi_port(port_name, parser)
+
+    if args.open_daw:
+        if not setup.daw_template_path:
+            parser.error("--open-daw was set but setup has no daw_template_path")
+        daw_path = Path(setup.daw_template_path)
+        if not daw_path.exists():
+            parser.error(f"DAW template not found: {daw_path}")
+        import subprocess
+
+        print(f"opening DAW template: {daw_path}")
+        subprocess.run(["open", str(daw_path)], check=False)
+
     sink = RealtimeMidiSink(port_name=port_name)
 
     mode: ClockMode = args.clock or setup.clock_mode

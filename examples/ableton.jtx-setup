@@ -2,7 +2,7 @@
   "id": "ableton",
   "name": "Ableton Template",
   "default_midi_port": "IAC Driver Bus 1",
-  "daw_template_path": null,
+  "daw_template_path": "/Users/jonno/Music/Ableton/User Library/Templates/Jamtronix.als",
   "clock_mode": "internal_master",
   "midi_clock_in_port": null,
   "voices": [
