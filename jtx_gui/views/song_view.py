@@ -33,6 +33,7 @@ from jtx.model import (
     LFO,
     ChordProgression,
     Key,
+    LFOApplication,
     Song,
     VoiceConfig,
     VoiceType,
@@ -588,12 +589,21 @@ class _HeaderPanel(QFrame):
 # --------------------------------------------------------------------------
 
 
-class _LFOPanel(QFrame):
-    """Read/edit the song's LFO definitions.
+_LFO_SHAPES: tuple[str, ...] = ("sine", "tri", "saw", "ramp", "square", "random", "sh")
+_LFO_TARGET_KINDS: tuple[str, ...] = ("pattern", "feel", "midi", "root")
 
-    For #17 this is intentionally lightweight: a list with name + summary,
-    plus a JSON-edit fallback for one selected LFO. Full structured
-    editing lives with the Parts/Live views in #18 / #19.
+
+class _LFOPanel(QFrame):
+    """Structured editor for the song's LFO definitions.
+
+    Top: list of LFOs with add / remove.
+    Bottom: selected LFO's header fields (name / shape / period / phase /
+    depth) plus a per-part applications list with target-kind / voice /
+    knob composers (or channel + cc spinners for raw MIDI targets).
+
+    The LFO model fields and target-string format are unchanged
+    (e.g. ``"pattern:acid:slide_prob"``); this widget just composes
+    them from clickable pickers instead of typed JSON.
     """
 
     def __init__(self, *, song: Song, on_dirty) -> None:  # type: ignore[no-untyped-def]
@@ -602,6 +612,11 @@ class _LFOPanel(QFrame):
         self._song = song
         self._on_dirty = on_dirty
         self._selected_index: int | None = None
+        # Holds the current detail-pane widget (rebuilt on selection).
+        self._detail_holder = QWidget(self)
+        self._detail_layout = QVBoxLayout(self._detail_holder)
+        self._detail_layout.setContentsMargins(0, 0, 0, 0)
+        self._detail_layout.setSpacing(6)
 
         title = QLabel("LFOS")
         title.setObjectName("SectionTitle")
@@ -621,41 +636,36 @@ class _LFOPanel(QFrame):
         button_row.addWidget(remove_btn)
         button_row.addStretch(1)
 
-        self._detail = QPlainTextEdit()
-        self._detail.setMinimumHeight(120)
-        self._detail.setPlaceholderText(
-            "Select an LFO to view its JSON. Full structured editor in #18/#19."
-        )
-        self._detail.setReadOnly(True)
-        self._detail.setStyleSheet(
-            f"font-family: {theme.MONO_FONT_FAMILY}; color: {theme.INK.name()};"
-        )
-
         root = QVBoxLayout(self)
         root.setContentsMargins(14, 12, 14, 14)
         root.setSpacing(8)
         root.addWidget(title)
         root.addWidget(self._list)
         root.addLayout(button_row)
-        root.addWidget(self._detail)
+        root.addWidget(self._detail_holder)
 
         self._refresh_list()
 
+    # ----- list management ------------------------------------------------
+
     def _refresh_list(self) -> None:
+        self._list.blockSignals(True)
         self._list.clear()
         for lfo in self._song.lfos:
             self._list.addItem(
                 QListWidgetItem(
-                    f"{lfo.name}  ·  {lfo.shape}  ·  period={lfo.period_bars} bars  "
-                    f"·  depth={lfo.depth}",
+                    f"{lfo.name}  ·  {lfo.shape}  ·  period={lfo.period_bars} bars"
+                    f"  ·  depth={lfo.depth}  ·  {len(lfo.applications)} bound",
                 )
             )
+        self._list.blockSignals(False)
         if self._song.lfos:
             self._list.setCurrentRow(0)
             self._selected_index = 0
             self._show_detail(0)
         else:
-            self._detail.setPlainText("")
+            self._selected_index = None
+            _clear_layout(self._detail_layout)
 
     def _on_select(self) -> None:
         row = self._list.currentRow()
@@ -663,14 +673,7 @@ class _LFOPanel(QFrame):
         if row >= 0:
             self._show_detail(row)
         else:
-            self._detail.setPlainText("")
-
-    def _show_detail(self, row: int) -> None:
-        import json
-        from dataclasses import asdict
-
-        lfo = self._song.lfos[row]
-        self._detail.setPlainText(json.dumps(asdict(lfo), indent=2))
+            _clear_layout(self._detail_layout)
 
     def _on_add(self) -> None:
         existing = {lfo.name for lfo in self._song.lfos}
@@ -689,6 +692,368 @@ class _LFOPanel(QFrame):
         del self._song.lfos[self._selected_index]
         self._refresh_list()
         self._on_dirty()
+
+    # ----- detail pane ---------------------------------------------------
+
+    def _show_detail(self, row: int) -> None:
+        _clear_layout(self._detail_layout)
+        lfo = self._song.lfos[row]
+        self._detail_layout.addWidget(self._build_lfo_header(lfo))
+        self._detail_layout.addWidget(self._build_applications_box(lfo))
+
+    def _build_lfo_header(self, lfo: LFO) -> QWidget:
+        name_edit = QLineEdit(lfo.name)
+        name_edit.editingFinished.connect(lambda: self._on_name_changed(lfo, name_edit.text()))
+
+        shape_combo = QComboBox()
+        shape_combo.addItems(_LFO_SHAPES)
+        if lfo.shape in _LFO_SHAPES:
+            shape_combo.setCurrentText(lfo.shape)
+        else:
+            shape_combo.addItem(lfo.shape)
+            shape_combo.setCurrentText(lfo.shape)
+        shape_combo.currentTextChanged.connect(lambda v: self._on_shape_changed(lfo, v))
+
+        period = KnobWidget(
+            label="period",
+            minimum=0.25,
+            maximum=32.0,
+            value=float(lfo.period_bars),
+            step=0.25,
+            decimals=2,
+        )
+        period.value_changed.connect(lambda v: self._on_period_changed(lfo, float(v)))
+
+        phase = KnobWidget(
+            label="phase",
+            minimum=0.0,
+            maximum=1.0,
+            value=float(lfo.phase),
+            step=0.01,
+            decimals=2,
+        )
+        phase.value_changed.connect(lambda v: self._on_phase_changed(lfo, float(v)))
+
+        depth = KnobWidget(
+            label="depth",
+            minimum=0.0,
+            maximum=1.0,
+            value=float(lfo.depth),
+            step=0.01,
+            decimals=2,
+        )
+        depth.value_changed.connect(lambda v: self._on_depth_changed(lfo, float(v)))
+
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(4)
+        _add_labeled(grid, 0, 0, "NAME", name_edit, span=2)
+        _add_labeled(grid, 0, 2, "SHAPE", shape_combo, span=1)
+
+        knob_row = QHBoxLayout()
+        knob_row.setSpacing(10)
+        knob_row.addWidget(period)
+        knob_row.addWidget(phase)
+        knob_row.addWidget(depth)
+        knob_row.addStretch(1)
+
+        container = QFrame()
+        container.setObjectName("Panel")
+        col = QVBoxLayout(container)
+        col.setContentsMargins(10, 8, 10, 8)
+        col.setSpacing(6)
+        col.addLayout(grid)
+        col.addLayout(knob_row)
+        return container
+
+    def _build_applications_box(self, lfo: LFO) -> QWidget:
+        title = QLabel("BOUND TARGETS")
+        title.setObjectName("FieldLabel")
+
+        rows_holder = QWidget()
+        rows_layout = QVBoxLayout(rows_holder)
+        rows_layout.setContentsMargins(0, 0, 0, 0)
+        rows_layout.setSpacing(4)
+        for i, app in enumerate(lfo.applications):
+            rows_layout.addWidget(self._build_application_row(lfo, i, app))
+
+        add_btn = QPushButton("BIND NEW TARGET")
+        add_btn.clicked.connect(lambda: self._on_add_application(lfo))
+
+        wrap = QFrame()
+        wrap.setObjectName("Panel")
+        col = QVBoxLayout(wrap)
+        col.setContentsMargins(10, 8, 10, 8)
+        col.setSpacing(6)
+        col.addWidget(title)
+        col.addWidget(rows_holder)
+        col.addWidget(add_btn, 0, Qt.AlignmentFlag.AlignLeft)
+        return wrap
+
+    def _build_application_row(self, lfo: LFO, idx: int, app: LFOApplication) -> QWidget:
+        return _LFOApplicationRow(
+            song=self._song,
+            lfo=lfo,
+            app=app,
+            on_change=self._on_dirty_and_refresh,
+            on_remove=lambda: self._on_remove_application(lfo, idx),
+        )
+
+    # ----- callbacks ------------------------------------------------------
+
+    def _on_name_changed(self, lfo: LFO, text: str) -> None:
+        if lfo.name != text:
+            lfo.name = text
+            self._on_dirty_and_refresh()
+
+    def _on_shape_changed(self, lfo: LFO, text: str) -> None:
+        if lfo.shape != text:
+            lfo.shape = text  # type: ignore[assignment]
+            self._on_dirty_and_refresh()
+
+    def _on_period_changed(self, lfo: LFO, value: float) -> None:
+        lfo.period_bars = value
+        self._on_dirty_and_refresh()
+
+    def _on_phase_changed(self, lfo: LFO, value: float) -> None:
+        lfo.phase = value
+        self._on_dirty()
+
+    def _on_depth_changed(self, lfo: LFO, value: float) -> None:
+        lfo.depth = value
+        self._on_dirty_and_refresh()
+
+    def _on_add_application(self, lfo: LFO) -> None:
+        # Default to the first part + first voice's first pattern knob,
+        # or root if no voices/knobs exist.
+        first_part = next(iter(self._song.parts.keys()), "")
+        target = self._default_target_for(self._song)
+        lfo.applications.append(LFOApplication(part=first_part, target=target))
+        self._on_dirty_and_refresh()
+        if self._selected_index is not None:
+            self._show_detail(self._selected_index)
+
+    def _on_remove_application(self, lfo: LFO, idx: int) -> None:
+        if 0 <= idx < len(lfo.applications):
+            del lfo.applications[idx]
+            self._on_dirty_and_refresh()
+            if self._selected_index is not None:
+                self._show_detail(self._selected_index)
+
+    def _on_dirty_and_refresh(self) -> None:
+        self._on_dirty()
+        # Refresh the list summary line (count of bound targets etc.).
+        row = self._selected_index
+        self._list.blockSignals(True)
+        for i, lfo in enumerate(self._song.lfos):
+            item = self._list.item(i)
+            if item is not None:
+                item.setText(
+                    f"{lfo.name}  ·  {lfo.shape}  ·  period={lfo.period_bars} bars"
+                    f"  ·  depth={lfo.depth}  ·  {len(lfo.applications)} bound",
+                )
+        if row is not None:
+            self._list.setCurrentRow(row)
+        self._list.blockSignals(False)
+
+    @staticmethod
+    def _default_target_for(song: Song) -> str:
+        for voice_name, voice in song.voices.items():
+            schema = SCHEMAS.pattern_by_algo.get(voice.algorithm, {})
+            if schema:
+                first_knob = next(iter(schema.keys()))
+                return f"pattern:{voice_name}:{first_knob}"
+        return "root:"
+
+
+class _LFOApplicationRow(QFrame):
+    """One row of the LFO applications list — composes the target string.
+
+    Target syntax (per ``docs/SPEC.md`` §LFOs):
+    * ``pattern:<voice>:<knob>``
+    * ``feel:<voice>:<knob>``
+    * ``midi:ch<N>:cc<M>``
+    * ``root:<voice>``
+    """
+
+    def __init__(
+        self,
+        *,
+        song: Song,
+        lfo: LFO,
+        app: LFOApplication,
+        on_change: Callable[[], None],
+        on_remove: Callable[[], None],
+    ) -> None:
+        super().__init__()
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self._song = song
+        self._lfo = lfo
+        self._app = app
+        self._on_change = on_change
+
+        kind, voice, knob, midi_channel, midi_cc = _parse_target(app.target)
+
+        self._part_combo = QComboBox()
+        self._part_combo.addItems(list(song.parts.keys()))
+        if app.part in song.parts:
+            self._part_combo.setCurrentText(app.part)
+        else:
+            if app.part:
+                self._part_combo.addItem(app.part)
+                self._part_combo.setCurrentText(app.part)
+        self._part_combo.currentTextChanged.connect(self._on_part_changed)
+
+        self._kind_combo = QComboBox()
+        self._kind_combo.addItems(_LFO_TARGET_KINDS)
+        self._kind_combo.setCurrentText(kind)
+        self._kind_combo.currentTextChanged.connect(self._on_kind_changed)
+
+        # Composed-target fields (voice / knob / midi channel / cc):
+        self._voice_combo = QComboBox()
+        self._voice_combo.setMinimumWidth(140)
+        self._voice_combo.currentTextChanged.connect(self._on_voice_changed)
+
+        self._knob_combo = QComboBox()
+        self._knob_combo.setMinimumWidth(160)
+        self._knob_combo.currentTextChanged.connect(self._on_knob_changed)
+
+        self._midi_channel = QSpinBox()
+        self._midi_channel.setRange(1, 16)
+        self._midi_channel.setPrefix("ch ")
+        self._midi_channel.setValue(midi_channel or 1)
+        self._midi_channel.valueChanged.connect(self._sync_target)
+
+        self._midi_cc = QSpinBox()
+        self._midi_cc.setRange(0, 127)
+        self._midi_cc.setPrefix("cc ")
+        self._midi_cc.setValue(midi_cc or 74)
+        self._midi_cc.valueChanged.connect(self._sync_target)
+
+        remove_btn = QPushButton("×")
+        remove_btn.setMaximumWidth(36)
+        remove_btn.setToolTip("Remove this binding")
+        remove_btn.clicked.connect(on_remove)
+
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+        row.addWidget(self._part_combo)
+        row.addWidget(self._kind_combo)
+        row.addWidget(self._voice_combo)
+        row.addWidget(self._knob_combo)
+        row.addWidget(self._midi_channel)
+        row.addWidget(self._midi_cc)
+        row.addWidget(remove_btn)
+
+        self._populate_voice_combo(initial=voice)
+        self._populate_knob_combo(initial=knob)
+        self._reveal_fields_for_kind(kind)
+
+    # ----- composing the target string -----------------------------------
+
+    def _sync_target(self) -> None:
+        kind = self._kind_combo.currentText()
+        if kind == "pattern" or kind == "feel":
+            voice = self._voice_combo.currentText()
+            knob = self._knob_combo.currentText()
+            target = f"{kind}:{voice}:{knob}"
+        elif kind == "midi":
+            target = f"midi:ch{self._midi_channel.value()}:cc{self._midi_cc.value()}"
+        elif kind == "root":
+            voice = self._voice_combo.currentText()
+            target = f"root:{voice}"
+        else:
+            target = self._app.target
+        if target != self._app.target:
+            self._app.target = target
+            self._on_change()
+
+    def _on_part_changed(self, name: str) -> None:
+        if self._app.part != name:
+            self._app.part = name
+            self._on_change()
+
+    def _on_kind_changed(self, kind: str) -> None:
+        self._reveal_fields_for_kind(kind)
+        # Re-populate voice + knob options for the new kind.
+        self._populate_voice_combo()
+        self._populate_knob_combo()
+        self._sync_target()
+
+    def _on_voice_changed(self, _name: str) -> None:
+        # Pattern knobs are voice-dependent; refresh.
+        if self._kind_combo.currentText() == "pattern":
+            self._populate_knob_combo()
+        self._sync_target()
+
+    def _on_knob_changed(self, _name: str) -> None:
+        self._sync_target()
+
+    def _reveal_fields_for_kind(self, kind: str) -> None:
+        self._voice_combo.setVisible(kind in {"pattern", "feel", "root"})
+        self._knob_combo.setVisible(kind in {"pattern", "feel"})
+        self._midi_channel.setVisible(kind == "midi")
+        self._midi_cc.setVisible(kind == "midi")
+
+    def _populate_voice_combo(self, *, initial: str | None = None) -> None:
+        current = initial if initial is not None else self._voice_combo.currentText()
+        self._voice_combo.blockSignals(True)
+        self._voice_combo.clear()
+        self._voice_combo.addItems(list(self._song.voices.keys()))
+        if current and self._voice_combo.findText(current) < 0:
+            self._voice_combo.addItem(current)
+        if current:
+            self._voice_combo.setCurrentText(current)
+        self._voice_combo.blockSignals(False)
+
+    def _populate_knob_combo(self, *, initial: str | None = None) -> None:
+        kind = self._kind_combo.currentText()
+        voice_name = self._voice_combo.currentText()
+        current = initial if initial is not None else self._knob_combo.currentText()
+        options: list[str] = []
+        if kind == "feel":
+            options = [k.name for k in FEEL_KNOBS]
+        elif kind == "pattern" and voice_name in self._song.voices:
+            algo = self._song.voices[voice_name].algorithm
+            options = list(SCHEMAS.pattern_by_algo.get(algo, {}).keys())
+        self._knob_combo.blockSignals(True)
+        self._knob_combo.clear()
+        self._knob_combo.addItems(options)
+        if current and self._knob_combo.findText(current) < 0:
+            self._knob_combo.addItem(current)
+        if current:
+            self._knob_combo.setCurrentText(current)
+        self._knob_combo.blockSignals(False)
+
+
+def _parse_target(target: str) -> tuple[str, str, str, int | None, int | None]:
+    """Split a target string into (kind, voice, knob, midi_channel, midi_cc).
+
+    Unknown shapes return ``("pattern", "", "", None, None)`` so the
+    GUI opens with sane defaults instead of crashing.
+    """
+    if not target:
+        return ("pattern", "", "", None, None)
+    parts = target.split(":")
+    if parts[0] in {"pattern", "feel"} and len(parts) >= 3:
+        return (parts[0], parts[1], parts[2], None, None)
+    if parts[0] == "root" and len(parts) >= 2:
+        return ("root", parts[1], "", None, None)
+    if parts[0] == "midi" and len(parts) >= 3:
+        ch = _trim_int_prefix(parts[1], "ch")
+        cc = _trim_int_prefix(parts[2], "cc")
+        return ("midi", "", "", ch, cc)
+    return ("pattern", "", "", None, None)
+
+
+def _trim_int_prefix(token: str, prefix: str) -> int | None:
+    if token.startswith(prefix):
+        try:
+            return int(token[len(prefix) :])
+        except ValueError:
+            return None
+    return None
 
 
 # --------------------------------------------------------------------------
