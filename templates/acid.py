@@ -1,10 +1,18 @@
 """Acid style template — 303 lead bass, four-on-floor, hat groove.
 
-Produces a 16-bar arrangement covering kick + snare + hats + acid bass
-+ chord stab + cc_lfo filter sweep + a melodic lead. A-minor at 126 BPM.
+Knob ranges below are picked fresh on every build so each new
+acid song lands in a different musical neighbourhood: tempo, key
+root, chord progression family, and the acid_bass / chord_stab
+character knobs all jitter within musically sensible bounds.
+
+Bar-by-bar variation (which steps fire, slide on/off, octave jumps)
+still flows from the title-derived SHA-256 seed — these jitters
+only affect the *macro* shape of the song.
 """
 
 from __future__ import annotations
+
+import random
 
 from jtx.model import (
     ChordProgression,
@@ -14,73 +22,113 @@ from jtx.model import (
     VoiceConfig,
 )
 
+# Progressions that fit acid's minor-scale, four-on-the-floor feel.
+_ACID_PROGRESSIONS: tuple[tuple[str, ...], ...] = (
+    ("i", "VII", "VI", "V"),  # andalusian descent
+    ("i", "VI", "III", "VII"),  # phuture-style
+    ("i", "v", "III", "VII"),  # dark circle
+    ("i", "VII", "VI", "VII"),  # descent + return
+)
+
+_ACID_TONICS: tuple[str, ...] = ("A", "C", "D", "E", "F", "G")
+
 
 def build(title: str, setup_ref: str) -> Song:
+    tonic = random.choice(_ACID_TONICS)
+    tempo = random.randint(122, 130)
+
+    base_progression = random.choice(_ACID_PROGRESSIONS)
+    rotation = random.randrange(len(base_progression))
+    degrees = list(base_progression[rotation:]) + list(base_progression[:rotation])
+    bars_per_chord = random.choice((2, 4, 4, 4, 8))  # weighted toward 4
+
+    acid_knobs = {
+        "drop_prob": round(random.uniform(0.15, 0.45), 2),
+        "slide_prob": round(random.uniform(0.10, 0.55), 2),
+        "base_vel": random.randint(88, 104),
+        "intensity": round(random.uniform(0.9, 1.3), 2),
+        "gate": round(random.uniform(0.45, 0.95), 2),
+        "cycle": random.choice((1, 2, 2, 4, 8)),  # 2-bar LFO most common
+        "resonance": random.randint(80, 120),
+        "octave": random.choice((-1, 0, 0, 0, 1)),  # 0 most common
+    }
+
     voices = {
         "kick": VoiceConfig(
             algorithm="drum_pattern",
-            pattern={"style": "four_floor", "velocity": 118},
+            pattern={
+                "style": "four_floor",
+                "velocity": random.randint(112, 122),
+                "ghost": round(random.uniform(0.0, 0.25), 2),
+                "ghost_velocity_ratio": 0.35,
+                "vel_curve": random.choice(("flat", "flat", "drift", "arc")),
+                "vel_curve_depth": round(random.uniform(0.05, 0.20), 2),
+            },
         ),
         "snare": VoiceConfig(
             algorithm="drum_one_shot",
-            pattern={"pulses": 2, "offset": 4, "velocity": 100},
+            pattern={
+                # 2-on-4 backbeat most of the time; occasionally
+                # delayed-snare (offset 6) or 1-hit (pulses 1, offset 4).
+                "pulses": random.choice((1, 2, 2, 2)),
+                "offset": random.choice((4, 4, 4, 6)),
+                "velocity": random.randint(94, 108),
+                "flam_count": random.choice((0, 0, 0, 1)),
+                "flam_spacing_ticks": 12,
+            },
         ),
         "chh": VoiceConfig(
             algorithm="drum_pattern",
             pattern={
                 "style": "euclid",
-                "pulses": 8,
-                "offset": 0,
-                "velocity": 92,
-                "vel_curve": "pulse",
-                "vel_curve_depth": 0.25,
+                "pulses": random.choice((6, 8, 8, 10, 12)),
+                "offset": random.choice((0, 0, 0, 1, 2)),
+                "velocity": random.randint(80, 100),
+                "vel_curve": random.choice(("pulse", "drift", "ramp_up", "arc")),
+                "vel_curve_depth": round(random.uniform(0.15, 0.35), 2),
             },
-            feel={"swing": 0.18},
+            feel={"swing": round(random.uniform(0.0, 0.22), 2)},
         ),
         "ohh": VoiceConfig(
             algorithm="drum_one_shot",
-            pattern={"pulses": 2, "offset": 2, "velocity": 88},
+            pattern={
+                "pulses": random.choice((1, 2, 2, 4)),
+                "offset": random.choice((2, 2, 6, 10)),
+                "velocity": random.randint(80, 92),
+            },
         ),
         "acid": VoiceConfig(
             algorithm="acid_bass",
-            pattern={
-                "drop_prob": 0.25,
-                "slide_prob": 0.30,
-                "base_vel": 96,
-                "intensity": 1.1,
-                "gate": 0.6,
-                "cycle": 2,
-                "resonance": 105,
-            },
+            pattern=acid_knobs,
         ),
         "stab": VoiceConfig(
             algorithm="chord_stab",
             pattern={
-                "quality": "minor",
-                "pulses": 4,
-                "offset": 2,
+                "quality": random.choice(("minor", "minor", "min7", "sus4")),
+                "pulses": random.choice((2, 4, 4, 8)),
+                "offset": random.choice((0, 2, 2, 4)),
                 "base_vel": 88,
-                "gate": 0.3,
+                "gate": round(random.uniform(0.2, 0.5), 2),
             },
         ),
         "lead": VoiceConfig(
             algorithm="melodic_line",
             pattern={
-                "drop_prob": 0.55,
+                "drop_prob": round(random.uniform(0.5, 0.75), 2),
                 "octave": 1,
                 "base_vel": 90,
-                "passing_prob": 0.15,
-                "palette": "tones_only",
+                "passing_prob": round(random.uniform(0.05, 0.25), 2),
+                "palette": random.choice(("tones_only", "triad", "pentatonic")),
             },
         ),
         "filter": VoiceConfig(
             algorithm="cc_lfo",
             pattern={
                 "cc": 74,
-                "shape": "sine",
-                "period_bars": 8,
-                "depth": 0.85,
-                "offset": 0.55,
+                "shape": random.choice(("sine", "sine", "tri", "saw")),
+                "period_bars": float(random.choice((4, 8, 8, 16))),
+                "depth": round(random.uniform(0.6, 0.95), 2),
+                "offset": round(random.uniform(0.4, 0.7), 2),
             },
         ),
     }
@@ -96,12 +144,12 @@ def build(title: str, setup_ref: str) -> Song:
     return Song(
         title=title,
         setup_ref=setup_ref,
-        key=Key(tonic="A", scale="minor"),
+        key=Key(tonic=tonic, scale="minor"),
         meter="4/4",
-        tempo=126,
+        tempo=tempo,
         chord_progression=ChordProgression(
-            degrees=["i", "VI", "III", "VII"],
-            bars_per_chord=4,
+            degrees=degrees,
+            bars_per_chord=bars_per_chord,
         ),
         voices=voices,
         parts=parts,
