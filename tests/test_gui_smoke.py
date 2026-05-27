@@ -99,6 +99,92 @@ def test_parts_view_lazy_override_creation(tmp_path: Path, qapp: QApplication) -
     view.deleteLater()
 
 
+def test_open_song_loads_sibling_setup(qapp: QApplication) -> None:
+    """Opening acid-demo should also load acid-demo.jtx-setup."""
+    state = AppState()
+    state.open(ACID_DEMO)
+    assert state.setup is not None
+    assert state.setup.id == "acid-demo"
+    assert state.setup_error is None
+
+
+def test_live_view_no_transport_when_setup_missing(tmp_path: Path, qapp: QApplication) -> None:
+    """Song without its sibling setup should report the error, not crash."""
+    from jtx_gui.views.live_view import LiveView
+
+    # Copy just the song into tmp — no setup file alongside it.
+    text = ACID_DEMO.read_text(encoding="utf-8")
+    orphan = tmp_path / "orphan.jtx"
+    orphan.write_text(text, encoding="utf-8")
+
+    state = AppState()
+    state.open(orphan)
+    assert state.setup is None
+    assert state.setup_error is not None
+
+    view = LiveView(state)
+    view._on_part_clicked("kick")  # type: ignore[attr-defined]
+    # The transport should still be idle since the setup is missing.
+    assert not view._transport.is_running  # type: ignore[attr-defined]
+    view.deleteLater()
+
+
+def test_transport_starts_and_stops_with_fake_sink(qapp: QApplication) -> None:
+    """Smoke-test the transport service with a recording fake sink."""
+    import time
+
+    from jtx.engine.sink import Sink
+    from jtx_gui.transport import BarTick, TransportService
+
+    class FakeSink(Sink):
+        def __init__(self) -> None:
+            self.started = False
+            self.stopped = False
+            self.events: list[object] = []
+
+        def start(self) -> None:
+            self.started = True
+
+        def emit(self, event: object) -> None:  # type: ignore[override]
+            self.events.append(event)
+
+        def stop(self) -> None:
+            self.stopped = True
+
+    fake = FakeSink()
+    state = AppState()
+    state.open(ACID_DEMO)
+    assert state.song is not None
+    assert state.setup is not None
+
+    # Slow tempo + a couple of bars in the loop is enough.
+    state.song.tempo = 600  # 10 Hz to keep the test snappy
+
+    received: list[BarTick] = []
+    transport = TransportService(sink_factory=lambda _name: fake)
+    transport.bar_changed.connect(received.append)
+
+    transport.start(
+        song=state.song,
+        setup=state.setup,
+        part_name=next(iter(state.song.parts.keys())),
+        port_name=None,
+    )
+    deadline = time.time() + 2.5
+    while time.time() < deadline and len(received) < 2:
+        qapp.processEvents()
+        time.sleep(0.02)
+    transport.stop()
+    deadline = time.time() + 2.0
+    while time.time() < deadline and transport.is_running:
+        qapp.processEvents()
+        time.sleep(0.02)
+
+    assert fake.started
+    assert fake.stopped
+    assert len(received) >= 1
+
+
 def test_arrangement_reorder_writes_dirty(qapp: QApplication) -> None:
     """Rebuilding arrangement via the view should sync Song.arrangement."""
     from jtx_gui.widgets.arrangement import ArrangementEditor

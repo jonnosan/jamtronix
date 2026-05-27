@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 from jtx.model import ValidationError
 from jtx_gui import theme
 from jtx_gui.state import AppState
+from jtx_gui.views.live_view import LiveView
 from jtx_gui.views.parts_view import PartsView
 from jtx_gui.views.song_view import SongView
 
@@ -50,13 +51,10 @@ class MainWindow(QMainWindow):
         self._stack = QStackedWidget(self)
         self._song_view = SongView(self._state, self)
         self._parts_view = PartsView(self._state, self)
-        self._live_placeholder = _Placeholder(
-            "LIVE VIEW",
-            "Coming in issue #19 — transport + queueable parts + knob jam surface.",
-        )
+        self._live_view = LiveView(self._state, parent=self)
         self._stack.addWidget(self._song_view)
         self._stack.addWidget(self._parts_view)
-        self._stack.addWidget(self._live_placeholder)
+        self._stack.addWidget(self._live_view)
 
         sidebar = self._build_sidebar()
 
