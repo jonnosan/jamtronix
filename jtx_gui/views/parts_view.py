@@ -265,7 +265,7 @@ class PartsView(QWidget):
             QMessageBox.warning(self, "Duplicate", f"Part {name!r} already exists.")
             return
         song.parts[name] = Part(bars=16)
-        self._state.mark_dirty()
+        self._state.notify_structural_change()
         self._select_by_name(name)
 
     def _on_rename_part(self) -> None:
@@ -284,7 +284,7 @@ class PartsView(QWidget):
             return
         song.parts[new] = song.parts.pop(old)
         song.arrangement = [new if p == old else p for p in song.arrangement]
-        self._state.mark_dirty()
+        self._state.notify_structural_change()
         self._select_by_name(new)
 
     def _on_remove_part(self) -> None:
@@ -303,7 +303,7 @@ class PartsView(QWidget):
         song = self._state.song
         del song.parts[name]
         song.arrangement = [p for p in song.arrangement if p != name]
-        self._state.mark_dirty()
+        self._state.notify_structural_change()
 
     # ----- detail pane -----------------------------------------------------
 

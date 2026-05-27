@@ -135,7 +135,22 @@ class AppState(QObject):
     # ----- edit signalling -------------------------------------------------
 
     def mark_dirty(self) -> None:
-        """Call from views after a successful edit to the song."""
+        """Call from views after a non-structural edit (e.g. a knob change).
+
+        Only flips the dirty flag; does *not* emit ``song_changed`` so
+        view widgets don't rebuild themselves (which would collapse
+        whichever panel the user is editing). For structural changes
+        — add/rename/remove a part, swap a voice — use
+        :meth:`notify_structural_change` instead.
+        """
+        self._set_dirty(True)
+
+    def notify_structural_change(self) -> None:
+        """Call after add/rename/remove of parts, voices, etc.
+
+        Marks the song dirty *and* triggers view rebuilds via
+        ``song_changed``.
+        """
         self._set_dirty(True)
         self.song_changed.emit()
 
