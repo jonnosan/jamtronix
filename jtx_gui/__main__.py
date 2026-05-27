@@ -53,12 +53,11 @@ def main(argv: list[str] | None = None) -> int:
 
     choice = splash.picked()
     if choice == SplashDialog.RESULT_OPEN:
-        if not window.open_song_dialog():
-            # User cancelled the file dialog — show the window with
-            # an empty workspace; they can still open from the menu.
-            pass
-    # RESULT_NEW path: button is disabled in #17, so we never get here
-    # from the splash itself. (When #20 lands this becomes a wizard.)
+        # If the user cancels the file dialog, fall through to an empty
+        # workspace — they can still pick New or Open from the menu.
+        window.open_song_dialog()
+    elif choice == SplashDialog.RESULT_NEW:
+        window.new_song_wizard()
 
     window.show()
     return app.exec()

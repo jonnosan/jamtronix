@@ -1,0 +1,19 @@
+{
+  "id": "iac",
+  "name": "IAC Bus 1",
+  "default_midi_port": "IAC Driver Bus 1",
+  "daw_template_path": null,
+  "clock_mode": "internal_master",
+  "midi_clock_in_port": null,
+  "voices": [
+    {"name": "kick",   "type": "drum",      "default_role": "drum",      "midi_channel": 10, "kit_map": {"kick": 36}},
+    {"name": "snare",  "type": "drum",      "default_role": "drum",      "midi_channel": 10, "kit_map": {"snare": 38}},
+    {"name": "chh",    "type": "drum",      "default_role": "drum",      "midi_channel": 10, "kit_map": {"chh": 42}},
+    {"name": "ohh",    "type": "drum",      "default_role": "drum",      "midi_channel": 10, "kit_map": {"ohh": 46}},
+    {"name": "acid",   "type": "mono",      "default_role": "bass",      "midi_channel": 1},
+    {"name": "stab",   "type": "poly",      "default_role": "stab",      "midi_channel": 2},
+    {"name": "lead",   "type": "mono",      "default_role": "lead",      "midi_channel": 3},
+    {"name": "filter", "type": "modulator", "default_role": "modulator", "midi_channel": 1}
+  ],
+  "schema_version": 1
+}

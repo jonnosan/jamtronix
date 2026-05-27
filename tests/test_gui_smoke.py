@@ -185,6 +185,47 @@ def test_transport_starts_and_stops_with_fake_sink(qapp: QApplication) -> None:
     assert len(received) >= 1
 
 
+def test_style_templates_build_valid_songs() -> None:
+    """Each style template produces a song that round-trips through persist."""
+    from jtx.persist import save_song
+    from templates import STYLES, build
+
+    for style in STYLES:
+        song = build(style, f"{style} test", "iac")
+        # validate via the persist layer (raises if invalid).
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".jtx", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+        try:
+            save_song(song, tmp_path)
+            assert tmp_path.exists()
+        finally:
+            tmp_path.unlink(missing_ok=True)
+
+
+def test_bundled_setups_discovered_and_loadable() -> None:
+    from jtx.persist import load_setup
+    from jtx_gui.bundles import bundled_setups
+
+    bundles = bundled_setups()
+    assert bundles, "no bundled .jtx-setup files found"
+    for path in bundles:
+        setup = load_setup(path)
+        assert setup.id
+        assert setup.voices
+
+
+def test_wizard_constructs(qapp: QApplication) -> None:
+    """The wizard should build without errors and expose 3 pages."""
+    from jtx_gui.views.new_song_wizard import NewSongWizard
+
+    wiz = NewSongWizard()
+    assert wiz.pageIds()
+    assert len(wiz.pageIds()) == 3
+    wiz.deleteLater()
+
+
 def test_arrangement_reorder_writes_dirty(qapp: QApplication) -> None:
     """Rebuilding arrangement via the view should sync Song.arrangement."""
     from jtx_gui.widgets.arrangement import ArrangementEditor

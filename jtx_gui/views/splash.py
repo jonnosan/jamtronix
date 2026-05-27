@@ -43,8 +43,6 @@ class SplashDialog(QDialog):
 
         new_btn = QPushButton("NEW SONG")
         new_btn.setMinimumHeight(56)
-        new_btn.setEnabled(False)
-        new_btn.setToolTip("New-song wizard ships in issue #20.")
         open_btn = QPushButton("OPEN SONG…")
         open_btn.setMinimumHeight(56)
         open_btn.setDefault(True)

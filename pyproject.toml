@@ -37,7 +37,7 @@ jtx-gui = "jtx_gui.__main__:main"
 Homepage = "https://github.com/jonnosan/jamtronix"
 
 [tool.hatch.build.targets.wheel]
-packages = ["jtx", "jtx_gui"]
+packages = ["jtx", "jtx_gui", "templates"]
 
 [tool.ruff]
 target-version = "py312"
