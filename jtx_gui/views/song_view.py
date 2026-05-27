@@ -443,9 +443,7 @@ class _HeaderPanel(QFrame):
             integer=True,
             step=1,
         )
-        self._prog_rotation.value_changed.connect(
-            lambda v: self._on_rotation_changed(int(v))
-        )
+        self._prog_rotation.value_changed.connect(lambda v: self._on_rotation_changed(int(v)))
 
         self._prog_preview = QLabel(self._format_preview(prog.degrees))
         self._prog_preview.setStyleSheet(
@@ -465,9 +463,7 @@ class _HeaderPanel(QFrame):
             integer=True,
             step=1,
         )
-        self._prog_bars.value_changed.connect(
-            lambda v: self._on_progression_bars(int(v))
-        )
+        self._prog_bars.value_changed.connect(lambda v: self._on_progression_bars(int(v)))
 
         # ----- layout -----
         seed_row = QHBoxLayout()

@@ -73,6 +73,10 @@ class Part:
     * ``False`` — the transport advances to the next part in
       ``song.parts`` dict order, wrapping at the end.
     """
+    tempo: int | None = None
+    """Part-level tempo override in BPM. ``None`` = use the song tempo."""
+    meter: str | None = None
+    """Part-level meter override (e.g. ``"3/4"``). ``None`` = song meter."""
 
 
 @dataclass

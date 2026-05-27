@@ -292,6 +292,7 @@ class _PlaybackWorker(QObject):
           on its own).
         """
         player = self._build_player(self._part)
+        self._apply_part_tempo(self._song.parts[self._part])
         bar_index = 0
         absolute_tick = 0
         while not self._stop_requested:
@@ -300,6 +301,7 @@ class _PlaybackWorker(QObject):
                 if self._queued in self._song.parts and self._queued != self._part:
                     self._part = self._queued
                     player = self._build_player(self._part)
+                    self._apply_part_tempo(self._song.parts[self._part])
                     bar_index = 0
                     self.part_changed.emit(self._part)
                 self._queued = None
@@ -317,6 +319,7 @@ class _PlaybackWorker(QObject):
                     if next_part is not None and next_part != self._part:
                         self._part = next_part
                         player = self._build_player(self._part)
+                        self._apply_part_tempo(self._song.parts[self._part])
                         self.part_changed.emit(self._part)
                     bar_index = 0
                     part = self._song.parts[self._part]
@@ -339,6 +342,20 @@ class _PlaybackWorker(QObject):
                 self._sink.emit(ev)
             absolute_tick += ticks_per_bar
             bar_index += 1
+
+    def _apply_part_tempo(self, part: object) -> None:
+        """Push the part's tempo override (if any) to the clock.
+
+        Only InternalClock supports ``set_tempo``; MIDI-clock-slave
+        and Ableton-Link clocks take their tempo from external, so
+        we leave them untouched.
+        """
+        override = getattr(part, "tempo", None)
+        if override is None:
+            override = self._song.tempo
+        setter = getattr(self._clock, "set_tempo", None)
+        if callable(setter):
+            setter(float(override))
 
     def _next_part_after(self, current: str) -> str | None:
         """Return the part following ``current`` in dict order (wraps)."""

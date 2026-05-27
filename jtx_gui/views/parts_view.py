@@ -340,17 +340,7 @@ class PartsView(QWidget):
 
 
 class _PartHeaderPanel(QFrame):
-    """Top of the part-detail pane: bars + part-wide key/meter overrides.
-
-    Per the spec, key + meter overrides apply per *voice* — but it's
-    very common to override them for *every* voice in a part. To match
-    user mental models we expose them at part level here AND offer
-    per-voice override inside the voice panel.
-
-    For #18 we keep this lightweight: the part-level controls live in
-    a future iteration; for now we expose bar count + a part name
-    label.
-    """
+    """Top of the part-detail pane: bars + part-level tempo + meter overrides."""
 
     def __init__(
         self,
@@ -362,6 +352,10 @@ class _PartHeaderPanel(QFrame):
     ) -> None:
         super().__init__()
         self.setObjectName("Panel")
+        self._song = song
+        self._part = part
+        self._on_dirty = on_dirty
+
         title = QLabel(part_name.upper())
         title.setObjectName("SectionTitle")
 
@@ -378,20 +372,97 @@ class _PartHeaderPanel(QFrame):
 
         bars.valueChanged.connect(emit_bars)
 
-        row = QHBoxLayout()
-        row.setSpacing(8)
-        row.addWidget(bars_label)
-        row.addWidget(bars)
-        row.addStretch(1)
+        bars_row = QHBoxLayout()
+        bars_row.setSpacing(8)
+        bars_row.addWidget(bars_label)
+        bars_row.addWidget(bars)
+        bars_row.addStretch(1)
+
+        tempo_row = self._make_tempo_row()
+        meter_row = self._make_meter_row()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 10, 14, 12)
         layout.setSpacing(6)
         layout.addWidget(title)
-        layout.addLayout(row)
-        # Quiet unused warning — we accept the song to keep the
-        # signature aligned with future per-part globals.
-        _ = song
+        layout.addLayout(bars_row)
+        layout.addLayout(tempo_row)
+        layout.addLayout(meter_row)
+
+    # ----- tempo override -------------------------------------------------
+
+    def _make_tempo_row(self) -> QHBoxLayout:
+        self._tempo_check = QCheckBox("OVERRIDE TEMPO")
+        self._tempo_check.setStyleSheet(
+            f"QCheckBox {{ color: {theme.INK_DIM.name()}; }} "
+            f"QCheckBox:checked {{ color: {theme.INK_HOT.name()}; }}"
+        )
+        is_overridden = self._part.tempo is not None
+        self._tempo_check.setChecked(is_overridden)
+
+        self._tempo_spin = QSpinBox()
+        self._tempo_spin.setRange(30, 300)
+        self._tempo_spin.setSuffix(" BPM")
+        self._tempo_spin.setValue(self._part.tempo or self._song.tempo)
+        self._tempo_spin.setEnabled(is_overridden)
+
+        self._tempo_check.toggled.connect(self._on_tempo_toggle)
+        self._tempo_spin.valueChanged.connect(self._on_tempo_change)
+
+        inherited = QLabel(f"(song = {self._song.tempo} BPM)")
+        inherited.setStyleSheet(f"color: {theme.INK_DIM.name()};")
+
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        row.addWidget(self._tempo_check)
+        row.addWidget(self._tempo_spin)
+        row.addWidget(inherited, 1)
+        return row
+
+    def _on_tempo_toggle(self, checked: bool) -> None:
+        self._tempo_spin.setEnabled(checked)
+        self._part.tempo = self._tempo_spin.value() if checked else None
+        self._on_dirty()
+
+    def _on_tempo_change(self, value: int) -> None:
+        if self._tempo_check.isChecked():
+            self._part.tempo = value
+            self._on_dirty()
+
+    # ----- meter override -------------------------------------------------
+
+    def _make_meter_row(self) -> QHBoxLayout:
+        self._meter_check = QCheckBox("OVERRIDE METER")
+        self._meter_check.setStyleSheet(self._tempo_check.styleSheet())
+        is_overridden = self._part.meter is not None
+        self._meter_check.setChecked(is_overridden)
+
+        self._meter_edit = QLineEdit(self._part.meter or self._song.meter)
+        self._meter_edit.setMaximumWidth(96)
+        self._meter_edit.setEnabled(is_overridden)
+
+        self._meter_check.toggled.connect(self._on_meter_toggle)
+        self._meter_edit.editingFinished.connect(self._on_meter_change)
+
+        inherited = QLabel(f"(song = {self._song.meter})")
+        inherited.setStyleSheet(f"color: {theme.INK_DIM.name()};")
+
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        row.addWidget(self._meter_check)
+        row.addWidget(self._meter_edit)
+        row.addWidget(inherited, 1)
+        return row
+
+    def _on_meter_toggle(self, checked: bool) -> None:
+        self._meter_edit.setEnabled(checked)
+        self._part.meter = self._meter_edit.text().strip() if checked else None
+        self._on_dirty()
+
+    def _on_meter_change(self) -> None:
+        if self._meter_check.isChecked():
+            self._part.meter = self._meter_edit.text().strip()
+            self._on_dirty()
 
 
 # --------------------------------------------------------------------------
