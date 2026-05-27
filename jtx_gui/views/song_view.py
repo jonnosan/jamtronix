@@ -53,6 +53,8 @@ _KNOBS_PER_ROW = 4
 _SCALES = (
     "minor",
     "major",
+    "minor_pentatonic",
+    "major_pentatonic",
     "dorian",
     "phrygian",
     "lydian",
@@ -60,7 +62,6 @@ _SCALES = (
     "aeolian",
     "locrian",
     "harmonic_minor",
-    "melodic_minor",
 )
 _TONICS = ("A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#")
 
