@@ -45,7 +45,15 @@ Lint + type-check (both gate pre-push):
 ```sh
 ruff check .
 ruff format --check .
-mypy jtx
+mypy jtx jtx_gui
+```
+
+## Launching the GUI
+
+```sh
+jtx-gui                  # splash dialog → open a .jtx
+jtx-gui examples/acid-demo.jtx   # skip splash, open immediately
+python -m jtx_gui        # equivalent to `jtx-gui`
 ```
 
 Run tests (none yet; the testing posture is minimal pytest + manual

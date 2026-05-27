@@ -30,6 +30,9 @@ dev = [
     "mypy>=1.10",
 ]
 
+[project.scripts]
+jtx-gui = "jtx_gui.__main__:main"
+
 [project.urls]
 Homepage = "https://github.com/jonnosan/jamtronix"
 
