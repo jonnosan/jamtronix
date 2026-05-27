@@ -144,6 +144,38 @@ def test_appstate_adopt_inmemory_song(qapp: QApplication) -> None:
     _ = load_setup(REPO_ROOT / "setups" / "iac.jtx-setup")
 
 
+def test_part_tempo_meter_round_trip(tmp_path: Path) -> None:
+    """Part.tempo + Part.meter overrides persist across save/load."""
+    from jtx.persist import load_song, save_song
+
+    state = AppState()
+    state.open(ACID_DEMO)
+    assert state.song is not None
+    first_part = next(iter(state.song.parts.values()))
+    first_part.tempo = 145
+    first_part.meter = "3/4"
+    target = tmp_path / "part_overrides.jtx"
+    save_song(state.song, target)
+    reloaded = load_song(target)
+    part = next(iter(reloaded.parts.values()))
+    assert part.tempo == 145
+    assert part.meter == "3/4"
+
+
+def test_song_player_uses_part_meter_override() -> None:
+    """SongPlayer should compute ticks_per_bar from the part override."""
+    from jtx.persist import load_setup, load_song
+    from jtx.player import SongPlayer
+
+    song = load_song(ACID_DEMO)
+    setup = load_setup(REPO_ROOT / "examples" / "acid-demo.jtx-setup")
+    first_part_name = next(iter(song.parts.keys()))
+    song.parts[first_part_name].meter = "3/4"
+    player = SongPlayer(song, setup, first_part_name)
+    # 3/4 at PPQ 480 = 3 × 480 = 1440 ticks/bar; song was 4/4 (=1920).
+    assert player.ticks_per_bar == 1440
+
+
 def test_part_loop_round_trip(tmp_path: Path) -> None:
     """Part.loop persists across save/load."""
     from jtx.persist import load_song, save_song

@@ -140,7 +140,9 @@ class SongPlayer:
         self.part_name = part_name
         self.part = song.parts[part_name]
         self.ppq = ppq
-        self.ticks_per_bar = ticks_per_bar(song.meter, ppq)
+        # Part may override the meter; otherwise inherit from the song.
+        effective_meter = self.part.meter or song.meter
+        self.ticks_per_bar = ticks_per_bar(effective_meter, ppq)
 
         self.song_seed: int = (
             song.seed_override if song.seed_override is not None else seed_from_title(song.title)
