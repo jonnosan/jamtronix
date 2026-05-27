@@ -56,6 +56,37 @@ _CLOCK_CHOICES: tuple[ClockMode, ...] = (
 )
 
 
+def _preflight_midi_port(port_name: str, parser: argparse.ArgumentParser) -> None:
+    """Surface a helpful error before we hit mido's terse OSError.
+
+    macOS exposes no CoreMIDI output ports by default — IAC Driver
+    has to be turned on manually. This catches the common case and
+    points the user at Audio MIDI Setup instead of dropping a stack
+    trace from rtmidi.
+    """
+    import mido
+
+    available = mido.get_output_names()
+    if not available:
+        parser.error(
+            "no MIDI output ports found.\n"
+            "  On macOS, enable IAC Driver:\n"
+            "    1. Open 'Audio MIDI Setup' (Applications → Utilities)\n"
+            "    2. Window → Show MIDI Studio (⌘2)\n"
+            "    3. Double-click 'IAC Driver'\n"
+            "    4. Tick 'Device is online'\n"
+            "    5. Default bus 'Bus 1' is fine\n"
+            "  Then re-run, or pass --port with one of: --list-ports"
+        )
+    if port_name not in available:
+        listing = "\n    ".join(sorted(available))
+        parser.error(
+            f"MIDI output port {port_name!r} not found.\n"
+            f"  Available ports:\n    {listing}\n"
+            "  Use --port to pick one, or --list-ports to see them all."
+        )
+
+
 def _build_clock(
     mode: ClockMode,
     *,
@@ -217,6 +248,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     port_name = args.port or setup.default_midi_port
+    _preflight_midi_port(port_name, parser)
     sink = RealtimeMidiSink(port_name=port_name)
 
     mode: ClockMode = args.clock or setup.clock_mode
