@@ -84,9 +84,9 @@ def instantiate_algorithm(algorithm_name: str, voice_slot: VoiceSlot) -> Algorit
             midi_note=voice_slot.kit_map.get(voice_slot.name, _GM_DRUM_DEFAULT),
         )
     if algorithm_name == "acid_bass":
-        return AcidBass(midi_channel=ch)
+        return AcidBass(midi_channel=ch, cc_map=voice_slot.cc_map)
     if algorithm_name == "sub_drone":
-        return SubDrone(midi_channel=ch)
+        return SubDrone(midi_channel=ch, cc_map=voice_slot.cc_map)
     if algorithm_name == "melodic_line":
         return MelodicLine(midi_channel=ch)
     if algorithm_name == "arp":

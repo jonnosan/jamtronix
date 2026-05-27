@@ -216,6 +216,106 @@ def test_bundled_setups_discovered_and_loadable() -> None:
         assert setup.voices
 
 
+def test_voice_slot_cc_map_persists(tmp_path: Path) -> None:
+    """cc_map round-trips through save_setup / load_setup."""
+    from jtx.model import Setup, VoiceSlot
+    from jtx.persist import load_setup, save_setup
+
+    setup = Setup(
+        id="x",
+        name="X",
+        default_midi_port="IAC",
+        voices=[
+            VoiceSlot(
+                name="acid",
+                type="mono",
+                default_role="bass",
+                midi_channel=1,
+                cc_map={"resonance": 90, "filter_cutoff": 100},
+            )
+        ],
+    )
+    path = tmp_path / "x.jtx-setup"
+    save_setup(setup, path)
+    reloaded = load_setup(path)
+    assert reloaded.voices[0].cc_map == {"resonance": 90, "filter_cutoff": 100}
+    assert reloaded.voices[0].cc_for("resonance", 71) == 90
+    assert reloaded.voices[0].cc_for("portamento_time", 5) == 5
+
+
+def test_acid_bass_honours_cc_map_override() -> None:
+    """AcidBass with a remapped resonance should emit that CC, not CC 71."""
+    import random
+
+    from jtx.algorithms import AcidBass
+    from jtx.engine.context import BarContext
+    from jtx.engine.events import ControlChange
+    from jtx.model import Key
+
+    algo = AcidBass(midi_channel=1, cc_map={"resonance": 100, "filter_cutoff": 105})
+    ctx = BarContext(
+        bar_index=0,
+        ticks_per_bar=1920,
+        ppq=480,
+        tempo_bpm=120.0,
+        rng=random.Random(123456),
+        key=Key(tonic="A", scale="minor"),
+        chord_root_semitones=0,
+        pattern_knobs={"slide_prob": 0.5, "cycle": 2, "resonance": 100},
+        feel_knobs={},
+        tick_offset=0,
+    )
+    events = algo.generate_bar(ctx)
+    ccs = {e.cc for e in events if isinstance(e, ControlChange)}
+    # Should contain the *remapped* CC numbers, never the defaults 71/74.
+    assert 100 in ccs
+    assert 105 in ccs
+    assert 71 not in ccs
+    assert 74 not in ccs
+
+
+def test_setup_editor_writes_back(tmp_path: Path, qapp: QApplication) -> None:
+    """SetupEditor flush() should push spinner state into the model."""
+    from jtx.model import Setup, VoiceSlot
+    from jtx.persist import load_setup, save_setup
+    from jtx_gui.views.setup_editor import SetupEditor
+
+    setup = Setup(
+        id="t",
+        name="T",
+        default_midi_port="IAC",
+        voices=[
+            VoiceSlot(
+                name="acid",
+                type="mono",
+                default_role="bass",
+                midi_channel=1,
+            )
+        ],
+    )
+    path = tmp_path / "t.jtx-setup"
+    save_setup(setup, path)
+
+    audition_calls: list[tuple[str, int]] = []
+
+    def fake_audition(voice: VoiceSlot, function: str, cc: int) -> None:
+        audition_calls.append((function, cc))
+
+    editor = SetupEditor(setup=setup, setup_path=path, audition_fn=fake_audition)
+    section = editor._voice_panels[0]  # type: ignore[attr-defined]
+    section._overrides["resonance"].setChecked(True)  # type: ignore[attr-defined]
+    section._spinners["resonance"].setValue(99)  # type: ignore[attr-defined]
+    section._on_audition("resonance")  # type: ignore[attr-defined]
+    assert audition_calls == [("resonance", 99)]
+    section.flush()
+    assert setup.voices[0].cc_map == {"resonance": 99}
+
+    # Save round-trip.
+    save_setup(setup, path)
+    assert load_setup(path).voices[0].cc_map == {"resonance": 99}
+    editor.deleteLater()
+
+
 def test_wizard_constructs(qapp: QApplication) -> None:
     """The wizard should build without errors and expose 3 pages."""
     from jtx_gui.views.new_song_wizard import NewSongWizard
