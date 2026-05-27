@@ -1,0 +1,115 @@
+{
+  "title": "Phuture Lines",
+  "setup_ref": "acid-demo",
+  "key": {"tonic": "A", "scale": "minor"},
+  "seed_override": null,
+  "meter": "4/4",
+  "tempo": 126,
+  "chord_progression": {"degrees": ["i"], "bars_per_chord": 16},
+  "voices": {
+    "kick": {
+      "algorithm": "drum_pattern",
+      "pattern": {"style": "four_floor", "velocity": 118},
+      "feel": {}
+    },
+    "clap": {
+      "algorithm": "drum_one_shot",
+      "pattern": {"steps": [4, 12], "velocity": 100, "duration_ticks": 60},
+      "feel": {"humanize": 4}
+    },
+    "chh": {
+      "algorithm": "drum_pattern",
+      "pattern": {"style": "euclid", "pulses": 8, "offset": 0, "velocity": 95, "ghost": 0.0},
+      "feel": {
+        "swing": 0.18,
+        "fade_in_at_bar": 2,
+        "fade_in_beats": 12,
+        "sidechain_from": "kick",
+        "sidechain_floor": 55,
+        "sidechain_release_beats": 0.4
+      }
+    },
+    "ohh": {
+      "algorithm": "drum_one_shot",
+      "pattern": {"steps": [2, 10], "velocity": 90, "duration_ticks": 180},
+      "feel": {
+        "fade_in_at_bar": 6,
+        "fade_in_beats": 8,
+        "sidechain_from": "kick",
+        "sidechain_floor": 40,
+        "sidechain_release_beats": 0.5
+      }
+    },
+    "acid": {
+      "algorithm": "acid_bass",
+      "pattern": {
+        "drop_prob": 0.22,
+        "slide_prob": 0.5,
+        "octave": 0,
+        "intensity": 1.0,
+        "gate": 0.7,
+        "bend": 80,
+        "cycle": 4,
+        "resonance": 110
+      },
+      "feel": {"humanize": 6}
+    },
+    "stab": {
+      "algorithm": "chord_stab",
+      "pattern": {
+        "intervals": [0, 7],
+        "steps": [4],
+        "gate": 0.25,
+        "base_vel": 75,
+        "velocity_spread": 4
+      },
+      "feel": {
+        "fade_in_at_bar": 8,
+        "fade_in_beats": 6,
+        "fade_out_at_bar": 28,
+        "fade_out_beats": 4,
+        "sidechain_from": "kick",
+        "sidechain_floor": 50,
+        "sidechain_release_beats": 0.5
+      }
+    },
+    "filt": {
+      "algorithm": "cc_lfo",
+      "pattern": {
+        "cc": 71,
+        "shape": "sine",
+        "period_bars": 16,
+        "depth": 0.7,
+        "offset": 0.6,
+        "samples_per_bar": 8
+      },
+      "feel": {}
+    },
+    "chord_ref": {
+      "algorithm": "root_pulse",
+      "pattern": {
+        "octave": 0,
+        "velocity": 70,
+        "steps": [0],
+        "duration_ticks": 1824
+      },
+      "feel": {}
+    },
+    "root_ref": {
+      "algorithm": "root_pulse",
+      "pattern": {
+        "octave": 1,
+        "velocity": 65,
+        "steps": [0, 4, 8, 12],
+        "gate": 0.35
+      },
+      "feel": {}
+    }
+  },
+  "parts": {
+    "drop": {"bars": 32, "voice_overrides": {}}
+  },
+  "arrangement": ["drop"],
+  "lfos": [],
+  "schema_version": 1
+}

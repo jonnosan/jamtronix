@@ -1,0 +1,91 @@
+{
+  "id": "deep-techno-demo",
+  "name": "Deep Techno Demo",
+  "default_midi_port": "IAC Driver Bus 1",
+  "daw_template_path": "/Users/jonno/Music/Ableton/User Library/Templates/Jamtronix Deep Techno.als",
+  "clock_mode": "internal_master",
+  "midi_clock_in_port": null,
+  "voices": [
+    {
+      "name": "kick",
+      "type": "drum",
+      "default_role": "drum",
+      "midi_channel": 10,
+      "midi_port": null,
+      "kit_map": {"kick": 36}
+    },
+    {
+      "name": "snare",
+      "type": "drum",
+      "default_role": "drum",
+      "midi_channel": 10,
+      "midi_port": null,
+      "kit_map": {"snare": 38}
+    },
+    {
+      "name": "chh",
+      "type": "drum",
+      "default_role": "drum",
+      "midi_channel": 10,
+      "midi_port": null,
+      "kit_map": {"chh": 42}
+    },
+    {
+      "name": "ride",
+      "type": "drum",
+      "default_role": "drum",
+      "midi_channel": 10,
+      "midi_port": null,
+      "kit_map": {"ride": 51}
+    },
+    {
+      "name": "sub",
+      "type": "mono",
+      "default_role": "bass",
+      "midi_channel": 1,
+      "midi_port": null,
+      "kit_map": {}
+    },
+    {
+      "name": "pad",
+      "type": "poly",
+      "default_role": "pad",
+      "midi_channel": 2,
+      "midi_port": null,
+      "kit_map": {}
+    },
+    {
+      "name": "stab",
+      "type": "poly",
+      "default_role": "stab",
+      "midi_channel": 3,
+      "midi_port": null,
+      "kit_map": {}
+    },
+    {
+      "name": "stab_echo",
+      "type": "follower",
+      "default_role": "follower",
+      "midi_channel": 4,
+      "midi_port": null,
+      "kit_map": {}
+    },
+    {
+      "name": "chord_ref",
+      "type": "mono",
+      "default_role": "lead",
+      "midi_channel": 15,
+      "midi_port": null,
+      "kit_map": {}
+    },
+    {
+      "name": "root_ref",
+      "type": "mono",
+      "default_role": "lead",
+      "midi_channel": 16,
+      "midi_port": null,
+      "kit_map": {}
+    }
+  ],
+  "schema_version": 1
+}
