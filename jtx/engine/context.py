@@ -1,0 +1,64 @@
+"""Per-bar context passed into every algorithm's ``generate_bar`` call.
+
+Algorithms read this; they don't reach back into the Song model. That
+keeps the algorithm boundary thin enough to also be the future
+external-input boundary (a ``RootProvider`` can override
+``chord_root_semitones`` per bar without algorithm changes).
+
+Algorithms **must** use ``ctx.rng`` for any randomness. Calling the bare
+``random`` module breaks the reproducibility contract pinned by
+:mod:`jtx.seed`.
+"""
+
+from __future__ import annotations
+
+import random
+from dataclasses import dataclass, field
+
+from jtx.model.song import Key, KnobDict
+
+
+@dataclass
+class BarContext:
+    """Read-mostly context for one (bar × voice) generate call.
+
+    Not frozen — :class:`random.Random` isn't trivially immutable — but
+    treat the data fields as read-only inside algorithms. The scheduler
+    constructs a fresh ``BarContext`` per (bar, voice); mutating it has
+    no effect on subsequent bars.
+    """
+
+    bar_index: int
+    """0-based bar index within the current part."""
+
+    tick_offset: int
+    """Absolute tick at which this bar starts (since playback began)."""
+
+    ticks_per_bar: int
+    """Ticks in one bar at the active PPQ + meter. Algorithms emit
+    events with ``0 <= tick < ticks_per_bar`` *relative to bar start*;
+    the scheduler adds :attr:`tick_offset` before dispatching."""
+
+    tempo_bpm: float
+    ppq: int
+
+    key: Key
+    """Active key for this bar — usually the song key, possibly
+    overridden by a per-part voice key for modal-mixture moments."""
+
+    chord_root_semitones: int = 0
+    """Semitones above the song's tonic for the current chord. The
+    :class:`jtx.engine.root_provider.RootProvider` (later milestone)
+    sources this — default 0 (= song tonic) until that lands."""
+
+    pattern_knobs: KnobDict = field(default_factory=dict)
+    """Resolved pattern knobs at this bar's scope (part > song > role
+    default > algorithm default). Resolution lives in the part/voice
+    glue layer, not here."""
+
+    feel_knobs: KnobDict = field(default_factory=dict)
+    """Resolved feel knobs at this bar's scope."""
+
+    rng: random.Random = field(default_factory=random.Random)
+    """Pre-seeded RNG for this (song, part, voice, bar) tuple — see
+    :func:`jtx.seed.derive_bar_seed`."""
