@@ -77,6 +77,23 @@ class AppState(QObject):
         self.path_changed.emit(self._path)
         self.dirty_changed.emit(False)
 
+    def adopt(self, *, song: Song, setup: Setup | None) -> None:
+        """Take ownership of a fresh in-memory song (e.g. from the wizard).
+
+        Sets the state to ``dirty=True`` and ``path=None`` so File → Save
+        falls through to Save As. The caller supplies the setup that was
+        chosen at song-creation time; sibling-loading is bypassed since
+        there's nothing on disk yet.
+        """
+        self._song = song
+        self._setup = setup
+        self._setup_error = None if setup is not None else "No setup attached to new song."
+        self._path = None
+        self._dirty = True
+        self.song_changed.emit()
+        self.path_changed.emit(None)
+        self.dirty_changed.emit(True)
+
     def _load_sibling_setup(self) -> None:
         """Look for ``<song_dir>/<setup_ref>.jtx-setup`` next to the song.
 

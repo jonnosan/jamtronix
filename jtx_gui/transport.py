@@ -257,31 +257,53 @@ class _PlaybackWorker(QObject):
             self.finished.emit()
 
     def _loop(self) -> None:
+        """Walk the parts list, looping or advancing per ``Part.loop``.
+
+        At every bar boundary:
+        * if a click landed via :meth:`queue_part`, jump to that part;
+        * else if the current part's last bar just played and ``loop``
+          is on, restart the same part from bar 0;
+        * else advance to the next part in ``song.parts`` dict order,
+          wrapping at the end (steady jam mode — playback never stops
+          on its own).
+        """
         player = self._build_player(self._part)
         bar_index = 0
         absolute_tick = 0
         while not self._stop_requested:
-            part_bars = max(1, self._song.parts[self._part].bars)
-            # If we've fallen off the end of the part and nothing's queued,
-            # wrap around — the spec's live-jam model keeps playing.
-            if bar_index >= part_bars and self._queued is None:
-                bar_index = 0
-
-            # Swap to the queued part at bar boundary, if any.
-            if self._queued is not None and self._queued != self._part:
-                if self._queued in self._song.parts:
+            # Honour any queued part swap at the bar boundary first.
+            if self._queued is not None:
+                if self._queued in self._song.parts and self._queued != self._part:
                     self._part = self._queued
                     player = self._build_player(self._part)
                     bar_index = 0
                     self.part_changed.emit(self._part)
                 self._queued = None
 
+            part = self._song.parts[self._part]
+            part_bars = max(1, part.bars)
+
+            # If we've fallen off the end of the part, either loop or
+            # advance per ``Part.loop``.
+            if bar_index >= part_bars:
+                if part.loop:
+                    bar_index = 0
+                else:
+                    next_part = self._next_part_after(self._part)
+                    if next_part is not None and next_part != self._part:
+                        self._part = next_part
+                        player = self._build_player(self._part)
+                        self.part_changed.emit(self._part)
+                    bar_index = 0
+                    part = self._song.parts[self._part]
+                    part_bars = max(1, part.bars)
+
             ticks_per_bar = player.ticks_per_bar
             self.bar_changed.emit(
                 BarTick(
                     part_name=self._part,
                     bar_index=bar_index,
-                    part_bars=self._song.parts[self._part].bars,
+                    part_bars=part.bars,
                 )
             )
             events: list[Event] = player.events_for_bar(bar_index)
@@ -293,6 +315,17 @@ class _PlaybackWorker(QObject):
                 self._sink.emit(ev)
             absolute_tick += ticks_per_bar
             bar_index += 1
+
+    def _next_part_after(self, current: str) -> str | None:
+        """Return the part following ``current`` in dict order (wraps)."""
+        keys = list(self._song.parts.keys())
+        if not keys:
+            return None
+        try:
+            idx = keys.index(current)
+        except ValueError:
+            return keys[0]
+        return keys[(idx + 1) % len(keys)]
 
     def _build_player(self, part_name: str) -> SongPlayer:
         return SongPlayer(self._song, self._setup, part_name)

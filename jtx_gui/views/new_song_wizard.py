@@ -1,22 +1,21 @@
-"""Three-step new-song wizard.
+"""Single-page new-song dialog.
 
-Page 1: title.
-Page 2: style template (acid / deep_techno / psytrance).
-Page 3: bundled setup (iac / ableton / pick a custom .jtx-setup).
+Title + style + bundled setup picker. On Finish the dialog hands the
+caller a (Song, Setup) pair in memory — no save dialog at this point,
+so the user can audition the new song before deciding where to write
+it. ``MainWindow`` adopts the result via :meth:`AppState.adopt`.
 
-On finish, asks the user for a target directory, writes the song +
-a copy of the chosen setup beside it, and hands the resulting path
-back to the caller via ``picked_path``.
+The 'blank' style is a no-voice / one-part starter for users who want
+to compose entirely from scratch in the Song view.
 """
 
 from __future__ import annotations
 
-import json
-import re
-from dataclasses import asdict
 from pathlib import Path
 
 from PySide6.QtWidgets import (
+    QComboBox,
+    QDialog,
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
@@ -24,218 +23,148 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
-    QRadioButton,
     QVBoxLayout,
     QWidget,
-    QWizard,
-    QWizardPage,
 )
 
-from jtx.model import Song
-from jtx.persist import load_setup, save_song
+from jtx.model import Setup, Song
+from jtx.persist import load_setup
 from jtx_gui import theme
 from jtx_gui.bundles import bundled_setups
 from templates import STYLES
 from templates import build as build_song
 
-_SLUG_RE = re.compile(r"[^a-z0-9]+")
 
+class NewSongWizard(QDialog):
+    """Modal dialog that returns a (Song, Setup) pair on accept."""
 
-def _slug(text: str) -> str:
-    slug = _SLUG_RE.sub("-", text.lower()).strip("-")
-    return slug or "song"
-
-
-# --------------------------------------------------------------------------
-#                              wizard pages
-# --------------------------------------------------------------------------
-
-
-class _TitlePage(QWizardPage):
-    def __init__(self) -> None:
-        super().__init__()
-        self.setTitle("NEW SONG  ·  TITLE")
-        self.setSubTitle("The title seeds the song's deterministic PRNG.")
-        self._title_edit = QLineEdit()
-        self._title_edit.setPlaceholderText("e.g. Phuture Lines")
-        self.registerField("title*", self._title_edit)
-        form = QFormLayout(self)
-        form.addRow("TITLE", self._title_edit)
-
-
-class _StylePage(QWizardPage):
-    def __init__(self) -> None:
-        super().__init__()
-        self.setTitle("NEW SONG  ·  STYLE")
-        self.setSubTitle(
-            "Style picks the starting arrangement. It is *not* stored on the "
-            "resulting song — swap algorithms / knobs freely later."
-        )
-        self._buttons: dict[str, QRadioButton] = {}
-        layout = QVBoxLayout(self)
-        descriptions = {
-            "acid": "Four-on-floor, 303 lead bass, chord stab, filter LFO. 126 BPM A minor.",
-            "deep_techno": "Sub drone, dub stab, sparse top-end. 122 BPM C minor.",
-            "psytrance": "Rolling offbeat bass, fast arp leads. 145 BPM F# minor.",
-        }
-        for index, style in enumerate(STYLES.keys()):
-            btn = QRadioButton(style.replace("_", " ").upper())
-            btn.setStyleSheet(
-                f"QRadioButton {{ color: {theme.INK.name()}; font-weight: bold;"
-                "letter-spacing: 1px; padding: 4px 0; }}"
-            )
-            blurb = QLabel(descriptions.get(style, ""))
-            blurb.setStyleSheet(f"color: {theme.INK_DIM.name()}; padding-left: 24px;")
-            blurb.setWordWrap(True)
-            self._buttons[style] = btn
-            if index == 0:
-                btn.setChecked(True)
-            layout.addWidget(btn)
-            layout.addWidget(blurb)
-        layout.addStretch(1)
-
-    def selected_style(self) -> str:
-        for style, btn in self._buttons.items():
-            if btn.isChecked():
-                return style
-        return next(iter(STYLES.keys()))
-
-
-class _SetupPage(QWizardPage):
-    def __init__(self) -> None:
-        super().__init__()
-        self.setTitle("NEW SONG  ·  SETUP")
-        self.setSubTitle(
-            "Pick a bundled setup (it'll be copied next to your song) "
-            "or browse to a custom .jtx-setup."
-        )
-
-        self._radios: dict[str, QRadioButton] = {}
-        self._setup_paths: dict[str, Path] = {}
-        self._custom_path: Path | None = None
-
-        layout = QVBoxLayout(self)
-
-        for index, path in enumerate(bundled_setups()):
-            label = f"BUNDLED  ·  {path.stem.upper()}  ·  {path.name}"
-            btn = QRadioButton(label)
-            btn.setStyleSheet(
-                f"QRadioButton {{ color: {theme.INK.name()}; font-weight: bold;"
-                "letter-spacing: 1px; padding: 4px 0; }}"
-            )
-            self._radios[path.stem] = btn
-            self._setup_paths[path.stem] = path
-            if index == 0:
-                btn.setChecked(True)
-            layout.addWidget(btn)
-
-        custom_row = QHBoxLayout()
-        self._custom_radio = QRadioButton("CUSTOM .jtx-setup")
-        self._custom_radio.setStyleSheet(
-            f"QRadioButton {{ color: {theme.INK.name()}; font-weight: bold;"
-            "letter-spacing: 1px; padding: 4px 0; }}"
-        )
-        browse_btn = QPushButton("BROWSE…")
-        browse_btn.clicked.connect(self._on_browse)
-        self._custom_label = QLabel("(none selected)")
-        self._custom_label.setStyleSheet(f"color: {theme.INK_DIM.name()};")
-        custom_row.addWidget(self._custom_radio)
-        custom_row.addWidget(browse_btn)
-        custom_row.addWidget(self._custom_label, 1)
-        layout.addLayout(custom_row)
-        layout.addStretch(1)
-
-    def selected_setup_path(self) -> Path | None:
-        if self._custom_radio.isChecked():
-            return self._custom_path
-        for name, btn in self._radios.items():
-            if btn.isChecked():
-                return self._setup_paths[name]
-        return None
-
-    def _on_browse(self) -> None:
-        path, _filter = QFileDialog.getOpenFileName(
-            self,
-            "Pick a .jtx-setup",
-            str(Path.home()),
-            "Setup files (*.jtx-setup)",
-        )
-        if not path:
-            return
-        self._custom_path = Path(path)
-        self._custom_label.setText(self._custom_path.name)
-        self._custom_radio.setChecked(True)
-
-
-# --------------------------------------------------------------------------
-#                                 wizard
-# --------------------------------------------------------------------------
-
-
-class NewSongWizard(QWizard):
-    """Drives the three pages and assembles a saved song on finish."""
+    _STYLE_BLURBS = {
+        "blank": "Empty song — no voices, one intro part. Compose from scratch.",
+        "acid": "Four-on-floor, 303 lead bass, chord stab, filter LFO. 126 BPM A minor.",
+        "deep_techno": "Sub drone, dub stab, sparse top-end. 122 BPM C minor.",
+        "psytrance": "Rolling offbeat bass, fast arp leads. 145 BPM F# minor.",
+    }
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Jamtronix — New Song")
-        self.setOption(QWizard.WizardOption.NoBackButtonOnStartPage)
-        self._title_page = _TitlePage()
-        self._style_page = _StylePage()
-        self._setup_page = _SetupPage()
-        self.addPage(self._title_page)
-        self.addPage(self._style_page)
-        self.addPage(self._setup_page)
-        self.resize(560, 460)
-        self._created_path: Path | None = None
+        self.setMinimumWidth(540)
+        self._result: tuple[Song, Setup] | None = None
+        self._custom_setup_path: Path | None = None
+        self._setup_paths: dict[str, Path] = {}
 
-    def created_path(self) -> Path | None:
-        return self._created_path
-
-    def accept(self) -> None:  # called on Finish click
-        try:
-            self._created_path = self._finish_create()
-        except Exception as exc:  # noqa: BLE001 — surface verbatim
-            QMessageBox.critical(self, "Couldn't create song", str(exc))
-            return
-        super().accept()
-
-    def _finish_create(self) -> Path:
-        title = str(self.field("title")).strip()
-        if not title:
-            raise ValueError("Title is required.")
-        style = self._style_page.selected_style()
-        setup_src = self._setup_page.selected_setup_path()
-        if setup_src is None:
-            raise ValueError("Pick a setup, or pick Custom and browse to one.")
-        if not setup_src.exists():
-            raise FileNotFoundError(f"Setup not found: {setup_src}")
-
-        # Validate the setup before we let the user save anywhere.
-        setup = load_setup(setup_src)
-
-        slug = _slug(title)
-        suggested_dir = Path.home() / "Documents" / "Jamtronix"
-        suggested = suggested_dir / f"{slug}.jtx"
-        target_str, _filter = QFileDialog.getSaveFileName(
-            self,
-            "Save new Jamtronix song",
-            str(suggested),
-            "Jamtronix song (*.jtx)",
+        title_label = QLabel("NEW SONG")
+        title_label.setStyleSheet(
+            f"color: {theme.INK_HOT.name()}; font-size: 20pt; font-weight: bold;"
+            "letter-spacing: 4px; padding-bottom: 8px;"
         )
-        if not target_str:
-            raise ValueError("Save cancelled.")
-        target = Path(target_str)
-        target.parent.mkdir(parents=True, exist_ok=True)
 
-        # The song references the setup by id; copy the setup file beside
-        # the song so AppState.open() picks it up via the sibling rule.
-        setup_dest = target.parent / f"{setup.id}.jtx-setup"
-        if setup_dest != setup_src:
-            setup_dest.write_text(
-                json.dumps(asdict(setup), indent=2, sort_keys=False) + "\n",
-                encoding="utf-8",
-            )
+        # ----- title input -----
+        self._title_edit = QLineEdit()
+        self._title_edit.setPlaceholderText("e.g. Phuture Lines")
 
-        song: Song = build_song(style, title, setup.id)
-        save_song(song, target)
-        return target
+        # ----- style picker -----
+        self._style_combo = QComboBox()
+        for style in STYLES.keys():
+            label = style.replace("_", " ").title()
+            self._style_combo.addItem(label, style)
+        self._style_blurb = QLabel("")
+        self._style_blurb.setWordWrap(True)
+        self._style_blurb.setStyleSheet(f"color: {theme.INK_DIM.name()}; padding: 4px 0;")
+        self._style_combo.currentIndexChanged.connect(self._refresh_style_blurb)
+
+        # ----- setup picker -----
+        self._setup_combo = QComboBox()
+        for path in bundled_setups():
+            self._setup_combo.addItem(f"BUNDLED  ·  {path.stem}", path)
+            self._setup_paths[path.stem] = path
+        browse_btn = QPushButton("BROWSE…")
+        browse_btn.clicked.connect(self._on_browse)
+        self._custom_label = QLabel("(no custom setup)")
+        self._custom_label.setStyleSheet(f"color: {theme.INK_DIM.name()};")
+
+        setup_row = QHBoxLayout()
+        setup_row.addWidget(self._setup_combo, 1)
+        setup_row.addWidget(browse_btn)
+
+        # ----- form -----
+        form = QFormLayout()
+        form.addRow("TITLE", self._title_edit)
+        form.addRow("STYLE", self._style_combo)
+        form.addRow("", self._style_blurb)
+        form.addRow("SETUP", setup_row)
+        form.addRow("", self._custom_label)
+
+        # ----- buttons -----
+        create_btn = QPushButton("CREATE")
+        create_btn.setDefault(True)
+        create_btn.clicked.connect(self._on_finish)
+        cancel_btn = QPushButton("CANCEL")
+        cancel_btn.clicked.connect(self.reject)
+        button_row = QHBoxLayout()
+        button_row.addStretch(1)
+        button_row.addWidget(cancel_btn)
+        button_row.addWidget(create_btn)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(20, 18, 20, 18)
+        root.setSpacing(10)
+        root.addWidget(title_label)
+        root.addLayout(form)
+        root.addStretch(1)
+        root.addLayout(button_row)
+
+        self._refresh_style_blurb()
+
+    # ----- result --------------------------------------------------------
+
+    def result_song(self) -> tuple[Song, Setup] | None:
+        """Return the created (song, setup), or None if cancelled / not finished."""
+        return self._result
+
+    # ----- callbacks -----------------------------------------------------
+
+    def _refresh_style_blurb(self) -> None:
+        style_id = self._style_combo.currentData()
+        self._style_blurb.setText(self._STYLE_BLURBS.get(style_id, ""))
+
+    def _on_browse(self) -> None:
+        path_str, _filter = QFileDialog.getOpenFileName(
+            self,
+            "Pick a custom .jtx-setup",
+            str(Path.home()),
+            "Setup files (*.jtx-setup)",
+        )
+        if not path_str:
+            return
+        path = Path(path_str)
+        self._custom_setup_path = path
+        self._custom_label.setText(f"Using {path.name}")
+
+    def _on_finish(self) -> None:
+        title = self._title_edit.text().strip()
+        if not title:
+            QMessageBox.warning(self, "New song", "Title is required.")
+            return
+        style = self._style_combo.currentData()
+        if not isinstance(style, str):
+            QMessageBox.warning(self, "New song", "Pick a style.")
+            return
+
+        setup_src = self._custom_setup_path or self._setup_combo.currentData()
+        if not isinstance(setup_src, Path):
+            QMessageBox.warning(self, "New song", "Pick a setup.")
+            return
+        if not setup_src.exists():
+            QMessageBox.critical(self, "New song", f"Setup not found:\n{setup_src}")
+            return
+
+        try:
+            setup = load_setup(setup_src)
+            song = build_song(style, title, setup.id)
+        except Exception as exc:  # noqa: BLE001 — surface verbatim
+            QMessageBox.critical(self, "New song", f"Couldn't create song:\n{exc}")
+            return
+
+        self._result = (song, setup)
+        self.accept()

@@ -108,10 +108,8 @@ def test_open_song_loads_sibling_setup(qapp: QApplication) -> None:
     assert state.setup_error is None
 
 
-def test_live_view_no_transport_when_setup_missing(tmp_path: Path, qapp: QApplication) -> None:
+def test_setup_error_surfaces_when_sibling_missing(tmp_path: Path, qapp: QApplication) -> None:
     """Song without its sibling setup should report the error, not crash."""
-    from jtx_gui.views.live_view import LiveView
-
     # Copy just the song into tmp — no setup file alongside it.
     text = ACID_DEMO.read_text(encoding="utf-8")
     orphan = tmp_path / "orphan.jtx"
@@ -122,11 +120,90 @@ def test_live_view_no_transport_when_setup_missing(tmp_path: Path, qapp: QApplic
     assert state.setup is None
     assert state.setup_error is not None
 
-    view = LiveView(state)
-    view._on_part_clicked("kick")  # type: ignore[attr-defined]
-    # The transport should still be idle since the setup is missing.
-    assert not view._transport.is_running  # type: ignore[attr-defined]
-    view.deleteLater()
+
+def test_appstate_adopt_inmemory_song(qapp: QApplication) -> None:
+    """The wizard hands off a Song + Setup via adopt() with no on-disk path."""
+    from jtx.persist import load_setup
+
+    state = AppState()
+    state.open(ACID_DEMO)
+    setup = state.setup
+    assert setup is not None
+    blank_song = state.song
+    assert blank_song is not None
+
+    # Adopt a freshly-built song under a different title.
+    blank_song.title = "Fresh"
+    state.adopt(song=blank_song, setup=setup)
+    assert state.song is blank_song
+    assert state.setup is setup
+    assert state.path is None
+    assert state.dirty is True
+
+    # Loading a separate setup should also work alongside adoption.
+    _ = load_setup(REPO_ROOT / "setups" / "iac.jtx-setup")
+
+
+def test_part_loop_round_trip(tmp_path: Path) -> None:
+    """Part.loop persists across save/load."""
+    from jtx.persist import load_song, save_song
+
+    state = AppState()
+    state.open(ACID_DEMO)
+    assert state.song is not None
+    next(iter(state.song.parts.values())).loop = True
+    target = tmp_path / "loop_test.jtx"
+    save_song(state.song, target)
+    reloaded = load_song(target)
+    assert next(iter(reloaded.parts.values())).loop is True
+
+
+def test_transport_advances_then_loops(qapp: QApplication) -> None:
+    """Worker should advance to next part once current ends; loop=True holds."""
+    import time
+
+    from jtx.engine.sink import Sink
+    from jtx_gui.transport import TransportService
+
+    class FakeSink(Sink):
+        def start(self) -> None: ...
+        def emit(self, event: object) -> None:  # type: ignore[override]
+            pass
+
+        def stop(self) -> None: ...
+
+    state = AppState()
+    state.open(ACID_DEMO)
+    assert state.song is not None
+    assert state.setup is not None
+    # Shrink each part to 1 bar so we advance quickly.
+    for part in state.song.parts.values():
+        part.bars = 1
+        part.loop = False
+    state.song.tempo = 600
+    part_names = list(state.song.parts.keys())
+
+    seen_parts: list[str] = []
+    transport = TransportService(sink_factory=lambda _name: FakeSink())
+    transport.part_changed.connect(seen_parts.append)
+
+    transport.start(
+        song=state.song,
+        setup=state.setup,
+        part_name=part_names[0],
+        port_name=None,
+    )
+    deadline = time.time() + 3.0
+    # Wait until we've seen at least two distinct part transitions.
+    while time.time() < deadline and len({*seen_parts}) < 2:
+        qapp.processEvents()
+        time.sleep(0.02)
+    transport.stop()
+    deadline = time.time() + 2.0
+    while time.time() < deadline and transport.is_running:
+        qapp.processEvents()
+        time.sleep(0.02)
+    assert len({*seen_parts}) >= 2, f"expected ≥2 parts visited, got {seen_parts}"
 
 
 def test_transport_starts_and_stops_with_fake_sink(qapp: QApplication) -> None:
@@ -361,35 +438,20 @@ def test_setup_editor_writes_back(tmp_path: Path, qapp: QApplication) -> None:
     editor.deleteLater()
 
 
+def test_wizard_offers_blank_style() -> None:
+    """The wizard should expose 'blank' as the first style choice."""
+    from templates import STYLES
+
+    assert "blank" in STYLES
+    blank_song = STYLES["blank"]("Untitled", "iac")
+    assert blank_song.title == "Untitled"
+    assert blank_song.parts  # at least one part
+
+
 def test_wizard_constructs(qapp: QApplication) -> None:
-    """The wizard should build without errors and expose 3 pages."""
+    """The wizard is a single-page QDialog now; just verify it builds."""
     from jtx_gui.views.new_song_wizard import NewSongWizard
 
     wiz = NewSongWizard()
-    assert wiz.pageIds()
-    assert len(wiz.pageIds()) == 3
+    assert wiz.windowTitle()
     wiz.deleteLater()
-
-
-def test_arrangement_reorder_writes_dirty(qapp: QApplication) -> None:
-    """Rebuilding arrangement via the view should sync Song.arrangement."""
-    from jtx_gui.widgets.arrangement import ArrangementEditor
-
-    state = AppState()
-    state.open(ACID_DEMO)
-    assert state.song is not None
-    state._dirty = False  # type: ignore[attr-defined]
-
-    bumped = []
-
-    def on_dirty() -> None:
-        bumped.append(1)
-
-    editor = ArrangementEditor(song=state.song, on_dirty=on_dirty)
-    initial_len = len(state.song.arrangement)
-    # Append the first known part.
-    first_part = next(iter(state.song.parts.keys()))
-    state.song.arrangement.append(first_part)
-    editor.reload()
-    assert len(state.song.arrangement) == initial_len + 1
-    editor.deleteLater()

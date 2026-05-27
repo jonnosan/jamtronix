@@ -66,6 +66,13 @@ class VoiceOverride:
 class Part:
     bars: int
     voice_overrides: dict[str, VoiceOverride] = field(default_factory=dict)
+    loop: bool = False
+    """When the part's last bar finishes, ``loop`` decides what plays next.
+
+    * ``True`` — the part replays from bar 0 (jam-friendly: hold here).
+    * ``False`` — the transport advances to the next part in
+      ``song.parts`` dict order, wrapping at the end.
+    """
 
 
 @dataclass
