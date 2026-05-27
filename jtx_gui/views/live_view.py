@@ -358,18 +358,15 @@ class _TransportPanel(QFrame):
 
     @staticmethod
     def _play_button_style(playing: bool) -> str:
-        if playing:
-            return (
-                f"QPushButton {{ background-color: {theme.ACCENT_RED.name()};"
-                f" color: {theme.PANEL_BG.name()}; font-size: 16pt; font-weight: 900;"
-                " letter-spacing: 3px; border-radius: 4px; }}"
-            )
-        return (
-            f"QPushButton {{ background-color: {theme.ACCENT_GREEN.name()};"
-            f" color: {theme.PANEL_BG.name()}; font-size: 16pt; font-weight: 900;"
-            " letter-spacing: 3px; border-radius: 4px; }}"
-            f"QPushButton:hover {{ background-color: {theme.INK_HOT.name()}; }}"
+        bg = theme.ACCENT_RED.name() if playing else theme.ACCENT_GREEN.name()
+        rules = (
+            f"QPushButton {{ background-color: {bg};"
+            f" color: {theme.PANEL_BG.name()}; font-size: 16pt; font-weight: bold;"
+            " border-radius: 4px; }"
         )
+        if not playing:
+            rules += f"QPushButton:hover {{ background-color: {theme.INK_HOT.name()}; }}"
+        return rules
 
 
 # --------------------------------------------------------------------------
@@ -437,20 +434,19 @@ class _PartButtonStrip(QFrame):
         if name == self._active:
             return (
                 f"QPushButton {{ background-color: {theme.ACCENT_GREEN.name()};"
-                f" color: {theme.PANEL_BG.name()}; font-weight: 900;"
-                " letter-spacing: 1px; border-radius: 3px; }}"
+                f" color: {theme.PANEL_BG.name()}; font-weight: bold;"
+                " border-radius: 3px; }"
             )
         if name == self._queued:
             return (
                 f"QPushButton {{ background-color: {theme.ACCENT_AMBER.name()};"
-                f" color: {theme.PANEL_BG.name()}; font-weight: 900;"
-                " letter-spacing: 1px; border-radius: 3px; }}"
+                f" color: {theme.PANEL_BG.name()}; font-weight: bold;"
+                " border-radius: 3px; }"
             )
         return (
             f"QPushButton {{ background-color: {theme.BRASS_DARK.name()};"
-            f" color: {theme.INK.name()}; font-weight: 800;"
-            " letter-spacing: 1px; border: 1px solid"
-            f" {theme.BRASS_MID.name()}; border-radius: 3px; }}"
+            f" color: {theme.INK.name()}; font-weight: bold;"
+            f" border: 1px solid {theme.BRASS_MID.name()}; border-radius: 3px; }}"
             f"QPushButton:hover {{ background-color: {theme.BRASS_MID.name()};"
             f" color: {theme.PANEL_BG.name()}; }}"
         )

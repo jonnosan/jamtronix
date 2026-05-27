@@ -39,6 +39,30 @@
       "kit_map": {"ohh": 46}
     },
     {
+      "name": "conga_hi",
+      "type": "drum",
+      "default_role": "drum",
+      "midi_channel": 11,
+      "midi_port": null,
+      "kit_map": {"conga_hi": 63}
+    },
+    {
+      "name": "conga_lo",
+      "type": "drum",
+      "default_role": "drum",
+      "midi_channel": 11,
+      "midi_port": null,
+      "kit_map": {"conga_lo": 64}
+    },
+    {
+      "name": "maracas",
+      "type": "drum",
+      "default_role": "drum",
+      "midi_channel": 11,
+      "midi_port": null,
+      "kit_map": {"maracas": 70}
+    },
+    {
       "name": "acid",
       "type": "mono",
       "default_role": "bass",
