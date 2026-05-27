@@ -31,6 +31,14 @@
       "kit_map": {"hat": 42}
     },
     {
+      "name": "crash",
+      "type": "drum",
+      "default_role": "drum",
+      "midi_channel": 10,
+      "midi_port": null,
+      "kit_map": {"crash": 49}
+    },
+    {
       "name": "acid",
       "type": "mono",
       "default_role": "bass",
@@ -51,6 +59,22 @@
       "type": "mono",
       "default_role": "lead",
       "midi_channel": 3,
+      "midi_port": null,
+      "kit_map": {}
+    },
+    {
+      "name": "lead_echo",
+      "type": "follower",
+      "default_role": "follower",
+      "midi_channel": 4,
+      "midi_port": null,
+      "kit_map": {}
+    },
+    {
+      "name": "strings",
+      "type": "follower",
+      "default_role": "follower",
+      "midi_channel": 5,
       "midi_port": null,
       "kit_map": {}
     },
