@@ -15,7 +15,6 @@ Knobs (all overridable per part):
 * ``ghost_velocity_ratio`` — multiplier on ``velocity`` for ghost hits.
 * ``polyrhythm`` — secondary euclid layer with N pulses across the bar
   at softer velocity (0 = off).
-* ``duration_ticks`` — note-off offset from note-on; default ``step // 2``.
 * ``vel_curve`` — algorithmic per-step velocity shape. One of
   ``flat`` (default) / ``ramp_up`` / ``ramp_down`` / ``arc`` /
   ``valley`` / ``pulse`` / ``drift`` (bar-seeded random walk) /
@@ -73,6 +72,11 @@ _BREAK_PATTERNS: dict[str, list[int]] = {
 
 _BEAT_STRIDE = 4  # at 16 steps/bar, beats are on every 4th step
 
+# Drum NoteOffs are fired a fixed short offset after the NoteOn, just
+# for MIDI-protocol correctness. Drum samples ignore note-off; any
+# release-time character lives in the sample's internal envelope.
+_NOTE_OFF_OFFSET_TICKS = 30
+
 
 class DrumPattern(Algorithm):
     """Single-piece drum generator (euclid / four_floor / break)."""
@@ -103,7 +107,9 @@ class DrumPattern(Algorithm):
 
         s = step_ticks(ctx.ppq)
         total_steps = steps_per_bar(ctx.ticks_per_bar, ctx.ppq)
-        duration = int(knobs.get("duration_ticks", max(1, s // 2)))
+        # Fixed-length NoteOffs for MIDI-protocol housekeeping only —
+        # drum samples ignore note-off and play their internal envelope.
+        duration = _NOTE_OFF_OFFSET_TICKS
 
         pattern = self._make_pattern(style, knobs, defaults, total_steps)
         events: list[Event] = []

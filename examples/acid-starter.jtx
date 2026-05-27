@@ -31,8 +31,7 @@
       "pattern": {
         "pulses": 2,
         "offset": 4,
-        "velocity": 100,
-        "duration_ticks": 60
+        "velocity": 100
       },
       "feel": {}
     },
@@ -55,8 +54,7 @@
       "pattern": {
         "pulses": 2,
         "offset": 2,
-        "velocity": 88,
-        "duration_ticks": 180
+        "velocity": 88
       },
       "feel": {}
     },

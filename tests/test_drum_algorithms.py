@@ -150,13 +150,15 @@ def test_drum_pattern_rejects_unknown_style() -> None:
         kick.generate_bar(_ctx({"style": "bogus"}))
 
 
-def test_drum_pattern_duration_knob_controls_note_off_offset() -> None:
+def test_drum_pattern_emits_short_fixed_note_off() -> None:
+    """Drum samples ignore note-off, so we just emit a short housekeeping off."""
     kick = DrumPattern(piece="kick", midi_channel=10, midi_note=36)
-    events = kick.generate_bar(_ctx({"style": "four_floor", "duration_ticks": 50}))
+    events = kick.generate_bar(_ctx({"style": "four_floor"}))
     note_ons = [e for e in events if isinstance(e, NoteOn)]
     note_offs = [e for e in events if isinstance(e, NoteOff)]
     for on, off in zip(note_ons, note_offs, strict=True):
-        assert off.tick - on.tick == 50
+        # 30 ticks ≈ 32nd note — fixed by the algorithm, not user-tunable.
+        assert off.tick - on.tick == 30
 
 
 def test_drum_pattern_emits_in_step_order() -> None:

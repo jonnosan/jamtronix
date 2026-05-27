@@ -19,7 +19,7 @@ def build(title: str, setup_ref: str) -> Song:
         ),
         "snare": VoiceConfig(
             algorithm="drum_one_shot",
-            pattern={"pulses": 2, "offset": 4, "velocity": 96, "duration_ticks": 40},
+            pattern={"pulses": 2, "offset": 4, "velocity": 96},
         ),
         "chh": VoiceConfig(
             algorithm="drum_pattern",
@@ -32,7 +32,7 @@ def build(title: str, setup_ref: str) -> Song:
         ),
         "ohh": VoiceConfig(
             algorithm="drum_one_shot",
-            pattern={"pulses": 4, "offset": 2, "velocity": 80, "duration_ticks": 80},
+            pattern={"pulses": 4, "offset": 2, "velocity": 80},
         ),
         "acid": VoiceConfig(
             algorithm="acid_bass",

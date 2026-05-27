@@ -29,7 +29,6 @@
       "algorithm": "drum_one_shot",
       "pattern": {
         "velocity": 100,
-        "duration_ticks": 60,
         "flam_decay": 0.65,
         "pulses": 2,
         "offset": 4,
@@ -61,7 +60,6 @@
       "algorithm": "drum_one_shot",
       "pattern": {
         "velocity": 90,
-        "duration_ticks": 180,
         "pulses": 2,
         "offset": 2
       },
@@ -75,7 +73,6 @@
       "algorithm": "drum_one_shot",
       "pattern": {
         "velocity": 92,
-        "duration_ticks": 60,
         "pulses": 4,
         "offset": 2
       },
@@ -88,7 +85,6 @@
       "algorithm": "drum_one_shot",
       "pattern": {
         "velocity": 96,
-        "duration_ticks": 60,
         "pulses": 2,
         "offset": 7
       },
@@ -104,8 +100,7 @@
         "offset": 0,
         "velocity": 70,
         "vel_curve": "pulse",
-        "vel_curve_depth": 0.3,
-        "duration_ticks": 30
+        "vel_curve_depth": 0.3
       },
       "feel": {
         "swing": 0.18,
@@ -161,7 +156,6 @@
       "pattern": {
         "octave": 0,
         "velocity": 70,
-        "duration_ticks": 1824,
         "pulses": 1,
         "offset": 0
       },

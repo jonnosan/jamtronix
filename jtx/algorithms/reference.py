@@ -9,10 +9,11 @@ Knobs:
 
 * ``pulses`` + ``offset`` — even distribution across the 16-step bar.
   ``pulses=4, offset=0`` = quarter-note pulse. ``pulses=1, offset=0``
-  + high ``gate`` = one held note per bar (sustained chord-root).
-* ``velocity`` (90), ``octave`` (0), ``gate`` (0.5).
-* ``duration_ticks`` — explicit note-off offset; if set, overrides
-  ``gate``.
+  + a high ``gate`` = one held note that lasts most of the bar.
+* ``velocity`` (90), ``octave`` (0).
+* ``gate`` (0.5..32) — note length as a fraction of *one step*. A
+  generous range lets a single pulse hold for many steps; ``gate=15``
+  with ``pulses=1`` gives a near-whole-bar sustained root.
 
 Deterministic (no RNG), stateless across bars.
 """
@@ -54,11 +55,7 @@ class RootPulse(Algorithm):
 
         s = step_ticks(ctx.ppq)
         total_steps = steps_per_bar(ctx.ticks_per_bar, ctx.ppq)
-
-        if "duration_ticks" in knobs and int(knobs["duration_ticks"]) > 0:
-            duration = max(1, int(knobs["duration_ticks"]))
-        else:
-            duration = max(1, int(s * gate))
+        duration = max(1, int(s * gate))
 
         pattern = euclid(pulses, total_steps, offset)
         events: list[Event] = []
