@@ -66,17 +66,19 @@ class TopToolbar(QFrame):
         self._port_combo.addItem("(use setup default)", None)
         self._refresh_ports()
         self._port_combo.currentIndexChanged.connect(self._on_port_change)
-        port_refresh_btn = QPushButton("⟳")
+        port_refresh_btn = QPushButton("RESCAN")
         port_refresh_btn.setToolTip("Re-scan available MIDI output ports")
-        port_refresh_btn.setMaximumWidth(36)
+        port_refresh_btn.setMinimumWidth(80)
         port_refresh_btn.clicked.connect(self._refresh_ports)
 
         # ----- DAW launch -----
         self._daw_btn = QPushButton("LAUNCH DAW TEMPLATE")
+        self._daw_btn.setMinimumWidth(200)
         self._daw_btn.clicked.connect(self._on_launch_daw)
 
         # ----- render -----
         self._render_btn = QPushButton("RENDER TO MIDI…")
+        self._render_btn.setMinimumWidth(170)
         self._render_btn.clicked.connect(self._on_render)
 
         # ----- layout -----

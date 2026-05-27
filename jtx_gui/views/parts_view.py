@@ -366,7 +366,7 @@ class _VoiceOverridePanel(QFrame):
         self._algo_override_chk = QCheckBox("OVERRIDE ALGORITHM")
         self._algo_override_chk.setStyleSheet(
             f"QCheckBox {{ color: {theme.INK_DIM.name()}; font-size: 8pt;"
-            " letter-spacing: 1.1px; }}"
+            " letter-spacing: 1px; }}"
             f"QCheckBox:checked {{ color: {theme.INK_HOT.name()}; }}"
         )
         self._algo_combo = QComboBox()
