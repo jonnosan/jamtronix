@@ -56,6 +56,22 @@ jtx-gui examples/acid-demo.jtx   # skip splash, open immediately
 python -m jtx_gui        # equivalent to `jtx-gui`
 ```
 
+## Building a macOS `.app`
+
+[`briefcase`](https://briefcase.readthedocs.io/) builds a standalone
+`.app` bundle from the `[tool.briefcase]` block in `pyproject.toml`.
+
+```sh
+pip install briefcase            # one-time
+briefcase create macOS           # scaffold the .app
+briefcase build macOS            # compile + bundle wheels
+briefcase run macOS              # smoke-launch the bundled .app
+briefcase package macOS          # produce a redistributable .dmg
+```
+
+The build pulls `setups/` and `examples/` in as resources so the
+bundled `.app` ships with starter songs.
+
 Run tests (none yet; the testing posture is minimal pytest + manual
 verification via the GUI):
 

@@ -39,6 +39,49 @@ Homepage = "https://github.com/jonnosan/jamtronix"
 [tool.hatch.build.targets.wheel]
 packages = ["jtx", "jtx_gui", "templates"]
 
+# ----- briefcase packaging for the macOS .app bundle -----
+# Run:
+#   briefcase create macOS
+#   briefcase build macOS
+#   briefcase run macOS         # smoke-launch from the build dir
+#   briefcase package macOS     # produce a redistributable .dmg
+#
+# Briefcase docs: https://briefcase.readthedocs.io/
+
+[tool.briefcase]
+project_name = "Jamtronix"
+bundle = "io.github.jonnosan"
+version = "0.1.0"
+url = "https://github.com/jonnosan/jamtronix"
+license.file = "LICENSE"
+author = "Jonno Downes"
+author_email = "jonnosan@gmail.com"
+
+[tool.briefcase.app.jamtronix]
+formal_name = "Jamtronix"
+description = "macOS GUI MIDI jam tool for acid + deep techno"
+long_description = """\
+Jamtronix (jtx) is a macOS-only PySide6 MIDI jam tool optimised for
+acid + deep techno workflows. MIDI-out only; talks to Ableton (or any
+DAW) over IAC Bus.\
+"""
+sources = ["jtx", "jtx_gui", "templates"]
+# Ship the bundled setups + starter songs alongside the .app.
+resources = ["setups", "examples"]
+test_sources = ["tests"]
+
+requires = [
+    "mido>=1.3",
+    "python-rtmidi>=1.5",
+]
+
+[tool.briefcase.app.jamtronix.macOS]
+universal_build = true
+requires = [
+    "PySide6>=6.6",
+    "std-nslog~=1.0.0",
+]
+
 [tool.ruff]
 target-version = "py312"
 line-length = 100
