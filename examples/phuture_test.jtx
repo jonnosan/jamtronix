@@ -1,0 +1,77 @@
+{
+  "title": "Phuture Test",
+  "setup_ref": "ableton",
+  "key": {"tonic": "A", "scale": "minor"},
+  "seed_override": null,
+  "meter": "4/4",
+  "tempo": 124,
+  "chord_progression": {"degrees": ["i", "VI", "III", "VII"], "bars_per_chord": 4},
+  "voices": {
+    "kick": {
+      "algorithm": "drum_pattern",
+      "pattern": {"style": "four_floor"},
+      "feel": {}
+    },
+    "snare": {
+      "algorithm": "drum_pattern",
+      "pattern": {"style": "euclid", "pulses": 2, "offset": 4},
+      "feel": {}
+    },
+    "hat": {
+      "algorithm": "drum_pattern",
+      "pattern": {"style": "euclid", "pulses": 8, "offset": 0, "velocity": 70, "ghost": 0.2},
+      "feel": {"swing": 0.15}
+    },
+    "acid": {
+      "algorithm": "acid_bass",
+      "pattern": {
+        "drop_prob": 0.3,
+        "slide_prob": 0.4,
+        "octave": 0,
+        "cycle": 0,
+        "bend": 60
+      },
+      "feel": {"humanize": 6}
+    },
+    "stab": {
+      "algorithm": "chord_stab",
+      "pattern": {
+        "intervals": [0, 3, 7, 10],
+        "steps": [2, 6, 10, 14],
+        "gate": 0.35,
+        "base_vel": 85
+      },
+      "feel": {}
+    },
+    "lead": {
+      "algorithm": "arp",
+      "pattern": {
+        "mode": "up",
+        "rate_steps": 2,
+        "chord_intervals": [0, 3, 7],
+        "octaves": 2,
+        "gate": 0.6,
+        "base_vel": 90
+      },
+      "feel": {"vel_jitter": 8}
+    },
+    "filt": {
+      "algorithm": "cc_lfo",
+      "pattern": {
+        "cc": 74,
+        "shape": "sine",
+        "period_bars": 8,
+        "depth": 1.0,
+        "offset": 0.5,
+        "samples_per_bar": 16
+      },
+      "feel": {}
+    }
+  },
+  "parts": {
+    "drop": {"bars": 16, "voice_overrides": {}}
+  },
+  "arrangement": ["drop"],
+  "lfos": [],
+  "schema_version": 1
+}

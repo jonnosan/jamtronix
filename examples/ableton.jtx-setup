@@ -1,0 +1,67 @@
+{
+  "id": "ableton",
+  "name": "Ableton Template",
+  "default_midi_port": "IAC Driver Bus 1",
+  "daw_template_path": null,
+  "clock_mode": "internal_master",
+  "midi_clock_in_port": null,
+  "voices": [
+    {
+      "name": "kick",
+      "type": "drum",
+      "default_role": "drum",
+      "midi_channel": 10,
+      "midi_port": null,
+      "kit_map": {"kick": 36}
+    },
+    {
+      "name": "snare",
+      "type": "drum",
+      "default_role": "drum",
+      "midi_channel": 10,
+      "midi_port": null,
+      "kit_map": {"snare": 38}
+    },
+    {
+      "name": "hat",
+      "type": "drum",
+      "default_role": "drum",
+      "midi_channel": 10,
+      "midi_port": null,
+      "kit_map": {"hat": 42}
+    },
+    {
+      "name": "acid",
+      "type": "mono",
+      "default_role": "bass",
+      "midi_channel": 1,
+      "midi_port": null,
+      "kit_map": {}
+    },
+    {
+      "name": "stab",
+      "type": "poly",
+      "default_role": "stab",
+      "midi_channel": 2,
+      "midi_port": null,
+      "kit_map": {}
+    },
+    {
+      "name": "lead",
+      "type": "mono",
+      "default_role": "lead",
+      "midi_channel": 3,
+      "midi_port": null,
+      "kit_map": {}
+    },
+    {
+      "name": "filt",
+      "type": "modulator",
+      "default_role": "modulator",
+      "midi_channel": 1,
+      "midi_port": null,
+      "kit_map": {}
+    }
+  ],
+  "schema_version": 1
+}
