@@ -16,6 +16,7 @@ def _ctx(
     *,
     pattern_knobs: dict[str, object] | None = None,
     source_events: list[Event] | None = None,
+    prev_source_events: list[Event] | None = None,
     seed: int = 0,
 ) -> BarContext:
     return BarContext(
@@ -28,6 +29,7 @@ def _ctx(
         pattern_knobs=pattern_knobs or {},
         rng=random.Random(seed),
         source_events=source_events,
+        prev_source_events=prev_source_events,
     )
 
 
@@ -266,6 +268,104 @@ def test_follower_ratchet_four_emits_four_evenly_spaced() -> None:
     ticks = sorted(e.tick for e in events if isinstance(e, NoteOn))
     # 4 retriggers over 120-tick duration → 30-tick spacing.
     assert ticks == [0, 30, 60, 90]
+
+
+# ---------------------------------------------------------- combos
+
+
+# ---------------------------------------------------------- shift_bars
+
+
+def test_follower_shift_one_uses_prev_bar_source() -> None:
+    """``shift_bars=1`` echoes the previous bar's source into this bar."""
+    follower = VoiceFollower(midi_channel=5)
+    curr = _source_notes((0, 60, 100, 60), (480, 64, 100, 60))
+    prev = _source_notes((0, 67, 100, 60), (960, 72, 100, 60))
+    events = follower.generate_bar(
+        _ctx(
+            source_events=curr,
+            prev_source_events=prev,
+            pattern_knobs={"shift_bars": 1},
+        )
+    )
+    # Output should mirror PREV (67, 72), not CURR (60, 64).
+    assert _extract_notes(events) == [(0, 67, 100), (960, 72, 100)]
+
+
+def test_follower_shift_one_with_no_prev_emits_nothing() -> None:
+    """First bar of a part with shift_bars=1 is silent."""
+    follower = VoiceFollower(midi_channel=5)
+    curr = _source_notes((0, 60, 100, 60))
+    assert (
+        follower.generate_bar(
+            _ctx(
+                source_events=curr,
+                prev_source_events=None,
+                pattern_knobs={"shift_bars": 1},
+            )
+        )
+        == []
+    )
+
+
+def test_follower_shift_zero_is_default_behaviour() -> None:
+    """Explicit shift_bars=0 reads current-bar source like the default."""
+    follower = VoiceFollower(midi_channel=5)
+    curr = _source_notes((240, 65, 100, 60))
+    prev = _source_notes((0, 99, 100, 60))
+    events = follower.generate_bar(
+        _ctx(
+            source_events=curr,
+            prev_source_events=prev,
+            pattern_knobs={"shift_bars": 0},
+        )
+    )
+    assert _extract_notes(events) == [(240, 65, 100)]
+
+
+def test_follower_shift_greater_than_one_returns_empty() -> None:
+    """v1 only caches one bar; deeper shifts return nothing."""
+    follower = VoiceFollower(midi_channel=5)
+    curr = _source_notes((0, 60, 100, 60))
+    prev = _source_notes((0, 64, 100, 60))
+    assert (
+        follower.generate_bar(
+            _ctx(
+                source_events=curr,
+                prev_source_events=prev,
+                pattern_knobs={"shift_bars": 2},
+            )
+        )
+        == []
+    )
+
+
+def test_follower_shift_negative_raises() -> None:
+    import pytest
+
+    follower = VoiceFollower(midi_channel=5)
+    curr = _source_notes((0, 60, 100, 60))
+    with pytest.raises(ValueError, match="shift_bars"):
+        follower.generate_bar(_ctx(source_events=curr, pattern_knobs={"shift_bars": -1}))
+
+
+def test_follower_shift_composes_with_pipeline_steps() -> None:
+    """Shifted source still goes through latch/transpose/chord/etc."""
+    follower = VoiceFollower(midi_channel=5)
+    prev = _source_notes((0, 60, 100, 60), (480, 62, 100, 60), (960, 64, 100, 60))
+    events = follower.generate_bar(
+        _ctx(
+            source_events=_source_notes((0, 99, 100, 60)),  # ignored
+            prev_source_events=prev,
+            pattern_knobs={
+                "shift_bars": 1,
+                "latch": "first_per_bar",
+                "transpose_octaves": 1,
+            },
+        )
+    )
+    # first_per_bar of prev → pitch 60, +12 octave → 72.
+    assert _extract_notes(events) == [(0, 72, 100)]
 
 
 # ---------------------------------------------------------- combos
