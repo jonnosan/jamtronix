@@ -397,10 +397,12 @@ class SongPlayer:
         # feel pass so jitter / accent layer on top of the ducked /
         # faded velocities.
         mix_knobs_by_voice = {v.name: contexts[v.name].mix_knobs for v in self._voices}
+        voice_slots = {v.name: v.slot for v in self._voices}
         mixed_voice_events = apply_mix_pass(
             raw_voice_events,
             prev_voice_events,
             mix_knobs_by_voice,
+            voice_slots,
             bar_idx,
             self.ticks_per_bar,
             self.ppq,

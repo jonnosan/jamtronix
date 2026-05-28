@@ -6,7 +6,7 @@ Sees every voice's current-bar events plus the previous bar's events
 (cached by the SongPlayer) so cross-voice sidechain ducking can look
 back across the bar boundary.
 
-Knobs live in each voice's ``feel`` dict because they shape *how*
+Knobs live in each voice's ``mix`` dict because they shape *how*
 notes are emitted, not *what* notes:
 
 **Fade envelope** (ADSR-flavoured):
@@ -31,8 +31,20 @@ notes are emitted, not *what* notes:
 
 **Sidechain ducking**:
 
-* ``sidechain_from`` (None | str | list[str]) — name(s) of the voice(s)
-  whose NoteOns trigger ducking. None = no sidechain.
+* ``sidechain_from`` (None | str | list[str]) — **instrument name(s)**
+  whose NoteOns trigger ducking. Resolution per instrument name:
+
+  * On a ``drum_kit`` voice, the instrument keys into ``slot.kit_map``;
+    NoteOns matching the entry's ``(channel, note)`` count as triggers.
+  * On a single-piece voice (``drum`` / ``mono`` / ``poly`` / …), the
+    voice's own ``slot.name`` IS its instrument name — every NoteOn on
+    that voice counts as a trigger.
+
+  Schema-v3 change: this is now an instrument-name lookup (e.g.
+  ``["kick"]``) instead of a raw voice-name lookup. Pump synthesizes
+  ``sidechain_from=["kick"]`` on every non-kit voice — that single
+  trigger source matches both a stand-alone ``kick`` voice and the
+  ``kick`` piece inside a ``drum_kit``.
 * ``sidechain_floor`` (60) — target velocity when fully ducked. The
   voice's velocity interpolates linearly between its raw value and
   this floor based on how recent the trigger was.
@@ -59,6 +71,7 @@ from __future__ import annotations
 from typing import Any
 
 from jtx.engine.events import ControlChange, Event, NoteOff, NoteOn, PitchBend
+from jtx.model.setup import VoiceSlot
 from jtx.model.song import KnobDict
 
 # Beats per quarter note — fixed. The "beat" unit in fade/sidechain
@@ -71,6 +84,7 @@ def apply_mix_pass(
     voice_events: dict[str, list[Event]],
     prev_voice_events: dict[str, list[Event]],
     mix_knobs_by_voice: dict[str, KnobDict],
+    voice_slots: dict[str, VoiceSlot],
     bar_index: int,
     ticks_per_bar: int,
     ppq: int,
@@ -88,12 +102,18 @@ def apply_mix_pass(
     (sidechain / fade / evolution). Renamed from the old
     ``feel_knobs_by_voice`` parameter in schema v3 — global feel knobs
     moved to the song-level :attr:`jtx.model.song.Song.feel`.
+
+    ``voice_slots`` is the per-voice :class:`VoiceSlot` map. Sidechain
+    needs it to translate ``sidechain_from`` instrument names into the
+    matching NoteOns: a ``drum_kit`` slot resolves the name via
+    ``slot.kit_map`` to ``(channel, note)``; any other slot treats its
+    own ``slot.name`` as its single instrument name.
     """
     out: dict[str, list[Event]] = {}
     for voice_name, events in voice_events.items():
         knobs = mix_knobs_by_voice.get(voice_name, {})
         ducked = _apply_sidechain(
-            events, knobs, voice_events, prev_voice_events, ticks_per_bar, ppq
+            events, knobs, voice_events, prev_voice_events, voice_slots, ticks_per_bar, ppq
         )
         faded = _apply_fade(ducked, knobs, bar_index, ticks_per_bar, ppq)
         evolved = _apply_evolution(faded, knobs, bar_index, part_bars)
@@ -109,6 +129,7 @@ def _apply_sidechain(
     knobs: KnobDict,
     all_curr: dict[str, list[Event]],
     all_prev: dict[str, list[Event]],
+    voice_slots: dict[str, VoiceSlot],
     ticks_per_bar: int,
     ppq: int,
 ) -> list[Event]:
@@ -129,14 +150,18 @@ def _apply_sidechain(
 
     triggers: list[int] = []
     for src in sources:
-        for ev in all_curr.get(src, []):
-            if isinstance(ev, NoteOn):
-                triggers.append(ev.tick)
-        # Previous-bar triggers translate to negative tick (they fired
-        # before bar 0 of the current bar).
-        for ev in all_prev.get(src, []):
-            if isinstance(ev, NoteOn):
-                triggers.append(ev.tick - ticks_per_bar)
+        for voice_name, slot in voice_slots.items():
+            matcher = _instrument_matcher(slot, voice_name, src)
+            if matcher is None:
+                continue
+            for ev in all_curr.get(voice_name, []):
+                if isinstance(ev, NoteOn) and matcher(ev):
+                    triggers.append(ev.tick)
+            # Previous-bar triggers translate to negative tick (they
+            # fired before bar 0 of the current bar).
+            for ev in all_prev.get(voice_name, []):
+                if isinstance(ev, NoteOn) and matcher(ev):
+                    triggers.append(ev.tick - ticks_per_bar)
     triggers.sort()
     if not triggers:
         return events
@@ -164,6 +189,28 @@ def _apply_sidechain(
         new_vel = max(1, min(127, new_vel))
         out.append(NoteOn(tick=ev.tick, channel=ev.channel, note=ev.note, velocity=new_vel))
     return out
+
+
+def _instrument_matcher(
+    slot: VoiceSlot,
+    voice_name: str,
+    instrument: str,
+):
+    """Return a predicate that selects NoteOns belonging to *instrument*.
+
+    Returns ``None`` if *slot* doesn't host *instrument* — caller skips
+    the voice entirely in that case.
+    """
+    if slot.type == "drum_kit":
+        piece = slot.kit_map.get(instrument)
+        if piece is None:
+            return None
+        ch, note = piece.channel, piece.note
+        return lambda ev: ev.channel == ch and ev.note == note
+    # Single-piece voice: the voice's own name is its instrument name.
+    if voice_name == instrument or slot.name == instrument:
+        return lambda ev: True
+    return None
 
 
 # --------------------------------------------------------------- fade
