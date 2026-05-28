@@ -340,7 +340,7 @@ class SongPlayer:
         import random as _r
 
         lfo_seed = derive_bar_seed(self.song_seed, bar_idx)
-        lfo_events = apply_lfos_to_bar(
+        lfo_emissions = apply_lfos_to_bar(
             self.song.lfos,
             self.part_name,
             contexts,
@@ -348,6 +348,8 @@ class SongPlayer:
             self.ticks_per_bar,
             _r.Random(lfo_seed),
         )
+        lfo_events = lfo_emissions.events
+        lfo_voice_params = lfo_emissions.voice_params
 
         # Compile song-wide feel knobs (Pump) into per-voice mix knobs.
         # Runs after LFOs so global_feel: LFO targets are reflected in
@@ -385,7 +387,13 @@ class SongPlayer:
                 if isinstance(src, str):
                     ctx.source_events = raw_voice_events.get(src, [])
                     ctx.prev_source_events = prev_voice_events.get(src)
-            algo_out = v.algorithm.generate_bar(ctx)
+            algo_out = list(v.algorithm.generate_bar(ctx))
+            # Merge any voice:<v>:<function> LFO emissions for this
+            # voice — they ride the same voicing → parameter_router
+            # pipeline as algorithm-emitted Params.
+            lfo_params = lfo_voice_params.get(v.name)
+            if lfo_params:
+                algo_out.extend(lfo_params)
             raw_voice_events[v.name] = translate_abstract_events(algo_out, v.slot)
 
         # Mix pass — sidechain ducking (cross-voice, cross-bar) +
