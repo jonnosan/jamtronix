@@ -18,7 +18,13 @@ Target string grammar (see ``docs/SPEC.md`` §LFOs):
   range via simple scaling: ``depth * lfo_value`` if the knob is a
   float, else ``int(depth * lfo_value * 127)`` heuristic. For v1 we
   just pass the float value through and let algorithms cast as needed.
-* ``feel:<voice>:<knob>`` — same but in the feel knob dict.
+* ``mix:<voice>:<knob>`` — same but in the per-voice mix knob dict
+  (sidechain / fade / evolution). Replaces the old ``feel:`` target
+  prefix that was removed in schema v3.
+* ``global_feel:<knob>`` — overwrite a value in the song-wide feel
+  dict (``pump`` / ``groove`` / ``drive`` / ``tension`` / ``wander``).
+  Broadcasts to every voice's ``BarContext.song_feel`` since they share
+  the same backing dict.
 * ``midi:ch<N>:cc<M>`` — emit a CC event on channel N, controller M,
   at value ``int(lfo_value * 127)``.
 * ``root:<voice>`` — set ``chord_root_semitones`` on that voice's
@@ -40,7 +46,7 @@ from jtx.engine.context import BarContext
 from jtx.engine.events import ControlChange, Event
 from jtx.model.lfo import LFO, LFOApplication
 
-TargetKind = Literal["pattern", "feel", "midi", "root"]
+TargetKind = Literal["pattern", "mix", "global_feel", "midi", "root"]
 
 
 @dataclass(frozen=True)
@@ -48,8 +54,8 @@ class ParsedTarget:
     """Decoded form of an :class:`LFOApplication.target` string."""
 
     kind: TargetKind
-    voice: str | None = None  # for pattern / feel / root
-    knob: str | None = None  # for pattern / feel
+    voice: str | None = None  # for pattern / mix / root
+    knob: str | None = None  # for pattern / mix / global_feel
     midi_channel: int | None = None  # for midi
     midi_cc: int | None = None  # for midi
 
@@ -62,9 +68,23 @@ def parse_target(target: str) -> ParsedTarget:
     if target.startswith("pattern:"):
         _, voice, knob = target.split(":", 2)
         return ParsedTarget(kind="pattern", voice=voice, knob=knob)
-    if target.startswith("feel:"):
+    if target.startswith("mix:"):
         _, voice, knob = target.split(":", 2)
-        return ParsedTarget(kind="feel", voice=voice, knob=knob)
+        return ParsedTarget(kind="mix", voice=voice, knob=knob)
+    if target.startswith("global_feel:"):
+        knob = target[len("global_feel:") :]
+        if not knob:
+            raise ValueError(
+                f"LFO target {target!r}: expected 'global_feel:<knob>' "
+                f"(pump / groove / drive / tension / wander)"
+            )
+        return ParsedTarget(kind="global_feel", knob=knob)
+    if target.startswith("feel:"):
+        raise ValueError(
+            f"LFO target {target!r}: 'feel:' targets were removed in schema v3 — "
+            f"use 'global_feel:<knob>' for the song-wide feel knobs or "
+            f"'mix:<voice>:<knob>' for per-voice mix-pass knobs"
+        )
     if target.startswith("midi:"):
         m = _MIDI_RE.match(target[len("midi:") :])
         if not m:
@@ -76,7 +96,10 @@ def parse_target(target: str) -> ParsedTarget:
         )
     if target.startswith("root:"):
         return ParsedTarget(kind="root", voice=target[len("root:") :])
-    raise ValueError(f"LFO target {target!r}: expected pattern:.. / feel:.. / midi:.. / root:..")
+    raise ValueError(
+        f"LFO target {target!r}: expected pattern:.. / mix:.. / global_feel:.. / "
+        f"midi:.. / root:.."
+    )
 
 
 def sample_lfo(
@@ -161,10 +184,19 @@ def apply_lfos_to_bar(
             ctx = voice_contexts.get(target.voice or "")
             if ctx is not None and target.knob is not None:
                 ctx.pattern_knobs[target.knob] = value
-        elif target.kind == "feel":
+        elif target.kind == "mix":
             ctx = voice_contexts.get(target.voice or "")
             if ctx is not None and target.knob is not None:
-                ctx.feel_knobs[target.knob] = value
+                ctx.mix_knobs[target.knob] = value
+        elif target.kind == "global_feel":
+            # Song-wide feel knobs live in ctx.song_feel — all voices
+            # share the same backing dict that SongPlayer constructed
+            # from Song.feel, so mutating any one ctx's view broadcasts
+            # to all voices for this bar.
+            if target.knob is not None:
+                for ctx in voice_contexts.values():
+                    ctx.song_feel[target.knob] = value
+                    break  # one mutation reaches all (shared dict)
         elif target.kind == "root":
             ctx = voice_contexts.get(target.voice or "")
             if ctx is not None:

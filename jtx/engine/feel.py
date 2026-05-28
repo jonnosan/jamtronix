@@ -46,7 +46,7 @@ from jtx.model.song import KnobDict
 
 def apply_feel(
     events: list[Event],
-    feel_knobs: KnobDict,
+    mix_knobs: KnobDict,
     ppq: int,
     rng: random.Random,
 ) -> list[Event]:
@@ -56,18 +56,18 @@ def apply_feel(
     swing/humanize may push events slightly negative — they're clamped
     at 0 before return.
     """
-    mute_prob = float(feel_knobs.get("mute_prob", 0.0))
+    mute_prob = float(mix_knobs.get("mute_prob", 0.0))
     if mute_prob > 0 and rng.random() < mute_prob:
         return []
 
-    swing = float(feel_knobs.get("swing", 0.0))
-    humanize = int(feel_knobs.get("humanize", 0))
-    vel_jitter = int(feel_knobs.get("vel_jitter", 0))
-    gate_jitter = float(feel_knobs.get("gate_jitter", 0.0))
-    accent = int(feel_knobs.get("accent", 0))
-    octave_jump = float(feel_knobs.get("octave_jump", 0.0))
+    swing = float(mix_knobs.get("swing", 0.0))
+    humanize = int(mix_knobs.get("humanize", 0))
+    vel_jitter = int(mix_knobs.get("vel_jitter", 0))
+    gate_jitter = float(mix_knobs.get("gate_jitter", 0.0))
+    accent = int(mix_knobs.get("accent", 0))
+    octave_jump = float(mix_knobs.get("octave_jump", 0.0))
 
-    raw_accent_beats = feel_knobs.get("accent_beats", [0, 8])
+    raw_accent_beats = mix_knobs.get("accent_beats", [0, 8])
     if isinstance(raw_accent_beats, list):
         accent_beats = {int(b) for b in raw_accent_beats}
     else:

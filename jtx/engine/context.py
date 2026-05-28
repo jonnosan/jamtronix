@@ -58,8 +58,31 @@ class BarContext:
     default > algorithm default). Resolution lives in the part/voice
     glue layer, not here."""
 
-    feel_knobs: KnobDict = field(default_factory=dict)
-    """Resolved feel knobs at this bar's scope."""
+    mix_knobs: KnobDict = field(default_factory=dict)
+    """Resolved per-voice mix-pass knobs (sidechain / fade /
+    evolution). Renamed from ``feel_knobs`` in schema v3; per-voice
+    bar-internal feel keys are gone — see :attr:`song_feel`."""
+
+    song_feel: dict[str, float] = field(default_factory=dict)
+    """Read-only snapshot of the song's global feel knobs at this bar
+    (pump, groove, drive, tension, wander). Algorithms that legitimately
+    consult feel (drum_kit reading drive for ghost prob, wander for
+    polyrhythm chance) read it here. The post-emit feel pass also reads
+    this — it no longer takes per-voice feel input."""
+
+    part_progress: float = 0.0
+    """0..1 normalised position within the active part. Bar 0 = 0.0;
+    last bar of an N-bar part = 1.0 (linear). One-bar parts are
+    treated as progress=1.0 from the outset.
+
+    Algorithms that want to evolve within a part (drum_kit's snare
+    density ramp, build-up fills, …) read this."""
+
+    part_intensity: float = 0.5
+    """Linear interpolation of the part's ``intensity_start`` →
+    ``intensity_end`` at the current bar, scaled by the song-level
+    ``Tension`` knob. Drum_kit's headline knob for choosing how
+    busy a piece's pattern is."""
 
     rng: random.Random = field(default_factory=random.Random)
     """Pre-seeded RNG for this (song, part, voice, bar) tuple — see

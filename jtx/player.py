@@ -279,6 +279,25 @@ class SongPlayer:
     def events_for_bar(self, bar_idx: int) -> list[Event]:
         chord_root = self.root_provider.root_semitones_for_bar(bar_idx)
 
+        # Compute part-level progress + intensity (Tension-scaled).
+        # Shared between all voices for this bar.
+        part_bars = max(1, self.part.bars)
+        if part_bars > 1:
+            part_progress = (bar_idx % part_bars) / (part_bars - 1)
+        else:
+            part_progress = 1.0
+        intensity_raw = self.part.intensity_start + (
+            self.part.intensity_end - self.part.intensity_start
+        ) * part_progress
+        tension = float(self.song.feel.get("tension", 0.0))
+        part_intensity = max(
+            0.0,
+            min(1.0, 0.5 + (intensity_raw - 0.5) * (0.5 + tension * 1.5)),
+        )
+        # Single shared dict so LFO global_feel: mutations broadcast to
+        # every voice for this bar.
+        shared_song_feel: dict[str, float] = {k: float(v) for k, v in self.song.feel.items()}
+
         # Build BarContext per voice + collect for LFO application.
         contexts: dict[str, BarContext] = {}
         for v in self._voices:
@@ -287,7 +306,7 @@ class SongPlayer:
             import random as _r
 
             song_voice = self.song.voices[v.name]
-            pattern_knobs, feel_knobs = self._resolve_knobs(v.name, song_voice)
+            pattern_knobs, mix_knobs = self._resolve_knobs(v.name, song_voice)
             # ``follow_progression`` lets a voice opt out of the chord
             # progression resolver — useful for sub bass that drones
             # on the root while pads/stabs cycle through changes.
@@ -302,7 +321,10 @@ class SongPlayer:
                 key=self.song.key,
                 chord_root_semitones=voice_chord_root,
                 pattern_knobs=pattern_knobs,
-                feel_knobs=feel_knobs,
+                mix_knobs=mix_knobs,
+                song_feel=shared_song_feel,
+                part_progress=part_progress,
+                part_intensity=part_intensity,
                 rng=_r.Random(bar_seed),
                 part_voice_seed=pv_seed,
             )
@@ -345,11 +367,11 @@ class SongPlayer:
         # fade-in/out envelope per voice. Runs before the per-voice
         # feel pass so jitter / accent layer on top of the ducked /
         # faded velocities.
-        feel_knobs_by_voice = {v.name: contexts[v.name].feel_knobs for v in self._voices}
+        mix_knobs_by_voice = {v.name: contexts[v.name].mix_knobs for v in self._voices}
         mixed_voice_events = apply_mix_pass(
             raw_voice_events,
             prev_voice_events,
-            feel_knobs_by_voice,
+            mix_knobs_by_voice,
             bar_idx,
             self.ticks_per_bar,
             self.ppq,
@@ -362,7 +384,7 @@ class SongPlayer:
         voice_events: dict[str, list[Event]] = {}
         for v in self._voices:
             ctx = contexts[v.name]
-            shaped = apply_feel(mixed_voice_events[v.name], ctx.feel_knobs, self.ppq, ctx.rng)
+            shaped = apply_feel(mixed_voice_events[v.name], ctx.mix_knobs, self.ppq, ctx.rng)
             voice_events[v.name] = self._routers[v.name].route(shaped)
 
         # Cache for next bar's lookback. We cache the *post-mix* events
@@ -377,7 +399,7 @@ class SongPlayer:
         return all_events
 
     def _resolve_knobs(self, voice_name: str, song_voice: VoiceConfig) -> tuple[KnobDict, KnobDict]:
-        """Return (pattern, feel) merged with any part override.
+        """Return (pattern, mix) merged with any part override.
 
         Resolution order: part override > song-level > algorithm default.
         Algorithm defaults are baked into algorithm code (each
@@ -386,8 +408,8 @@ class SongPlayer:
         """
         override: VoiceOverride | None = self.part.voice_overrides.get(voice_name)
         pattern: dict[str, Any] = dict(song_voice.pattern)
-        feel: dict[str, Any] = dict(song_voice.feel)
+        mix: dict[str, Any] = dict(song_voice.mix)
         if override is not None:
             pattern.update(override.pattern)
-            feel.update(override.feel)
-        return pattern, feel
+            mix.update(override.mix)
+        return pattern, mix

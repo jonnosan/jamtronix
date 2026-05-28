@@ -70,7 +70,7 @@ from jtx.model.song import KnobDict
 def apply_mix_pass(
     voice_events: dict[str, list[Event]],
     prev_voice_events: dict[str, list[Event]],
-    feel_knobs_by_voice: dict[str, KnobDict],
+    mix_knobs_by_voice: dict[str, KnobDict],
     bar_index: int,
     ticks_per_bar: int,
     ppq: int,
@@ -83,10 +83,15 @@ def apply_mix_pass(
 
     ``part_bars`` is the total bar count of the active part; used by
     the evolution ramp to compute progress (0..1) across the part.
+
+    ``mix_knobs_by_voice`` is the per-voice mix-pass knob dict
+    (sidechain / fade / evolution). Renamed from the old
+    ``feel_knobs_by_voice`` parameter in schema v3 — global feel knobs
+    moved to the song-level :attr:`jtx.model.song.Song.feel`.
     """
     out: dict[str, list[Event]] = {}
     for voice_name, events in voice_events.items():
-        knobs = feel_knobs_by_voice.get(voice_name, {})
+        knobs = mix_knobs_by_voice.get(voice_name, {})
         ducked = _apply_sidechain(
             events, knobs, voice_events, prev_voice_events, ticks_per_bar, ppq
         )
