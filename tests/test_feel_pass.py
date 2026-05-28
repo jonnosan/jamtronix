@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import random
 
+import pytest
+
 from jtx.engine.feel import apply_feel
 from jtx.model.events import AbstractEvent, Hit, Note, Param
 from jtx.model.setup import VoiceSlot
@@ -157,10 +159,46 @@ def test_drive_boosts_hit_velocity_too() -> None:
     assert hit.velocity == 115
 
 
-def test_drive_does_not_affect_param() -> None:
+def test_drive_pushes_cutoff_param_upward() -> None:
+    """Drive shifts every Param(name='cutoff').value up by drive*0.2,
+    clamped at 1.0. Pairs with the velocity boost for the 'push the
+    mix harder' feel."""
     events: list[AbstractEvent] = [Param(name="cutoff", tick=0, value=0.5)]
     out = apply_feel(events, {"drive": 1.0}, _lead_slot(), ppq=480, rng=random.Random(0))
-    assert out[0].value == 0.5  # type: ignore[union-attr]
+    param = out[0]
+    assert isinstance(param, Param)
+    # drive=1.0 → +0.2 → 0.7.
+    assert param.value == pytest.approx(0.7)
+
+
+def test_drive_cutoff_push_clamps_at_one() -> None:
+    events: list[AbstractEvent] = [Param(name="cutoff", tick=0, value=0.95)]
+    out = apply_feel(events, {"drive": 1.0}, _lead_slot(), ppq=480, rng=random.Random(0))
+    assert isinstance(out[0], Param)
+    assert out[0].value == pytest.approx(1.0)
+
+
+def test_drive_cutoff_push_scales_with_drive() -> None:
+    """drive=0.5 → +0.1; drive=0 → no change."""
+    events: list[AbstractEvent] = [Param(name="cutoff", tick=0, value=0.5)]
+    half = apply_feel(events, {"drive": 0.5}, _lead_slot(), ppq=480, rng=random.Random(0))
+    zero = apply_feel(events, {"drive": 0.0}, _lead_slot(), ppq=480, rng=random.Random(0))
+    assert isinstance(half[0], Param) and isinstance(zero[0], Param)
+    assert half[0].value == pytest.approx(0.6)
+    assert zero[0].value == pytest.approx(0.5)
+
+
+def test_drive_does_not_affect_non_cutoff_params() -> None:
+    """Only ``cutoff`` is in _DRIVE_PUSH_FUNCTIONS; other functions
+    (resonance, glide, bend, …) pass through unchanged."""
+    events: list[AbstractEvent] = [
+        Param(name="resonance", tick=0, value=0.5),
+        Param(name="glide", tick=0, value=0.2),
+        Param(name="bend", tick=0, value=0.1),
+    ]
+    out = apply_feel(events, {"drive": 1.0}, _lead_slot(), ppq=480, rng=random.Random(0))
+    values = [e.value for e in out if isinstance(e, Param)]
+    assert values == [0.5, 0.2, 0.1]
 
 
 # ---------------------------------------------------------- wander → mute / octave
