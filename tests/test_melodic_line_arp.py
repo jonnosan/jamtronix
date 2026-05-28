@@ -1,4 +1,8 @@
-"""Tests for melodic_line + arp algorithms."""
+"""Tests for melodic_line + arp algorithms.
+
+Schema v3: both emit abstract :class:`Note` events (pitch + duration_ticks).
+The voicing stage adds the MIDI channel at SongPlayer level.
+"""
 
 from __future__ import annotations
 
@@ -9,7 +13,7 @@ import pytest
 from jtx.algorithms import Arp, MelodicLine
 from jtx.algorithms._theory import scale_intervals
 from jtx.engine.context import BarContext
-from jtx.engine.events import NoteOff, NoteOn
+from jtx.model.events import Note
 from jtx.model.song import Key
 
 
@@ -34,6 +38,10 @@ def _ctx(
     )
 
 
+def _notes(events) -> list[Note]:
+    return [e for e in events if isinstance(e, Note)]
+
+
 # ----------------------------------------------------------------- scales
 
 
@@ -51,49 +59,40 @@ def test_scale_intervals_unknown_falls_back_to_minor() -> None:
 
 
 def test_melodic_line_pitches_within_scale() -> None:
-    line = MelodicLine(midi_channel=3)
+    line = MelodicLine()
     events = line.generate_bar(_ctx(pattern_knobs={"drop_prob": 0.0}))
-    # A minor at octave 4: A4=69. Default palette "tones_only" =
-    # (0, 2, 4, 5, 7) → +0, +3, +7, +8, +12 → 69, 72, 76, 77, 81.
     expected = {69, 72, 76, 77, 81}
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    assert all(e.note in expected for e in note_ons)
+    assert all(n.pitch in expected for n in _notes(events))
 
 
 def test_melodic_line_drop_prob_one_emits_nothing() -> None:
-    line = MelodicLine(midi_channel=3)
+    line = MelodicLine()
     events = line.generate_bar(_ctx(pattern_knobs={"drop_prob": 1.0}))
-    assert not any(isinstance(e, NoteOn) for e in events)
+    assert _notes(events) == []
 
 
 def test_melodic_line_drop_prob_zero_fills_all_positions_default_grid() -> None:
-    line = MelodicLine(midi_channel=3)
+    line = MelodicLine()
     events = line.generate_bar(_ctx(pattern_knobs={"drop_prob": 0.0}))
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    # Default subdivision = "16" → 16 positions per bar.
-    assert len(note_ons) == 16
+    assert len(_notes(events)) == 16
 
 
 def test_melodic_line_subdivision_8_fills_eight_positions() -> None:
-    line = MelodicLine(midi_channel=3)
+    line = MelodicLine()
     events = line.generate_bar(_ctx(pattern_knobs={"drop_prob": 0.0, "subdivision": "8"}))
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    assert len(note_ons) == 8
+    assert len(_notes(events)) == 8
 
 
 def test_melodic_line_subdivision_16t_uses_triplet_grid() -> None:
-    line = MelodicLine(midi_channel=3)
+    line = MelodicLine()
     events = line.generate_bar(_ctx(pattern_knobs={"drop_prob": 0.0, "subdivision": "16t"}))
-    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
-    # 16t = 3 per 8th × 8 8ths per bar = 24 positions per bar.
-    assert len(note_ons) == 24
-    # Triplet spacing at PPQ=480 is 80 ticks; first three positions
-    # cluster at 0, 80, 160 (the 2/3-of-quarter triplet grid).
-    assert [e.tick for e in note_ons[:3]] == [0, 80, 160]
+    notes = sorted(_notes(events), key=lambda n: n.tick)
+    assert len(notes) == 24
+    assert [n.tick for n in notes[:3]] == [0, 80, 160]
 
 
 def test_melodic_line_triplet_prob_inserts_triplet_runs() -> None:
-    line = MelodicLine(midi_channel=3)
+    line = MelodicLine()
     events = line.generate_bar(
         _ctx(
             pattern_knobs={
@@ -103,49 +102,39 @@ def test_melodic_line_triplet_prob_inserts_triplet_runs() -> None:
             }
         )
     )
-    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
-    # Every beat won the roll; each beat gets 3 triplet positions
-    # instead of 4 16ths. 4 beats × 3 = 12 notes total.
-    assert len(note_ons) == 12
+    assert len(_notes(events)) == 12
 
 
 def test_melodic_line_triplet_prob_zero_leaves_base_grid_intact() -> None:
-    line = MelodicLine(midi_channel=3)
+    line = MelodicLine()
     events = line.generate_bar(
         _ctx(pattern_knobs={"drop_prob": 0.0, "triplet_prob": 0.0}),
     )
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    assert len(note_ons) == 16
+    assert len(_notes(events)) == 16
 
 
 def test_melodic_line_palette_constrains_pitches() -> None:
-    line = MelodicLine(midi_channel=3)
-    # "triad" palette = (0, 2, 4) → root + 3rd + 5th = {69, 72, 76}.
+    line = MelodicLine()
     events = line.generate_bar(_ctx(pattern_knobs={"drop_prob": 0.0, "palette": "triad"}))
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    assert all(e.note in {69, 72, 76} for e in note_ons)
+    assert all(n.pitch in {69, 72, 76} for n in _notes(events))
 
 
 def test_melodic_line_low_palette_reaches_below_root() -> None:
-    line = MelodicLine(midi_channel=3)
-    # "low" palette = (-3, -1, 0, 2, 4) → {64, 67, 69, 72, 76}.
+    line = MelodicLine()
     events = line.generate_bar(_ctx(pattern_knobs={"drop_prob": 0.0, "palette": "low"}))
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    assert any(e.note < 69 for e in note_ons)
+    assert any(n.pitch < 69 for n in _notes(events))
 
 
 def test_melodic_line_chord_root_semitones_transposes() -> None:
-    line = MelodicLine(midi_channel=3)
+    line = MelodicLine()
     ctx = _ctx(pattern_knobs={"drop_prob": 0.0, "palette": "triad"})
     ctx.chord_root_semitones = 5
     events = line.generate_bar(ctx)
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    # triad palette shifted by +5: {74, 77, 81}.
-    assert all(e.note in {74, 77, 81} for e in note_ons)
+    assert all(n.pitch in {74, 77, 81} for n in _notes(events))
 
 
 def test_melodic_line_passing_tone_inserts_chromatic_neighbour() -> None:
-    line = MelodicLine(midi_channel=3)
+    line = MelodicLine()
     events = line.generate_bar(
         _ctx(
             pattern_knobs={
@@ -155,48 +144,37 @@ def test_melodic_line_passing_tone_inserts_chromatic_neighbour() -> None:
             }
         )
     )
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    pitches_seen = {e.note for e in note_ons}
-    # tones_only palette pitches in A minor: {69, 72, 76, 77, 81}.
+    pitches_seen = {n.pitch for n in _notes(events)}
     palette_pitches = {69, 72, 76, 77, 81}
-    chromatic_neighbours = pitches_seen - palette_pitches
-    assert chromatic_neighbours
+    assert pitches_seen - palette_pitches  # at least one chromatic neighbour
 
 
 def test_melodic_line_gate_controls_duration() -> None:
-    line = MelodicLine(midi_channel=3)
+    line = MelodicLine()
     events = line.generate_bar(_ctx(pattern_knobs={"drop_prob": 0.0, "gate": 0.25}))
-    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
-    note_offs = sorted((e for e in events if isinstance(e, NoteOff)), key=lambda e: e.tick)
-    # Each non-passing-tone note: off.tick - on.tick == int(120 * 0.25) = 30.
-    # passing tones produce extra short notes — count matching length 30.
-    durations = [off.tick - on.tick for on, off in zip(note_ons, note_offs, strict=False)]
-    assert any(d == 30 for d in durations)
+    notes = _notes(events)
+    # Each base-grid note: duration = int(120 * 0.25) = 30.
+    assert any(n.duration_ticks == 30 for n in notes)
 
 
 def test_melodic_line_uses_key_scale() -> None:
-    line = MelodicLine(midi_channel=3)
-    # Major scale at A: scale intervals (0,2,4,5,7,9,11). triad palette
-    # (0, 2, 4) → 69, 73, 76 (root + major 3rd + 5th).
+    line = MelodicLine()
     events = line.generate_bar(
         _ctx(scale="major", pattern_knobs={"drop_prob": 0.0, "palette": "triad"})
     )
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    assert all(e.note in {69, 73, 76} for e in note_ons)
+    assert all(n.pitch in {69, 73, 76} for n in _notes(events))
 
 
 # ---------------------------------------------------- cycle knobs
 
 
 def _pitch_seq(line: MelodicLine, *, bar: int, knobs: dict[str, object]) -> tuple[int, ...]:
-    # Pass a bar-specific seed so ctx.rng (used when cycles are "off") varies
-    # across bars — that's the per-bar-fresh property the cycle knobs override.
     events = line.generate_bar(_ctx(bar_index=bar, seed=bar, pattern_knobs=knobs))
-    return tuple(e.note for e in events if isinstance(e, NoteOn))
+    return tuple(n.pitch for n in _notes(events))
 
 
 def test_melodic_line_pitch_cycle_4_repeats_every_4_bars() -> None:
-    line = MelodicLine(midi_channel=3)
+    line = MelodicLine()
     knobs = {"drop_prob": 0.0, "pitch_cycle_bars": "4"}
     seqs = {b: _pitch_seq(line, bar=b, knobs=knobs) for b in range(8)}
     assert seqs[0] == seqs[4]
@@ -207,47 +185,42 @@ def test_melodic_line_pitch_cycle_4_repeats_every_4_bars() -> None:
 
 
 def test_melodic_line_pitch_cycle_1_makes_every_bar_identical() -> None:
-    line = MelodicLine(midi_channel=3)
+    line = MelodicLine()
     knobs = {"drop_prob": 0.0, "pitch_cycle_bars": "1"}
     seqs = {_pitch_seq(line, bar=b, knobs=knobs) for b in range(8)}
     assert len(seqs) == 1
 
 
 def test_melodic_line_pitch_cycle_off_varies_every_bar() -> None:
-    line = MelodicLine(midi_channel=3)
+    line = MelodicLine()
     knobs = {"drop_prob": 0.0, "pitch_cycle_bars": "off"}
-    # With part_voice_seed pinned, bar-seeded ctx.rng differs per bar;
-    # generated pitch sequences should not be uniform.
     seqs = {_pitch_seq(line, bar=b, knobs=knobs) for b in range(8)}
     assert len(seqs) > 1
 
 
 def test_melodic_line_combined_cycle_locks_full_bar() -> None:
-    line = MelodicLine(midi_channel=3)
-    # Both cycles at 4 → bar 0 and bar 4 should have identical pitches AND
-    # identical drop patterns (only velocity jitter still varies).
+    line = MelodicLine()
     knobs = {
         "drop_prob": 0.5,
         "pitch_cycle_bars": "4",
         "rhythm_cycle_bars": "4",
-        "intensity": 0.0,  # zeroes velocity contribution; jitter still ±5 ticks
+        "intensity": 0.0,
     }
-    # Compare pitches at the same tick positions across bar 0 vs bar 4.
     e0 = sorted(
         line.generate_bar(_ctx(bar_index=0, seed=0, pattern_knobs=knobs)),
-        key=lambda e: (e.tick, isinstance(e, NoteOff)),
+        key=lambda e: e.tick,
     )
     e4 = sorted(
         line.generate_bar(_ctx(bar_index=4, seed=4, pattern_knobs=knobs)),
-        key=lambda e: (e.tick, isinstance(e, NoteOff)),
+        key=lambda e: e.tick,
     )
-    pitches_0 = [(e.tick, e.note) for e in e0 if isinstance(e, NoteOn)]
-    pitches_4 = [(e.tick, e.note) for e in e4 if isinstance(e, NoteOn)]
+    pitches_0 = [(n.tick, n.pitch) for n in _notes(e0)]
+    pitches_4 = [(n.tick, n.pitch) for n in _notes(e4)]
     assert pitches_0 == pitches_4
 
 
 def test_melodic_line_pitch_cycle_part_locks_across_part() -> None:
-    line = MelodicLine(midi_channel=3)
+    line = MelodicLine()
     knobs = {"drop_prob": 0.0, "pitch_cycle_bars": "part"}
     seqs = {_pitch_seq(line, bar=b, knobs=knobs) for b in [0, 3, 7, 17, 65]}
     assert len(seqs) == 1
@@ -257,27 +230,25 @@ def test_melodic_line_pitch_cycle_part_locks_across_part() -> None:
 
 
 def test_arp_up_climbs_chord_tones() -> None:
-    arp = Arp(midi_channel=4)
+    arp = Arp()
     events = arp.generate_bar(
         _ctx(pattern_knobs={"mode": "up", "quality": "minor", "subdivision": "4"})
     )
-    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
-    # subdivision="4" → 4 arp notes per bar; 1 octave × 3 intervals.
-    assert [e.note for e in note_ons] == [69, 72, 76, 69]
+    notes = sorted(_notes(events), key=lambda n: n.tick)
+    assert [n.pitch for n in notes] == [69, 72, 76, 69]
 
 
 def test_arp_down_descends() -> None:
-    arp = Arp(midi_channel=4)
+    arp = Arp()
     events = arp.generate_bar(
         _ctx(pattern_knobs={"mode": "down", "quality": "minor", "subdivision": "4"})
     )
-    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
-    # down starts at top of ladder (76, 72, 69) and wraps.
-    assert [e.note for e in note_ons] == [76, 72, 69, 76]
+    notes = sorted(_notes(events), key=lambda n: n.tick)
+    assert [n.pitch for n in notes] == [76, 72, 69, 76]
 
 
 def test_arp_octaves_extends_range() -> None:
-    arp = Arp(midi_channel=4)
+    arp = Arp()
     events = arp.generate_bar(
         _ctx(
             pattern_knobs={
@@ -288,92 +259,80 @@ def test_arp_octaves_extends_range() -> None:
             }
         )
     )
-    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
-    # subdivision="2" → 2 notes per bar; 3-rung unison-octave ladder.
-    assert [e.note for e in note_ons] == [69, 81]
+    notes = sorted(_notes(events), key=lambda n: n.tick)
+    assert [n.pitch for n in notes] == [69, 81]
 
 
 def test_arp_random_stays_within_ladder() -> None:
-    arp = Arp(midi_channel=4)
+    arp = Arp()
     events = arp.generate_bar(
         _ctx(pattern_knobs={"mode": "random", "quality": "minor", "subdivision": "16"})
     )
     ladder = {69, 72, 76}
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    assert all(e.note in ladder for e in note_ons)
+    assert all(n.pitch in ladder for n in _notes(events))
 
 
 def test_arp_walk_takes_steps_of_one() -> None:
-    arp = Arp(midi_channel=4)
+    arp = Arp()
     events = arp.generate_bar(
         _ctx(pattern_knobs={"mode": "walk", "quality": "minor", "subdivision": "8"})
     )
     ladder = [69, 72, 76]
-    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
-    # Each consecutive walk note should be one ladder index away
-    # (or clamped at the boundary).
-    indices = [ladder.index(e.note) for e in note_ons]
+    notes = sorted(_notes(events), key=lambda n: n.tick)
+    indices = [ladder.index(n.pitch) for n in notes]
     for prev, curr in zip(indices, indices[1:], strict=False):
         assert abs(prev - curr) <= 1
 
 
 def test_arp_subdivision_4_produces_4_arp_notes_per_bar() -> None:
-    arp = Arp(midi_channel=4)
+    arp = Arp()
     events = arp.generate_bar(_ctx(pattern_knobs={"mode": "up", "subdivision": "4"}))
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    assert len(note_ons) == 4
+    assert len(_notes(events)) == 4
 
 
 def test_arp_subdivision_16_produces_16_arp_notes() -> None:
-    arp = Arp(midi_channel=4)
+    arp = Arp()
     events = arp.generate_bar(_ctx(pattern_knobs={"mode": "up", "subdivision": "16"}))
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    assert len(note_ons) == 16
+    assert len(_notes(events)) == 16
 
 
 def test_arp_subdivision_8t_produces_triplet_grid() -> None:
-    arp = Arp(midi_channel=4)
+    arp = Arp()
     events = arp.generate_bar(_ctx(pattern_knobs={"mode": "up", "subdivision": "8t"}))
-    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
-    # 8t at PPQ=480 → spacing 160 ticks → 12 positions per 1920-tick bar.
-    assert len(note_ons) == 12
-    assert [e.tick for e in note_ons[:4]] == [0, 160, 320, 480]
+    notes = sorted(_notes(events), key=lambda n: n.tick)
+    assert len(notes) == 12
+    assert [n.tick for n in notes[:4]] == [0, 160, 320, 480]
 
 
 def test_arp_subdivision_16t_produces_24_notes() -> None:
-    arp = Arp(midi_channel=4)
+    arp = Arp()
     events = arp.generate_bar(_ctx(pattern_knobs={"mode": "up", "subdivision": "16t"}))
-    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
-    # 16t spacing 80 ticks → 24 positions per bar.
-    assert len(note_ons) == 24
+    assert len(_notes(events)) == 24
 
 
 def test_arp_gate_controls_duration() -> None:
-    arp = Arp(midi_channel=4)
+    arp = Arp()
     events = arp.generate_bar(_ctx(pattern_knobs={"mode": "up", "subdivision": "4", "gate": 0.25}))
-    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
-    note_offs = sorted((e for e in events if isinstance(e, NoteOff)), key=lambda e: e.tick)
-    # quarter-note subdivision = 480 ticks; gate 0.25 → duration = 120.
-    for on, off in zip(note_ons, note_offs, strict=True):
-        assert off.tick - on.tick == 120
+    notes = sorted(_notes(events), key=lambda n: n.tick)
+    for n in notes:
+        assert n.duration_ticks == 120
 
 
 def test_arp_unknown_mode_raises() -> None:
-    arp = Arp(midi_channel=4)
+    arp = Arp()
     with pytest.raises(ValueError, match="unknown mode"):
         arp.generate_bar(_ctx(pattern_knobs={"mode": "bogus", "subdivision": "4"}))
 
 
 def test_arp_unknown_subdivision_raises() -> None:
-    arp = Arp(midi_channel=4)
+    arp = Arp()
     with pytest.raises(ValueError, match="unknown subdivision"):
         arp.generate_bar(_ctx(pattern_knobs={"mode": "up", "subdivision": "bogus"}))
 
 
 def test_arp_chord_root_semitones_transposes() -> None:
-    arp = Arp(midi_channel=4)
+    arp = Arp()
     ctx = _ctx(pattern_knobs={"mode": "up", "quality": "unison", "subdivision": "4"})
     ctx.chord_root_semitones = 5
     events = arp.generate_bar(ctx)
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    assert all(e.note == 69 + 5 for e in note_ons)
+    assert all(n.pitch == 69 + 5 for n in _notes(events))

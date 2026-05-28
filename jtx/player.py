@@ -106,20 +106,24 @@ def instantiate_algorithm(algorithm_name: str, voice_slot: VoiceSlot) -> Algorit
         return DrumPattern(piece=voice_slot.name)
     if algorithm_name == "drum_one_shot":
         return DrumOneShot()
+    if algorithm_name == "sub_drone":
+        return SubDrone()
+    if algorithm_name == "melodic_line":
+        return MelodicLine()
+    if algorithm_name == "motif_phrase":
+        return MotifPhrase()
+    if algorithm_name == "arp":
+        return Arp()
+    if algorithm_name == "sustained_chord":
+        return SustainedChord()
+    if algorithm_name == "chord_stab":
+        return ChordStab()
+    if algorithm_name == "root_pulse":
+        return RootPulse()
+    # Algorithms still pinned to their MIDI channel — these will lose
+    # the arg in their dedicated refactors below.
     if algorithm_name == "acid_bass":
         return AcidBass(midi_channel=ch)
-    if algorithm_name == "sub_drone":
-        return SubDrone(midi_channel=ch)
-    if algorithm_name == "melodic_line":
-        return MelodicLine(midi_channel=ch)
-    if algorithm_name == "motif_phrase":
-        return MotifPhrase(midi_channel=ch)
-    if algorithm_name == "arp":
-        return Arp(midi_channel=ch)
-    if algorithm_name == "sustained_chord":
-        return SustainedChord(midi_channel=ch)
-    if algorithm_name == "chord_stab":
-        return ChordStab(midi_channel=ch)
     if algorithm_name == "cc_lfo":
         return CCLFO(midi_channel=ch)
     if algorithm_name == "cc_envelope":
@@ -132,8 +136,6 @@ def instantiate_algorithm(algorithm_name: str, voice_slot: VoiceSlot) -> Algorit
         return ReeseBass(midi_channel=ch)
     if algorithm_name == "voice_follower":
         return VoiceFollower(midi_channel=ch)
-    if algorithm_name == "root_pulse":
-        return RootPulse(midi_channel=ch)
     raise ValueError(f"unknown algorithm: {algorithm_name!r}")
 
 

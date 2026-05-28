@@ -43,7 +43,7 @@ from jtx.algorithms._rhythm_templates import RhythmTemplate, min_position_spacin
 from jtx.algorithms._theory import note_to_midi, scale_intervals
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
-from jtx.engine.events import Event, NoteOff, NoteOn
+from jtx.model.events import AbstractEvent, Note
 
 # (tick, scale_degree, base_velocity) — the internal pipeline note shape.
 _Note = tuple[int, int, int]
@@ -54,10 +54,10 @@ class MotifPhrase(Algorithm):
 
     name: ClassVar[str] = "motif_phrase"
 
-    def __init__(self, *, midi_channel: int) -> None:
-        self.midi_channel = midi_channel
+    def __init__(self) -> None:
+        pass
 
-    def generate_bar(self, ctx: BarContext) -> list[Event]:
+    def generate_bar(self, ctx: BarContext) -> list[AbstractEvent]:
         knobs = ctx.pattern_knobs
         bar_rng = ctx.rng
 
@@ -185,13 +185,14 @@ class MotifPhrase(Algorithm):
         spacing = min_position_spacing(template, ctx.ppq)
         duration = max(1, int(spacing * gate * template.duration_mult))
 
-        events: list[Event] = []
+        events: list[AbstractEvent] = []
         for tick, deg, vel_base in bar_pre:
             pitch = tonic_midi + _degree_to_semitones(deg, scale)
             pitch = max(0, min(127, pitch))
             vel = max(1, min(127, int(vel_base * intensity) + bar_rng.randint(-5, 5)))
-            events.append(NoteOn(tick=tick, channel=self.midi_channel, note=pitch, velocity=vel))
-            events.append(NoteOff(tick=tick + duration, channel=self.midi_channel, note=pitch))
+            events.append(
+                Note(pitch=pitch, velocity=vel, duration_ticks=duration, tick=tick)
+            )
         events.sort(key=lambda e: e.tick)
         return events
 

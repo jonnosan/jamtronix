@@ -38,22 +38,27 @@ from jtx.algorithms._cycle import parse_cycle_bars
 from jtx.algorithms._theory import note_to_midi
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
-from jtx.engine.events import ControlChange, Event, NoteOff, NoteOn
+from jtx.model.events import AbstractEvent, Note, Param
 from jtx.model.parameter_target import CCTarget, ParameterTarget
 
 
 class SubDrone(Algorithm):
-    """Long-gated root/fifth sub-bass with optional kick-locked CC74."""
+    """Long-gated root/fifth sub-bass with optional kick-locked CC74.
+
+    MIDI-naive: emits :class:`Note` for the held bass tone and
+    :class:`Param` events tagged ``"cutoff"`` for the per-beat
+    envelope.
+    """
 
     name: ClassVar[str] = "sub_drone"
     DEFAULT_PARAM_MAP: ClassVar[dict[str, ParameterTarget]] = {
         "cutoff": CCTarget(74),
     }
 
-    def __init__(self, *, midi_channel: int) -> None:
-        self.midi_channel = midi_channel
+    def __init__(self) -> None:
+        pass
 
-    def generate_bar(self, ctx: BarContext) -> list[Event]:
+    def generate_bar(self, ctx: BarContext) -> list[AbstractEvent]:
         knobs = ctx.pattern_knobs
         jitter_rng = ctx.rng
         fifth_rng = ctx.rng_loop(parse_cycle_bars(knobs.get("fifth_cycle_bars", "off")))
@@ -84,9 +89,13 @@ class SubDrone(Algorithm):
         duration = max(1, int(ctx.ticks_per_bar * gate))
         clamped_pitch = max(0, min(127, pitch))
 
-        events: list[Event] = [
-            NoteOn(tick=0, channel=self.midi_channel, note=clamped_pitch, velocity=vel),
-            NoteOff(tick=duration, channel=self.midi_channel, note=clamped_pitch),
+        events: list[AbstractEvent] = [
+            Note(
+                pitch=clamped_pitch,
+                velocity=vel,
+                duration_ticks=duration,
+                tick=0,
+            )
         ]
 
         if kick_env > 0:
@@ -100,13 +109,12 @@ class SubDrone(Algorithm):
                 for i in range(events_per_beat):
                     frac = i / max(1, events_per_beat - 1)
                     value = int(round(low + (high - low) * frac))
+                    cc_value = max(0, min(127, value))
                     events.append(
-                        ControlChange(
+                        Param(
+                            name="cutoff",
+                            value=cc_value / 127.0,
                             tick=beat_tick + i * cc_step,
-                            channel=self.midi_channel,
-                            cc=74,
-                            value=max(0, min(127, value)),
-                            function="cutoff",
                         )
                     )
 

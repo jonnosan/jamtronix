@@ -1,4 +1,9 @@
-"""Tests for the sub_drone algorithm."""
+"""Tests for the sub_drone algorithm.
+
+Schema v3: emits :class:`Note` for the held bass tone and
+:class:`Param` events (function ``cutoff``, value in [0, 1]) for the
+kick-env CC74 envelope.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +11,7 @@ import random
 
 from jtx.algorithms import SubDrone
 from jtx.engine.context import BarContext
-from jtx.engine.events import ControlChange, NoteOff, NoteOn
+from jtx.model.events import Note, Param
 from jtx.model.song import Key
 
 
@@ -23,120 +28,114 @@ def _ctx(*, pattern_knobs: dict[str, object] | None = None, bar_index: int = 0) 
     )
 
 
+def _notes(events) -> list[Note]:
+    return [e for e in events if isinstance(e, Note)]
+
+
+def _cutoff(events) -> list[Param]:
+    return [e for e in events if isinstance(e, Param) and e.name == "cutoff"]
+
+
 def test_sub_drone_emits_one_note_per_bar() -> None:
-    drone = SubDrone(midi_channel=1)
+    drone = SubDrone()
     events = drone.generate_bar(_ctx())
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    note_offs = [e for e in events if isinstance(e, NoteOff)]
-    assert len(note_ons) == 1
-    assert len(note_offs) == 1
+    assert len(_notes(events)) == 1
 
 
 def test_sub_drone_emits_at_register_1_by_default() -> None:
-    drone = SubDrone(midi_channel=1)
+    drone = SubDrone()
     events = drone.generate_bar(_ctx())
-    note_on = next(e for e in events if isinstance(e, NoteOn))
-    # A1 = MIDI 33.
-    assert note_on.note == 33
+    assert _notes(events)[0].pitch == 33  # A1
 
 
 def test_sub_drone_octave_knob_shifts_register() -> None:
-    drone = SubDrone(midi_channel=1)
+    drone = SubDrone()
     events = drone.generate_bar(_ctx(pattern_knobs={"octave": 1}))
-    note_on = next(e for e in events if isinstance(e, NoteOn))
-    # A2 = 45.
-    assert note_on.note == 45
+    assert _notes(events)[0].pitch == 45  # A2
 
 
 def test_sub_drone_cell_pattern_root_first() -> None:
-    drone = SubDrone(midi_channel=1)
-    # bars_per_chord=2 → bars 0,1 = root; bars 2,3 = fifth.
-    bar0 = drone.generate_bar(_ctx(pattern_knobs={"fifth_prob": 0.0}, bar_index=0))
-    bar1 = drone.generate_bar(_ctx(pattern_knobs={"fifth_prob": 0.0}, bar_index=1))
-    bar2 = drone.generate_bar(_ctx(pattern_knobs={"fifth_prob": 0.0}, bar_index=2))
-    bar3 = drone.generate_bar(_ctx(pattern_knobs={"fifth_prob": 0.0}, bar_index=3))
-
-    n0 = next(e for e in bar0 if isinstance(e, NoteOn))
-    n1 = next(e for e in bar1 if isinstance(e, NoteOn))
-    n2 = next(e for e in bar2 if isinstance(e, NoteOn))
-    n3 = next(e for e in bar3 if isinstance(e, NoteOn))
-
-    # Root (A1=33) bars 0/1, fifth (E2=40) bars 2/3.
-    assert n0.note == n1.note == 33
-    assert n2.note == n3.note == 40
+    drone = SubDrone()
+    pitches = [
+        _notes(drone.generate_bar(_ctx(pattern_knobs={"fifth_prob": 0.0}, bar_index=b)))[0].pitch
+        for b in range(4)
+    ]
+    assert pitches == [33, 33, 40, 40]
 
 
 def test_sub_drone_bars_per_chord_one_alternates_every_bar() -> None:
-    drone = SubDrone(midi_channel=1)
-    pitches: list[int] = []
-    for bar_idx in range(4):
-        events = drone.generate_bar(
-            _ctx(pattern_knobs={"fifth_prob": 0.0, "bars_per_chord": 1}, bar_index=bar_idx)
-        )
-        pitches.append(next(e.note for e in events if isinstance(e, NoteOn)))
+    drone = SubDrone()
+    pitches = [
+        _notes(
+            drone.generate_bar(
+                _ctx(pattern_knobs={"fifth_prob": 0.0, "bars_per_chord": 1}, bar_index=b)
+            )
+        )[0].pitch
+        for b in range(4)
+    ]
     assert pitches == [33, 40, 33, 40]
 
 
 def test_sub_drone_fifth_prob_one_always_emits_fifth() -> None:
-    drone = SubDrone(midi_channel=1)
+    drone = SubDrone()
     events = drone.generate_bar(_ctx(pattern_knobs={"fifth_prob": 1.0}, bar_index=0))
-    note_on = next(e for e in events if isinstance(e, NoteOn))
-    assert note_on.note == 40  # E2 is the fifth above A1
+    assert _notes(events)[0].pitch == 40
 
 
 def test_sub_drone_chord_root_semitones_transposes() -> None:
-    drone = SubDrone(midi_channel=1)
+    drone = SubDrone()
     ctx = _ctx(pattern_knobs={"fifth_prob": 0.0}, bar_index=0)
     ctx.chord_root_semitones = 5  # IV in A minor → D1 = 38.
     events = drone.generate_bar(ctx)
-    note_on = next(e for e in events if isinstance(e, NoteOn))
-    assert note_on.note == 38
+    assert _notes(events)[0].pitch == 38
 
 
-def test_sub_drone_gate_controls_note_off_offset() -> None:
-    drone = SubDrone(midi_channel=1)
+def test_sub_drone_gate_controls_duration() -> None:
+    drone = SubDrone()
     events = drone.generate_bar(_ctx(pattern_knobs={"gate": 0.5}))
-    note_off = next(e for e in events if isinstance(e, NoteOff))
-    assert note_off.tick == 1920 // 2
+    note = _notes(events)[0]
+    assert note.duration_ticks == 1920 // 2
 
 
-def test_sub_drone_kick_env_zero_emits_no_cc() -> None:
-    drone = SubDrone(midi_channel=1)
+def test_sub_drone_kick_env_zero_emits_no_cutoff_param() -> None:
+    drone = SubDrone()
     events = drone.generate_bar(_ctx(pattern_knobs={"kick_env": 0.0}))
-    assert not any(isinstance(e, ControlChange) for e in events)
+    assert _cutoff(events) == []
 
 
-def test_sub_drone_kick_env_emits_cc74_envelope_per_beat() -> None:
-    drone = SubDrone(midi_channel=1)
+def test_sub_drone_kick_env_emits_per_beat_cutoff_envelope() -> None:
+    drone = SubDrone()
     events = drone.generate_bar(_ctx(pattern_knobs={"kick_env": 1.0}))
-    ccs = [e for e in events if isinstance(e, ControlChange) and e.cc == 74]
-    # 4 beats per bar × 4 events per beat = 16 CC74 events.
-    assert len(ccs) == 16
-    # All values inside 0..127.
-    assert all(0 <= c.value <= 127 for c in ccs)
+    cutoffs = _cutoff(events)
+    # 4 beats × 4 samples = 16.
+    assert len(cutoffs) == 16
+    # All values are normalised [0, 1].
+    assert all(0.0 <= p.value <= 1.0 for p in cutoffs)
 
 
 def test_sub_drone_kick_env_starts_low_ramps_high_each_beat() -> None:
-    drone = SubDrone(midi_channel=1)
+    drone = SubDrone()
     events = drone.generate_bar(_ctx(pattern_knobs={"kick_env": 1.0}))
-    ccs = sorted(
-        (e for e in events if isinstance(e, ControlChange) and e.cc == 74),
-        key=lambda e: e.tick,
-    )
-    # First sample of each beat should be the "low" floor (20),
-    # last sample should approach 120.
+    cutoffs = sorted(_cutoff(events), key=lambda p: p.tick)
     beats_per_bar = 4
     samples_per_beat = 4
     for beat in range(beats_per_bar):
-        beat_first = ccs[beat * samples_per_beat]
-        beat_last = ccs[beat * samples_per_beat + samples_per_beat - 1]
-        assert beat_first.value == 20
-        assert beat_last.value == 120
+        first = cutoffs[beat * samples_per_beat]
+        last = cutoffs[beat * samples_per_beat + samples_per_beat - 1]
+        # Floor = 20/127, ceiling = 120/127.
+        assert first.value == pytest_approx(20 / 127.0)
+        assert last.value == pytest_approx(120 / 127.0)
 
 
 def test_sub_drone_velocity_around_base_vel() -> None:
-    drone = SubDrone(midi_channel=1)
+    drone = SubDrone()
     events = drone.generate_bar(_ctx(pattern_knobs={"base_vel": 80}))
-    note_on = next(e for e in events if isinstance(e, NoteOn))
-    # ±3 random jitter from the seeded RNG.
-    assert 77 <= note_on.velocity <= 83
+    note = _notes(events)[0]
+    assert 77 <= note.velocity <= 83
+
+
+def pytest_approx(value: float, tol: float = 1e-6) -> object:
+    """Tiny inline approx — used inline to keep this test file free of fixtures."""
+    import pytest as _pytest
+
+    return _pytest.approx(value, abs=tol)

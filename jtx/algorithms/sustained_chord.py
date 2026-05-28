@@ -7,6 +7,9 @@ Both pick the chord shape from a single ``quality`` knob (minor,
 major, sus4, maj7, …) rather than a free-form intervals list. Pitches
 stack on the current ``ctx.chord_root_semitones`` so the chord follows
 the macro progression bar-to-bar.
+
+MIDI-naive: both emit :class:`Note` events; the voicing stage adds
+the channel from the voice slot.
 """
 
 from __future__ import annotations
@@ -19,7 +22,7 @@ from jtx.algorithms._steps import step_ticks, steps_per_bar
 from jtx.algorithms._theory import note_to_midi
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
-from jtx.engine.events import Event, NoteOff, NoteOn
+from jtx.model.events import AbstractEvent, Note
 
 
 class SustainedChord(Algorithm):
@@ -27,10 +30,10 @@ class SustainedChord(Algorithm):
 
     name: ClassVar[str] = "sustained_chord"
 
-    def __init__(self, *, midi_channel: int) -> None:
-        self.midi_channel = midi_channel
+    def __init__(self) -> None:
+        pass
 
-    def generate_bar(self, ctx: BarContext) -> list[Event]:
+    def generate_bar(self, ctx: BarContext) -> list[AbstractEvent]:
         knobs = ctx.pattern_knobs
         rng = ctx.rng
 
@@ -51,7 +54,7 @@ class SustainedChord(Algorithm):
         if drift_prob > 0 and intervals and rng.random() < drift_prob:
             drift_index = rng.randrange(len(intervals))
 
-        events: list[Event] = []
+        events: list[AbstractEvent] = []
         for idx, interval in enumerate(intervals):
             pitch = root_midi + interval
             if idx == drift_index:
@@ -59,8 +62,9 @@ class SustainedChord(Algorithm):
             pitch = max(0, min(127, pitch))
             jitter = rng.randint(-vel_spread, vel_spread) if vel_spread else 0
             vel = max(1, min(127, base_vel + jitter))
-            events.append(NoteOn(tick=0, channel=self.midi_channel, note=pitch, velocity=vel))
-            events.append(NoteOff(tick=duration, channel=self.midi_channel, note=pitch))
+            events.append(
+                Note(pitch=pitch, velocity=vel, duration_ticks=duration, tick=0)
+            )
         return events
 
 
@@ -69,10 +73,10 @@ class ChordStab(Algorithm):
 
     name: ClassVar[str] = "chord_stab"
 
-    def __init__(self, *, midi_channel: int) -> None:
-        self.midi_channel = midi_channel
+    def __init__(self) -> None:
+        pass
 
-    def generate_bar(self, ctx: BarContext) -> list[Event]:
+    def generate_bar(self, ctx: BarContext) -> list[AbstractEvent]:
         knobs = ctx.pattern_knobs
         rng = ctx.rng
 
@@ -95,7 +99,7 @@ class ChordStab(Algorithm):
         root_midi = note_to_midi(ctx.key.tonic, register_octave) + ctx.chord_root_semitones
 
         pattern = euclid(pulses, total_steps, offset)
-        events: list[Event] = []
+        events: list[AbstractEvent] = []
         for step_idx, fires in enumerate(pattern):
             if not fires:
                 continue
@@ -107,7 +111,6 @@ class ChordStab(Algorithm):
                 jitter = rng.randint(-vel_spread, vel_spread) if vel_spread else 0
                 vel = max(1, min(127, base_vel + jitter))
                 events.append(
-                    NoteOn(tick=tick, channel=self.midi_channel, note=pitch, velocity=vel)
+                    Note(pitch=pitch, velocity=vel, duration_ticks=duration, tick=tick)
                 )
-                events.append(NoteOff(tick=tick + duration, channel=self.midi_channel, note=pitch))
         return events
