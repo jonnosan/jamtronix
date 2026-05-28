@@ -179,6 +179,96 @@ _DRUM_PATTERN = (
     ),
 )
 
+_DRUM_KIT = (
+    KnobSpec(
+        "style",
+        "choice",
+        default="techno",
+        choices=("acid", "techno", "psy"),
+        description="Preset family — biases kick/snare/hat velocities + ghost-note flavour.",
+    ),
+    KnobSpec(
+        "kit_focus",
+        "choice",
+        default="full",
+        choices=(
+            "full",
+            "minimal",
+            "kick_only",
+            "no_kick",
+            "percussion",
+            "build",
+            "wind_down",
+        ),
+        description=(
+            "Which pieces play. 'build' ramps snare density with part_progress; "
+            "'wind_down' fades to half-time kick; 'kick_only' is the psy "
+            "drop's moment-of-silence move."
+        ),
+    ),
+    KnobSpec(
+        "density",
+        "float",
+        default=0.5,
+        minimum=0.0,
+        maximum=1.0,
+        description="Overall density multiplier on top of part intensity.",
+    ),
+    KnobSpec(
+        "variation",
+        "float",
+        default=0.3,
+        minimum=0.0,
+        maximum=1.0,
+        description="Per-bar pseudo-random drift amplitude (kept seed-deterministic).",
+    ),
+    KnobSpec(
+        "kick_pattern",
+        "choice",
+        default="auto",
+        choices=("auto", "four_floor", "half_time", "break"),
+        description=(
+            "Force a kick pattern, or 'auto' to derive from intensity "
+            "(four_floor when high, half_time when low)."
+        ),
+    ),
+    KnobSpec(
+        "snare_subdiv",
+        "choice",
+        default="auto",
+        choices=("auto", "16", "32", "8t"),
+        description=(
+            "Snare grid. 'auto' ramps 8th → 16th → 32nd across intensity² "
+            "(the machine-gun snare path)."
+        ),
+    ),
+    KnobSpec(
+        "hat_pulses",
+        "int",
+        default=-1,
+        minimum=-1,
+        maximum=16,
+        description="Closed-hat pulses across the bar; -1 = auto-derive from intensity.",
+    ),
+    KnobSpec(
+        "clap_on",
+        "choice",
+        default="intensity_gate",
+        choices=("never", "2_and_4", "intensity_gate"),
+        description=(
+            "When the clap fires. 'intensity_gate' = backbeat above 0.7 intensity."
+        ),
+    ),
+    KnobSpec(
+        "perc_complexity",
+        "float",
+        default=0.4,
+        minimum=0.0,
+        maximum=1.0,
+        description="How busy percussion + tom + clave + cowbell layers run.",
+    ),
+)
+
 _DRUM_ONE_SHOT = (
     KnobSpec(
         "pulses",
@@ -1362,6 +1452,7 @@ _STEP_CC = (
 
 
 ALGORITHMS: dict[str, AlgorithmMeta] = {
+    "drum_kit": AlgorithmMeta("drum_kit", ("drum_kit",), _DRUM_KIT),
     "drum_pattern": AlgorithmMeta("drum_pattern", ("drum",), _DRUM_PATTERN),
     "drum_one_shot": AlgorithmMeta("drum_one_shot", ("drum",), _DRUM_ONE_SHOT),
     "acid_bass": AlgorithmMeta("acid_bass", ("mono",), _ACID_BASS),
