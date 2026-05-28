@@ -9,6 +9,21 @@
   "osc_port": 11000,
   "voices": [
     {
+      "name": "kit",
+      "type": "drum_kit",
+      "default_role": "drum_kit",
+      "midi_channel": 9,
+      "kit_map": {
+        "kick":   {"note": 36, "channel": 9},
+        "snare":  {"note": 38, "channel": 10},
+        "chh":    {"note": 42, "channel": 10},
+        "ohh":    {"note": 46, "channel": 10},
+        "shaker": {"note": 82, "channel": 11},
+        "tom":    {"note": 45, "channel": 11},
+        "perc":   {"note": 64, "channel": 11}
+      }
+    },
+    {
       "name": "lead",
       "type": "mono",
       "default_role": "lead",
@@ -20,18 +35,18 @@
         "cutoff": {"kind": "mpe_timbre"}
       }
     },
-    {"name": "filter",     "type": "modulator", "default_role": "modulator", "midi_channel": 8},
-    {"name": "kick",       "type": "drum",      "default_role": "drum",      "midi_channel": 9,  "kit_map": {"kick": 36}},
-    {"name": "snare",      "type": "drum",      "default_role": "drum",      "midi_channel": 10, "kit_map": {"snare": 38}},
-    {"name": "chh",        "type": "drum",      "default_role": "drum",      "midi_channel": 10, "kit_map": {"chh": 42}},
-    {"name": "ohh",        "type": "drum",      "default_role": "drum",      "midi_channel": 10, "kit_map": {"ohh": 46}},
-    {"name": "shaker",     "type": "drum",      "default_role": "drum",      "midi_channel": 11, "kit_map": {"shaker": 82}},
-    {"name": "tom",        "type": "drum",      "default_role": "drum",      "midi_channel": 11, "kit_map": {"tom": 45}},
-    {"name": "bass",       "type": "mono",      "default_role": "bass",      "midi_channel": 12},
-    {"name": "pluck",      "type": "poly",      "default_role": "stab",      "midi_channel": 13},
-    {"name": "riser",      "type": "mono",      "default_role": "lead",      "midi_channel": 14},
-    {"name": "chord_ref",  "type": "mono",      "default_role": "lead",      "midi_channel": 15},
-    {"name": "root_ref",   "type": "mono",      "default_role": "lead",      "midi_channel": 16}
+    {"name": "filter",    "type": "modulator", "default_role": "modulator", "midi_channel": 8},
+    {"name": "kick",      "type": "drum",      "default_role": "drum",      "midi_channel": 9,  "note": 36},
+    {"name": "snare",     "type": "drum",      "default_role": "drum",      "midi_channel": 10, "note": 38},
+    {"name": "chh",       "type": "drum",      "default_role": "drum",      "midi_channel": 10, "note": 42},
+    {"name": "ohh",       "type": "drum",      "default_role": "drum",      "midi_channel": 10, "note": 46},
+    {"name": "shaker",    "type": "drum",      "default_role": "drum",      "midi_channel": 11, "note": 82},
+    {"name": "tom",       "type": "drum",      "default_role": "drum",      "midi_channel": 11, "note": 45},
+    {"name": "bass",      "type": "mono",      "default_role": "bass",      "midi_channel": 12},
+    {"name": "pluck",     "type": "poly",      "default_role": "stab",      "midi_channel": 13},
+    {"name": "riser",     "type": "mono",      "default_role": "lead",      "midi_channel": 14},
+    {"name": "chord_ref", "type": "mono",      "default_role": "lead",      "midi_channel": 15},
+    {"name": "root_ref",  "type": "mono",      "default_role": "lead",      "midi_channel": 16}
   ],
-  "schema_version": 2
+  "schema_version": 3
 }
