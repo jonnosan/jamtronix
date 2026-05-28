@@ -1443,80 +1443,140 @@ def algorithms_for(voice_type: VoiceType) -> list[AlgorithmMeta]:
     return [meta for meta in ALGORITHMS.values() if voice_type in meta.voice_types]
 
 
-# ---- universal feel-knob schema (mirrors docs/SPEC.md §Feel Knobs) ---------
+# ---- per-voice mix-pass knob schema (schema v3, was "feel") -----------------
+#
+# In schema v3 the bar-internal per-voice feel knobs (humanize / swing /
+# accent / mute_prob / octave_jump …) were retired in favour of the
+# song-wide :data:`GLOBAL_FEEL_KNOBS`. What survives at the per-voice
+# layer are the mix-pass knobs — sidechain, fade envelope, evolution.
+# These live in :attr:`VoiceConfig.mix` / :attr:`VoiceOverride.mix`.
 
-FEEL_KNOBS: tuple[KnobSpec, ...] = (
+MIX_KNOBS: tuple[KnobSpec, ...] = (
     KnobSpec(
-        "humanize",
+        "sidechain_floor",
         "int",
-        default=0,
+        default=60,
         minimum=0,
-        maximum=60,
-        description="±N ticks of micro-timing jitter",
+        maximum=127,
+        description="Velocity floor at full duck",
     ),
     KnobSpec(
-        "vel_jitter",
+        "sidechain_release_beats",
+        "float",
+        default=1.0,
+        minimum=0.05,
+        maximum=4.0,
+        description="Release time of duck in quarter notes",
+    ),
+    KnobSpec(
+        "fade_in_at_bar",
         "int",
         default=0,
         minimum=0,
         maximum=64,
-        description="±N velocity jitter per note-on",
+        description="Bar within part at which fade-in begins",
     ),
     KnobSpec(
-        "gate_jitter",
+        "fade_in_beats",
         "float",
         default=0.0,
         minimum=0.0,
-        maximum=1.0,
-        description="±fraction of duration jitter",
+        maximum=64.0,
+        description="Fade-in ramp duration (quarter notes)",
     ),
     KnobSpec(
-        "swing",
-        "float",
-        default=0.0,
-        minimum=0.0,
-        maximum=1.0,
-        description="Shuffle: 0=straight, 0.5≈classic MPC, 1.0=full 16th-triplet feel",
-    ),
-    KnobSpec(
-        "accent",
+        "fade_out_at_bar",
         "int",
         default=0,
         minimum=0,
-        maximum=40,
-        description="Velocity boost on accented beats",
+        maximum=64,
+        description="Bar within part at which fade-out begins",
     ),
     KnobSpec(
-        "mute_prob",
+        "fade_out_beats",
+        "float",
+        default=0.0,
+        minimum=0.0,
+        maximum=64.0,
+        description="Fade-out ramp duration (quarter notes)",
+    ),
+    KnobSpec(
+        "fade_sustain_level",
+        "float",
+        default=1.0,
+        minimum=0.0,
+        maximum=1.0,
+        description="Sustained velocity multiplier after fade-in",
+    ),
+    KnobSpec(
+        "evolution_start",
+        "float",
+        default=1.0,
+        minimum=0.0,
+        maximum=2.0,
+        description="Velocity multiplier at bar 0 of part",
+    ),
+    KnobSpec(
+        "evolution_end",
+        "float",
+        default=1.0,
+        minimum=0.0,
+        maximum=2.0,
+        description="Velocity multiplier at last bar of part",
+    ),
+)
+
+# Backwards-compat alias for the GUI's old import name. Identical to MIX_KNOBS.
+FEEL_KNOBS: tuple[KnobSpec, ...] = MIX_KNOBS
+
+
+# ---- song-wide feel knob schema (schema v3) ----------------------------------
+#
+# The five global feel knobs live at the song level and are compiled or
+# applied across all voices: Pump (sidechain), Groove (swing/humanize/
+# accent), Drive (velocity boost), Tension (intensity reshape), Wander
+# (mute / octave-jump).
+
+GLOBAL_FEEL_KNOBS: tuple[KnobSpec, ...] = (
+    KnobSpec(
+        "pump",
         "float",
         default=0.0,
         minimum=0.0,
         maximum=1.0,
-        description="Per-bar drop chance",
+        description="Sidechain depth driven by kick triggers",
     ),
     KnobSpec(
-        "evolution",
-        "float",
-        default=0.0,
-        minimum=-1.0,
-        maximum=1.0,
-        description="Linear velocity ramp across the part",
-    ),
-    KnobSpec(
-        "octave_jump",
+        "groove",
         "float",
         default=0.0,
         minimum=0.0,
         maximum=1.0,
-        description="Per-event ±12 chance",
+        description="Swing + humanize + backbeat accent",
     ),
     KnobSpec(
-        "passing_tones",
+        "drive",
         "float",
         default=0.0,
         minimum=0.0,
         maximum=1.0,
-        description="Chromatic neighbour swap chance",
+        description="Velocity boost + drum_kit ghost/roll energy",
+    ),
+    KnobSpec(
+        "tension",
+        "float",
+        default=0.0,
+        minimum=0.0,
+        maximum=1.0,
+        description="Reshape part intensity envelope",
+    ),
+    KnobSpec(
+        "wander",
+        "float",
+        default=0.0,
+        minimum=0.0,
+        maximum=1.0,
+        description="Per-bar mute + per-note octave-jump probability",
     ),
 )
 
@@ -1524,7 +1584,8 @@ FEEL_KNOBS: tuple[KnobSpec, ...] = (
 @dataclass(frozen=True)
 class _LoadedSchemas:
     pattern_by_algo: dict[str, dict[str, KnobSpec]] = field(default_factory=dict)
-    feel: dict[str, KnobSpec] = field(default_factory=dict)
+    mix_knobs: dict[str, KnobSpec] = field(default_factory=dict)
+    global_feel: dict[str, KnobSpec] = field(default_factory=dict)
 
 
 def _build() -> _LoadedSchemas:
@@ -1532,7 +1593,8 @@ def _build() -> _LoadedSchemas:
         pattern_by_algo={
             name: {k.name: k for k in meta.pattern} for name, meta in ALGORITHMS.items()
         },
-        feel={k.name: k for k in FEEL_KNOBS},
+        mix_knobs={k.name: k for k in MIX_KNOBS},
+        global_feel={k.name: k for k in GLOBAL_FEEL_KNOBS},
     )
 
 

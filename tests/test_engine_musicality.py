@@ -40,14 +40,19 @@ def _vels(events: list[Event]) -> list[int]:
 def _mix(
     *,
     voice_events: dict[str, list[Event]],
-    feel_knobs: dict[str, dict[str, object]] | None = None,
+    mix_knobs: dict[str, dict[str, object]] | None = None,
     bar_index: int = 0,
     part_bars: int = 1,
 ) -> dict[str, list[Event]]:
+    slots = {
+        name: VoiceSlot(name=name, type="mono", default_role="bass", midi_channel=1)
+        for name in voice_events
+    }
     return apply_mix_pass(
         voice_events=voice_events,
         prev_voice_events={},
-        feel_knobs_by_voice=feel_knobs or {},
+        mix_knobs_by_voice=mix_knobs or {},
+        voice_slots=slots,
         bar_index=bar_index,
         ticks_per_bar=1920,
         ppq=480,
@@ -64,7 +69,7 @@ def test_evolution_defaults_no_op() -> None:
 def test_evolution_start_scales_first_bar() -> None:
     out = _mix(
         voice_events={"v": _notes((0, 1, 60, 100, 60))},
-        feel_knobs={"v": {"evolution_start": 0.5, "evolution_end": 1.0}},
+        mix_knobs={"v": {"evolution_start": 0.5, "evolution_end": 1.0}},
         bar_index=0,
         part_bars=16,
     )
@@ -74,7 +79,7 @@ def test_evolution_start_scales_first_bar() -> None:
 def test_evolution_end_scales_last_bar() -> None:
     out = _mix(
         voice_events={"v": _notes((0, 1, 60, 100, 60))},
-        feel_knobs={"v": {"evolution_start": 0.5, "evolution_end": 1.0}},
+        mix_knobs={"v": {"evolution_start": 0.5, "evolution_end": 1.0}},
         bar_index=15,
         part_bars=16,
     )
@@ -84,7 +89,7 @@ def test_evolution_end_scales_last_bar() -> None:
 def test_evolution_midpoint_interpolates() -> None:
     out = _mix(
         voice_events={"v": _notes((0, 1, 60, 100, 60))},
-        feel_knobs={"v": {"evolution_start": 0.5, "evolution_end": 1.0}},
+        mix_knobs={"v": {"evolution_start": 0.5, "evolution_end": 1.0}},
         bar_index=7,
         part_bars=15,  # progress 7/14 = 0.5
     )
@@ -95,7 +100,7 @@ def test_evolution_midpoint_interpolates() -> None:
 def test_evolution_can_ramp_down() -> None:
     out = _mix(
         voice_events={"v": _notes((0, 1, 60, 100, 60))},
-        feel_knobs={"v": {"evolution_start": 1.0, "evolution_end": 0.2}},
+        mix_knobs={"v": {"evolution_start": 1.0, "evolution_end": 0.2}},
         bar_index=15,
         part_bars=16,
     )
@@ -304,7 +309,7 @@ def _player_with_voices(*, follow_kick: bool = True, follow_bass: bool = True) -
                 type="drum",
                 default_role="drum",
                 midi_channel=10,
-                kit_map={"kick": 36},
+                note=36,
             ),
             VoiceSlot(name="bass", type="mono", default_role="bass", midi_channel=1),
         ],

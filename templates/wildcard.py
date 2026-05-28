@@ -2,12 +2,10 @@
 
 For when you want a fresh, unpredictable starting point that's not
 locked into any genre. Picks the key, scale, tempo, progression,
-voice algorithms, and every knob from broad ranges. Kick stays
-four-on-the-floor as a grounding anchor; everything else is fair
-game.
-
-Use this when you've heard the curated styles enough and want a
-musical neighbourhood you wouldn't have picked yourself.
+voice algorithms, and every knob from broad ranges. Schema v3: drums
+collapse into one ``kit`` voice (with the drum_kit algorithm); a
+``kit_focus="full"`` ground state with broad density / variation
+ranges.
 """
 
 from __future__ import annotations
@@ -20,6 +18,7 @@ from jtx.model import (
     Part,
     Song,
     VoiceConfig,
+    VoiceOverride,
 )
 
 _TONICS: tuple[str, ...] = (
@@ -66,6 +65,7 @@ _BASS_ALGOS: tuple[str, ...] = ("acid_bass", "sub_drone", "melodic_line")
 _LEAD_ALGOS: tuple[str, ...] = ("arp", "melodic_line", "arp")  # arp weighted
 _POLY_ALGOS: tuple[str, ...] = ("chord_stab", "sustained_chord")
 _MOD_ALGOS: tuple[str, ...] = ("cc_lfo", "cc_envelope")
+_KIT_STYLES: tuple[str, ...] = ("acid", "techno", "psy")
 
 _CHORD_QUALITIES: tuple[str, ...] = (
     "minor",
@@ -90,14 +90,7 @@ _PALETTES: tuple[str, ...] = (
 
 def build(title: str, setup_ref: str) -> Song:
     voices = {
-        "kick": VoiceConfig(
-            # Kick is the constant — strict 4-on-floor.
-            algorithm="drum_pattern",
-            pattern={"style": "four_floor", "velocity": random.randint(110, 122)},
-        ),
-        "snare": _build_snare(),
-        "chh": _build_chh(),
-        "ohh": _build_ohh(),
+        "kit": _build_kit(),
         "acid": _build_bass_voice(),
         "stab": _build_poly_voice(),
         "lead": _build_lead_voice(),
@@ -105,17 +98,49 @@ def build(title: str, setup_ref: str) -> Song:
     }
 
     parts = {
-        "intro": Part(bars=random.choice((8, 16))),
-        "groove": Part(bars=random.choice((16, 32))),
-        "main": Part(bars=random.choice((16, 32))),
-        "break": Part(bars=random.choice((8, 16))),
-        "outro": Part(bars=8),
+        "intro": Part(
+            bars=random.choice((8, 16)),
+            intensity_start=0.2,
+            intensity_end=0.45,
+            voice_overrides={"kit": VoiceOverride(pattern={"kit_focus": "minimal"})},
+        ),
+        "groove": Part(
+            bars=random.choice((16, 32)),
+            intensity_start=0.45,
+            intensity_end=0.8,
+            voice_overrides={"kit": VoiceOverride(pattern={"kit_focus": "build"})},
+        ),
+        "main": Part(
+            bars=random.choice((16, 32)),
+            intensity_start=0.85,
+            intensity_end=0.95,
+        ),
+        "break": Part(
+            bars=random.choice((8, 16)),
+            intensity_start=0.5,
+            intensity_end=0.3,
+            voice_overrides={"kit": VoiceOverride(pattern={"kit_focus": "percussion"})},
+        ),
+        "outro": Part(
+            bars=8,
+            intensity_start=0.6,
+            intensity_end=0.1,
+            voice_overrides={"kit": VoiceOverride(pattern={"kit_focus": "wind_down"})},
+        ),
     }
 
     base = random.choice(_PROGRESSIONS)
     rotation = random.randrange(len(base))
     degrees = list(base[rotation:]) + list(base[:rotation])
     bars_per_chord = random.choice((2, 4, 4, 4, 8, 8, 16))
+
+    feel = {
+        "pump": round(random.uniform(0.1, 0.7), 2),
+        "groove": round(random.uniform(0.0, 0.4), 2),
+        "drive": round(random.uniform(0.2, 0.8), 2),
+        "tension": round(random.uniform(0.3, 0.85), 2),
+        "wander": round(random.uniform(0.05, 0.25), 2),
+    }
 
     return Song(
         title=title,
@@ -130,55 +155,22 @@ def build(title: str, setup_ref: str) -> Song:
         voices=voices,
         parts=parts,
         arrangement=["intro", "groove", "main", "break", "main", "outro"],
+        feel=feel,
     )
 
 
 # ---- voice builders --------------------------------------------------------
 
 
-def _build_snare() -> VoiceConfig:
+def _build_kit() -> VoiceConfig:
     return VoiceConfig(
-        algorithm="drum_one_shot",
+        algorithm="drum_kit",
         pattern={
-            "pulses": random.choice((1, 2, 2, 2, 4)),
-            "offset": random.choice((2, 4, 4, 4, 6, 8)),
-            "velocity": random.randint(85, 110),
-            "flam_count": random.choice((0, 0, 0, 1, 2)),
-            "flam_spacing_ticks": random.choice((8, 12, 18)),
-        },
-        feel={"humanize": random.randint(0, 10)},
-    )
-
-
-def _build_chh() -> VoiceConfig:
-    return VoiceConfig(
-        algorithm="drum_pattern",
-        pattern={
-            "style": "euclid",
-            "pulses": random.choice((4, 6, 8, 8, 10, 12, 14)),
-            "offset": random.choice((0, 0, 1, 2)),
-            "velocity": random.randint(72, 100),
-            "vel_curve": random.choice(
-                ("flat", "pulse", "ramp_up", "ramp_down", "arc", "valley", "drift")
-            ),
-            "vel_curve_depth": round(random.uniform(0.1, 0.4), 2),
-            "polyrhythm": random.choice((0, 0, 0, 8, 12)),
-            "polyrhythm_subdiv": random.choice(("16", "8t", "16t")),
-            "roll_pos": random.choice(("none", "none", "none", "last_bar_of_8", "last_bar_of_4")),
-            "roll_subdiv": random.choice(("16t", "16t", "8t")),
-            "roll_depth": round(random.uniform(0.4, 0.85), 2),
-        },
-        feel={"swing": round(random.uniform(0.0, 0.55), 2)},
-    )
-
-
-def _build_ohh() -> VoiceConfig:
-    return VoiceConfig(
-        algorithm="drum_one_shot",
-        pattern={
-            "pulses": random.choice((1, 2, 2, 4)),
-            "offset": random.choice((2, 4, 6, 10, 14)),
-            "velocity": random.randint(70, 92),
+            "style": random.choice(_KIT_STYLES),
+            "kit_focus": "full",
+            "density": round(random.uniform(0.4, 0.85), 2),
+            "variation": round(random.uniform(0.15, 0.5), 2),
+            "perc_complexity": round(random.uniform(0.2, 0.65), 2),
         },
     )
 
@@ -239,7 +231,6 @@ def _build_poly_voice() -> VoiceConfig:
                 "gate": round(random.uniform(0.15, 0.6), 2),
                 "drop_prob": round(random.uniform(0.0, 0.4), 2),
             },
-            feel={"swing": round(random.uniform(0.0, 0.35), 2)},
         )
     return VoiceConfig(
         algorithm="sustained_chord",

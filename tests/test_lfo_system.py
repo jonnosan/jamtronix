@@ -26,7 +26,8 @@ def _bar_ctx() -> BarContext:
         ppq=480,
         key=Key(tonic="A", scale="minor"),
         pattern_knobs={},
-        feel_knobs={},
+        mix_knobs={},
+        song_feel={},
         rng=random.Random(0),
     )
 
@@ -39,9 +40,20 @@ def test_parse_target_pattern() -> None:
     assert p.kind == "pattern" and p.voice == "acid" and p.knob == "slide_prob"
 
 
-def test_parse_target_feel() -> None:
-    p = parse_target("feel:kick:swing")
-    assert p.kind == "feel" and p.voice == "kick" and p.knob == "swing"
+def test_parse_target_mix() -> None:
+    p = parse_target("mix:kick:sidechain_floor")
+    assert p.kind == "mix" and p.voice == "kick" and p.knob == "sidechain_floor"
+
+
+def test_parse_target_global_feel() -> None:
+    p = parse_target("global_feel:pump")
+    assert p.kind == "global_feel" and p.voice is None and p.knob == "pump"
+
+
+def test_parse_target_legacy_feel_rejected() -> None:
+    """``feel:`` targets are gone in schema v3."""
+    with pytest.raises(ValueError, match="global_feel"):
+        parse_target("feel:kick:swing")
 
 
 def test_parse_target_midi() -> None:
@@ -126,20 +138,44 @@ def test_apply_lfos_pattern_target_writes_knob() -> None:
     assert ctx.pattern_knobs.get("slide_prob") == pytest.approx(1.0, abs=1e-6)
 
 
-def test_apply_lfos_feel_target_writes_feel_knob() -> None:
+def test_apply_lfos_mix_target_writes_mix_knob() -> None:
     lfos = [
         LFO(
             name="x",
             shape="square",
             period_bars=1.0,
             depth=1.0,
-            applications=[LFOApplication(part="drop", target="feel:kick:swing")],
+            applications=[LFOApplication(part="drop", target="mix:kick:sidechain_floor")],
         )
     ]
     ctx = _bar_ctx()
     voice_contexts = {"kick": ctx}
     apply_lfos_to_bar(lfos, "drop", voice_contexts, 0, 1920, random.Random(0))
-    assert ctx.feel_knobs.get("swing") == 1.0
+    assert ctx.mix_knobs.get("sidechain_floor") == 1.0
+
+
+def test_apply_lfos_global_feel_target_writes_song_feel() -> None:
+    """``global_feel:`` LFO target broadcasts to every voice's song_feel."""
+    lfos = [
+        LFO(
+            name="x",
+            shape="square",
+            period_bars=1.0,
+            depth=1.0,
+            applications=[LFOApplication(part="drop", target="global_feel:pump")],
+        )
+    ]
+    # Two voices share the same song_feel dict (as SongPlayer arranges).
+    shared = {"pump": 0.0}
+    ctx_a = _bar_ctx()
+    ctx_a.song_feel = shared
+    ctx_b = _bar_ctx()
+    ctx_b.song_feel = shared
+    apply_lfos_to_bar(
+        lfos, "drop", {"a": ctx_a, "b": ctx_b}, 0, 1920, random.Random(0)
+    )
+    assert ctx_a.song_feel["pump"] == 1.0
+    assert ctx_b.song_feel["pump"] == 1.0  # broadcast through shared dict
 
 
 def test_apply_lfos_midi_target_emits_control_change() -> None:

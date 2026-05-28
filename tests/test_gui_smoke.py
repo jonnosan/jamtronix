@@ -426,7 +426,10 @@ def test_voice_slot_cc_map_v1_migrates_to_parameter_map(tmp_path: Path) -> None:
     path = tmp_path / "legacy.jtx-setup"
     path.write_text(json.dumps(v1_setup), encoding="utf-8")
     loaded = load_setup(path)
-    assert loaded.schema_version == 2
+    # Migration normalises to current SCHEMA_VERSION.
+    from jtx.model.types import SCHEMA_VERSION
+
+    assert loaded.schema_version == SCHEMA_VERSION
     assert loaded.voices[0].parameter_map == {
         "resonance": CCTarget(90),
         "filter_cutoff": CCTarget(100),
