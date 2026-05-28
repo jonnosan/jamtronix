@@ -103,9 +103,12 @@ def instantiate_algorithm(algorithm_name: str, voice_slot: VoiceSlot) -> Algorit
     if algorithm_name == "drum_kit":
         return DrumKit(kit_map=dict(voice_slot.kit_map))
     if algorithm_name == "drum_pattern":
-        return DrumPattern(piece=voice_slot.name)
+        # Tag every Hit with the voice's name so downstream passes
+        # (sidechain, swing) can match by instrument name without
+        # walking back to the slot.
+        return DrumPattern(piece=voice_slot.name, instrument_name=voice_slot.name)
     if algorithm_name == "drum_one_shot":
-        return DrumOneShot()
+        return DrumOneShot(instrument_name=voice_slot.name)
     if algorithm_name == "sub_drone":
         return SubDrone()
     if algorithm_name == "melodic_line":
