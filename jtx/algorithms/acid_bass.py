@@ -5,7 +5,7 @@ decide:
 
 * fire or rest (``1 - drop_prob`` chance of firing);
 * root / octave-up / minor-third pitch (driven by knob probabilities);
-* slide from previous note (``slide_prob`` chance) via CC 65/5;
+* slide from previous note (``slide_prob`` chance) via ``glide`` Param;
 * pitch-bend wobble (``bend`` ticks of pitchwheel around 0);
 * note duration shaped by ``gate``.
 
@@ -16,26 +16,19 @@ same pitch/drop/accent rules — independent rolls, not a clone of one
 host beat. Use sparingly: classic acid breakdown roll-into-the-drop
 flavour at ``triplet_prob`` ≈ 0.05–0.12.
 
-CC 74 (filter cutoff) + CC 71 (resonance) are emitted on every quarter
-note as a sine LFO whose period is ``cycle`` bars; phase is anchored to
-``ctx.bar_index`` so the LFO is continuous across bars. ``cycle=0``
-silences the built-in LFO so an external LFO system can drive the same
-CC without two sources fighting.
+The cutoff (74) + resonance (71) sine LFO emits Param events on every
+quarter note; phase is anchored to ``ctx.bar_index`` so the LFO is
+continuous across bars. ``cycle=0`` silences the built-in LFO so an
+external LFO system can drive the same parameter without two sources
+fighting.
 
 Accent every 4 steps (downbeat of each beat) gets +15 velocity — the
-unmistakable acid accent pattern. On triplet beats the first triplet
-position is the accent.
+unmistakable acid accent pattern.
 
-Slides land within the same bar only: the algorithm is stateless across
-bars so it can't see the last note of the previous bar. In practice
-that's fine — slide is most musical between consecutive close notes
-and almost all acid lines have plenty of those inside one bar.
-
-Cycle knobs (``pitch_cycle_bars`` / ``rhythm_cycle_bars``) loop the
-respective random decisions on an N-bar period. With both at ``"4"`` an
-acid line repeats every 4 bars verbatim (minus velocity jitter); with
-only ``pitch_cycle_bars`` set, the *pitch alphabet* repeats while drop
-patterns stay bar-fresh.
+Schema v3: MIDI-naive. Emits :class:`Note` for note events,
+:class:`Param` for cutoff / resonance / glide / glide_on / bend. The
+voicing stage routes each Param via ``DEFAULT_PARAM_MAP`` /
+``slot.parameter_map``.
 """
 
 from __future__ import annotations
@@ -50,7 +43,7 @@ from jtx.algorithms._subdivision import subdivision_grid
 from jtx.algorithms._theory import note_to_midi
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
-from jtx.engine.events import ControlChange, Event, NoteOff, NoteOn, PitchBend
+from jtx.model.events import AbstractEvent, Note, Param
 from jtx.model.parameter_target import CCTarget, ParameterTarget
 
 # Pitch-pick probabilities once a step has been decided to fire.
@@ -59,7 +52,7 @@ _MINOR_THIRD_PROB = 0.10
 
 
 class AcidBass(Algorithm):
-    """TB-303 line: 16-step probabilistic, with CC74/71 + pitch-bend."""
+    """TB-303 line: 16-step probabilistic, with cutoff/resonance + bend."""
 
     name: ClassVar[str] = "acid_bass"
     DEFAULT_PARAM_MAP: ClassVar[dict[str, ParameterTarget]] = {
@@ -67,14 +60,13 @@ class AcidBass(Algorithm):
         "resonance": CCTarget(71),
         "glide": CCTarget(5),
         "glide_on": CCTarget(65),
-        # "bend" deliberately omitted: its natural target is the
-        # PitchBend event itself; no CC remap makes sense.
+        # "bend" deliberately omitted: routes to PitchBend directly.
     }
 
-    def __init__(self, *, midi_channel: int) -> None:
-        self.midi_channel = midi_channel
+    def __init__(self) -> None:
+        pass
 
-    def generate_bar(self, ctx: BarContext) -> list[Event]:
+    def generate_bar(self, ctx: BarContext) -> list[AbstractEvent]:
         knobs = ctx.pattern_knobs
         jitter_rng = ctx.rng
         pitch_rng = ctx.rng_loop(parse_cycle_bars(knobs.get("pitch_cycle_bars", "off")))
@@ -94,39 +86,20 @@ class AcidBass(Algorithm):
         total_steps = steps_per_bar(ctx.ticks_per_bar, ctx.ppq)
         duration = max(1, int(s * gate))
 
-        # Root at register-2 (TB-303 lead-bass territory: A2 ≈ 110 Hz).
         register_octave = 2 + octave_shift
         root_raw = note_to_midi(ctx.key.tonic, register_octave)
         root_pitch = root_raw + ctx.chord_root_semitones
         minor_third_pitch = root_pitch + 3
         octave_pitch = root_pitch + 12
 
-        events: list[Event] = []
+        events: list[AbstractEvent] = []
 
-        # First bar of the part: latch portamento on (the per-note CC5
-        # toggle then decides whether each note actually slides).
+        # First bar of the part: latch portamento on (the per-note
+        # glide toggle below decides whether each note actually slides).
         if slide_prob > 0 and ctx.bar_index == 0:
-            events.append(
-                ControlChange(
-                    tick=0,
-                    channel=self.midi_channel,
-                    cc=65,
-                    value=127,
-                    function="glide_on",
-                )
-            )
-            events.append(
-                ControlChange(
-                    tick=0,
-                    channel=self.midi_channel,
-                    cc=5,
-                    value=0,
-                    function="glide",
-                )
-            )
+            events.append(Param(name="glide_on", value=127 / 127.0, tick=0))
+            events.append(Param(name="glide", value=0.0, tick=0))
 
-        # CC74 / CC71 sine LFO, one event per quarter note. Phase is
-        # continuous across bars by anchoring to absolute tick.
         if lfo_cycles > 0:
             cycle_ticks = max(1, lfo_cycles * ctx.ticks_per_bar)
             for q in range(ctx.ticks_per_bar // ctx.ppq):
@@ -135,34 +108,19 @@ class AcidBass(Algorithm):
                 theta = math.tau * absolute_tick / cycle_ticks
                 lfo = (math.sin(theta) + 1.0) / 2.0
                 cutoff = 30 + int(round(80 * lfo * intensity))
-                events.append(
-                    ControlChange(
-                        tick=tick,
-                        channel=self.midi_channel,
-                        cc=74,
-                        value=max(0, min(127, cutoff)),
-                        function="cutoff",
-                    )
-                )
+                cutoff = max(0, min(127, cutoff))
+                events.append(Param(name="cutoff", value=cutoff / 127.0, tick=tick))
                 if resonance_ceiling > 0:
                     res_lfo = (math.sin(theta + math.pi / 3) + 1.0) / 2.0
                     resonance = 40 + int(round((resonance_ceiling - 40) * res_lfo))
+                    resonance = max(0, min(127, resonance))
                     events.append(
-                        ControlChange(
-                            tick=tick,
-                            channel=self.midi_channel,
-                            cc=71,
-                            value=max(0, min(127, resonance)),
-                            function="resonance",
-                        )
+                        Param(name="resonance", value=resonance / 127.0, tick=tick)
                     )
 
-        # Note pattern — 16 steps probabilistic, with per-beat triplet
-        # insertion if triplet_prob fires.
         triplet_prob = float(knobs.get("triplet_prob", 0.0))
         triplet_subdiv = str(knobs.get("triplet_subdiv", "16t"))
 
-        # Decide which beats become triplet beats up-front.
         beats_per_bar = ctx.ticks_per_bar // ctx.ppq
         triplet_beats: set[int] = set()
         if triplet_prob > 0:
@@ -178,8 +136,6 @@ class AcidBass(Algorithm):
         for step in range(total_steps):
             beat = step // 4
             if beat in triplet_beats:
-                # Skip the base 16ths for this beat; the triplet loop
-                # below fills it in.
                 continue
             if rhythm_rng.random() < drop_prob:
                 continue
@@ -188,7 +144,6 @@ class AcidBass(Algorithm):
             is_accent = step % 4 == 0
             prev_pitch = _emit_acid_note(
                 events,
-                channel=self.midi_channel,
                 tick=tick,
                 pitch=pitch,
                 duration=duration,
@@ -203,7 +158,6 @@ class AcidBass(Algorithm):
                 jitter_rng=jitter_rng,
             )
 
-        # Triplet insertions — each fired beat gets 3 independent rolls.
         for beat in sorted(triplet_beats):
             beat_start = beat * ctx.ppq
             beat_prev_pitch: int | None = prev_pitch
@@ -217,7 +171,6 @@ class AcidBass(Algorithm):
                 tri_duration = max(1, int(triplet_spacing * gate))
                 beat_prev_pitch = _emit_acid_note(
                     events,
-                    channel=self.midi_channel,
                     tick=tick,
                     pitch=pitch,
                     duration=tri_duration,
@@ -247,9 +200,8 @@ def _roll_pitch(rng: random.Random, root: int, octave_up: int, minor_third: int)
 
 
 def _emit_acid_note(
-    events: list[Event],
+    events: list[AbstractEvent],
     *,
-    channel: int,
     tick: int,
     pitch: int,
     duration: int,
@@ -271,27 +223,18 @@ def _emit_acid_note(
     if slide_prob > 0 and prev_pitch is not None and prev_pitch != pitch:
         glide = 30 if rhythm_rng.random() < slide_prob else 0
         events.append(
-            ControlChange(
-                tick=max(0, tick - 2),
-                channel=channel,
-                cc=5,
-                value=glide,
-                function="glide",
-            )
+            Param(name="glide", value=glide / 127.0, tick=max(0, tick - 2))
         )
 
     if bend_amount > 0:
-        events.append(
-            PitchBend(
-                tick=max(0, tick - 1),
-                channel=channel,
-                value=pitch_rng.randint(-bend_amount, bend_amount),
-                function="bend",
-            )
-        )
+        bend_value = pitch_rng.randint(-bend_amount, bend_amount)
+        # Normalise to ±1 — voicing stage scales to PitchBend's 14-bit range.
+        events.append(Param(name="bend", value=bend_value / 8192.0, tick=max(0, tick - 1)))
+
     clamped_pitch = max(0, min(127, pitch))
-    events.append(NoteOn(tick=tick, channel=channel, note=clamped_pitch, velocity=vel))
-    events.append(NoteOff(tick=tick + duration, channel=channel, note=clamped_pitch))
+    events.append(
+        Note(pitch=clamped_pitch, velocity=vel, duration_ticks=duration, tick=tick)
+    )
     if bend_amount > 0:
-        events.append(PitchBend(tick=tick + duration, channel=channel, value=0, function="bend"))
+        events.append(Param(name="bend", value=0.0, tick=tick + duration))
     return pitch

@@ -1,4 +1,8 @@
-"""Tests for the reese_bass algorithm."""
+"""Tests for the reese_bass algorithm.
+
+Schema v3: MIDI-naive. Emits :class:`Note` for the held tone and
+:class:`Param` for the cutoff wobble + detune modulation.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +10,7 @@ import random
 
 from jtx.algorithms import ReeseBass
 from jtx.engine.context import BarContext
-from jtx.engine.events import ControlChange, NoteOff, NoteOn
+from jtx.model.events import Note, Param
 from jtx.model.song import Key
 
 
@@ -28,82 +32,75 @@ def _ctx(
     )
 
 
+def _notes(events) -> list[Note]:
+    return [e for e in events if isinstance(e, Note)]
+
+
+def _params(events, name: str) -> list[Param]:
+    return [e for e in events if isinstance(e, Param) and e.name == name]
+
+
 def test_reese_bass_emits_one_note_per_bar() -> None:
-    reese = ReeseBass(midi_channel=8)
+    reese = ReeseBass()
     events = reese.generate_bar(_ctx())
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    note_offs = [e for e in events if isinstance(e, NoteOff)]
-    assert len(note_ons) == 1
-    assert len(note_offs) == 1
+    assert len(_notes(events)) == 1
 
 
 def test_reese_bass_root_default_octave_register_1() -> None:
-    reese = ReeseBass(midi_channel=8)
+    reese = ReeseBass()
     events = reese.generate_bar(_ctx(pattern_knobs={"wobble_depth": 0.0, "detune_depth": 0.0}))
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    # A at octave 1 = MIDI 33.
-    assert note_ons[0].note == 33
+    assert _notes(events)[0].pitch == 33  # A1
 
 
 def test_reese_bass_alternates_root_and_fifth_per_cell() -> None:
-    reese = ReeseBass(midi_channel=8)
+    reese = ReeseBass()
     knobs = {"wobble_depth": 0.0, "detune_depth": 0.0, "bars_per_chord": 2}
-    pitches = []
-    for b in range(4):
-        evs = reese.generate_bar(_ctx(pattern_knobs=knobs, bar_index=b))
-        pitches.append(next(e for e in evs if isinstance(e, NoteOn)).note)
-    # bars 0-1 root, bars 2-3 fifth.
+    pitches = [
+        _notes(reese.generate_bar(_ctx(pattern_knobs=knobs, bar_index=b)))[0].pitch
+        for b in range(4)
+    ]
     assert pitches[0] == pitches[1]
     assert pitches[2] == pitches[3]
-    assert pitches[2] - pitches[0] == 7  # perfect fifth
+    assert pitches[2] - pitches[0] == 7
 
 
-def test_reese_bass_wobble_emits_cc74_on_subdivision() -> None:
-    reese = ReeseBass(midi_channel=8)
+def test_reese_bass_wobble_emits_cutoff_on_subdivision() -> None:
+    reese = ReeseBass()
     events = reese.generate_bar(
         _ctx(pattern_knobs={"wobble_subdiv": "8", "wobble_depth": 1.0, "detune_depth": 0.0})
     )
-    cc74 = [e for e in events if isinstance(e, ControlChange) and e.cc == 74]
-    # 8th-note subdivision → 8 samples per bar.
-    assert len(cc74) == 8
+    assert len(_params(events, "cutoff")) == 8
 
 
 def test_reese_bass_wobble_triplet_subdivision() -> None:
-    reese = ReeseBass(midi_channel=8)
+    reese = ReeseBass()
     events = reese.generate_bar(
         _ctx(pattern_knobs={"wobble_subdiv": "8t", "wobble_depth": 0.8, "detune_depth": 0.0})
     )
-    cc74 = [e for e in events if isinstance(e, ControlChange) and e.cc == 74]
-    # 8t = 12 positions per 4/4 bar.
-    assert len(cc74) == 12
+    assert len(_params(events, "cutoff")) == 12
 
 
-def test_reese_bass_wobble_zero_emits_no_cc74() -> None:
-    reese = ReeseBass(midi_channel=8)
+def test_reese_bass_wobble_zero_emits_no_cutoff() -> None:
+    reese = ReeseBass()
     events = reese.generate_bar(_ctx(pattern_knobs={"wobble_depth": 0.0, "detune_depth": 0.0}))
-    assert not any(isinstance(e, ControlChange) and e.cc == 74 for e in events)
+    assert _params(events, "cutoff") == []
 
 
-def test_reese_bass_detune_emits_cc1() -> None:
-    reese = ReeseBass(midi_channel=8)
+def test_reese_bass_detune_emits_detune_param() -> None:
+    reese = ReeseBass()
     events = reese.generate_bar(_ctx(pattern_knobs={"wobble_depth": 0.0, "detune_depth": 0.5}))
-    cc1 = [e for e in events if isinstance(e, ControlChange) and e.cc == 1]
-    assert cc1
+    assert _params(events, "detune")
 
 
-def test_reese_bass_gate_controls_note_duration() -> None:
-    reese = ReeseBass(midi_channel=8)
+def test_reese_bass_gate_controls_duration() -> None:
+    reese = ReeseBass()
     events = reese.generate_bar(_ctx(pattern_knobs={"gate": 0.5, "wobble_depth": 0.0}))
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    note_offs = [e for e in events if isinstance(e, NoteOff)]
-    assert note_offs[0].tick - note_ons[0].tick == int(1920 * 0.5)
+    assert _notes(events)[0].duration_ticks == int(1920 * 0.5)
 
 
 def test_reese_bass_octave_shift_changes_register() -> None:
-    reese = ReeseBass(midi_channel=8)
+    reese = ReeseBass()
     events = reese.generate_bar(
         _ctx(pattern_knobs={"octave": 1, "wobble_depth": 0.0, "detune_depth": 0.0})
     )
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    # A at octave 2 = MIDI 45.
-    assert note_ons[0].note == 45
+    assert _notes(events)[0].pitch == 45  # A2

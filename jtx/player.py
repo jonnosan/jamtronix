@@ -120,20 +120,19 @@ def instantiate_algorithm(algorithm_name: str, voice_slot: VoiceSlot) -> Algorit
         return ChordStab()
     if algorithm_name == "root_pulse":
         return RootPulse()
-    # Algorithms still pinned to their MIDI channel — these will lose
-    # the arg in their dedicated refactors below.
     if algorithm_name == "acid_bass":
-        return AcidBass(midi_channel=ch)
+        return AcidBass()
+    if algorithm_name == "noise_riser":
+        return NoiseRiser()
+    if algorithm_name == "reese_bass":
+        return ReeseBass()
+    # Algorithms still pinned to their MIDI channel — refactor pending.
     if algorithm_name == "cc_lfo":
         return CCLFO(midi_channel=ch)
     if algorithm_name == "cc_envelope":
         return CCEnvelope(midi_channel=ch)
     if algorithm_name == "step_cc":
         return StepCC(midi_channel=ch)
-    if algorithm_name == "noise_riser":
-        return NoiseRiser(midi_channel=ch)
-    if algorithm_name == "reese_bass":
-        return ReeseBass(midi_channel=ch)
     if algorithm_name == "voice_follower":
         return VoiceFollower(midi_channel=ch)
     raise ValueError(f"unknown algorithm: {algorithm_name!r}")
