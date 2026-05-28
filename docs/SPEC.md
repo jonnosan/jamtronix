@@ -418,9 +418,14 @@ Named, song-level LFOs as in slackbeatz Phase #65. Each LFO has:
 
 - `name`,
 - `shape` (sine / tri / saw / ramp / square / random / s&h),
-- `period` (bars or beats),
+- `period_bars` (cycle length in bars; fractional values land sub-bar),
 - `phase` (0–1),
-- `depth` (0–1).
+- `depth` (0–1),
+- `samples_per_bar` (default 1) — how many times the LFO is sampled
+  per bar for **event-emitting** targets (`midi:` / `voice:`).
+  Higher = smoother sweep at the cost of more events. Knob-writing
+  targets (`pattern:` / `mix:` / `global_feel:` / `root:`) always
+  sample once at tick 0 regardless — they back read-once knob dicts.
 
 LFOs are *applied* by binding them to a target in a part. Target scopes:
 
@@ -429,17 +434,32 @@ LFOs are *applied* by binding them to a target in a part. Target scopes:
   (sidechain / fade / evolution),
 - `global_feel:<knob>` — modulates a song-wide feel knob
   (`pump`/`groove`/`drive`/`tension`/`wander`),
+- `voice:<voice>:<function>` — drives a voice parameter by logical
+  name (`cutoff` / `resonance` / `bend` / …). The LFO emits
+  `Param(name=function, value=...)` events into the named voice's
+  stream; the **parameter router** resolves `function` via
+  `slot.parameter_map` (or the algorithm's `DEFAULT_PARAM_MAP`) to a
+  concrete CC / MPE / OSC target. Lets a single LFO config drive the
+  right wire format regardless of how the voice happens to be routed
+  on a given setup. Combined with `samples_per_bar` this replaces
+  the retired `cc_lfo` voice algorithm.
 - `midi:ch<N>:cc<M>` — direct CC output,
 - `root:<voice>` — modulates the root note (in semitones or scale degrees).
 
 The legacy `feel:<voice>:<knob>` target was removed in schema v3 —
 `mix:` covers per-voice surface, `global_feel:` covers song-wide.
 
+**Phantom voices.** A `voice:<v>:<fn>` target may name a setup slot
+that has no `Song.voices` entry (e.g. a `filter` modulator slot
+driven entirely by an LFO). The SongPlayer builds a parameter_router
+per such phantom slot so LFO emissions still route through
+`slot.parameter_map`.
+
 Applications are part-scoped (you can apply `slow_sweep` in `build` but not in
 `drop`). This is strictly more powerful than the modulator voice type
-(`cc_lfo`/`cc_envelope`) but coexists with it: modulator voices are the
-convenient case (a CC on a channel); LFOs are the general case (modulate any
-knob).
+(`cc_envelope` / `step_cc`) but coexists with it: modulator algorithms
+are the convenient case for *envelope*-shaped or *step-sequenced*
+modulation that doesn't fit a single sine/saw LFO.
 
 ### Macro Chord Progression
 

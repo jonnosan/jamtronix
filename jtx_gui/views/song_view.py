@@ -638,7 +638,24 @@ class _HeaderPanel(QFrame):
 
 
 _LFO_SHAPES: tuple[str, ...] = ("sine", "tri", "saw", "ramp", "square", "random", "sh")
-_LFO_TARGET_KINDS: tuple[str, ...] = ("pattern", "feel", "midi", "root")
+_LFO_TARGET_KINDS: tuple[str, ...] = (
+    "pattern",
+    "mix",
+    "global_feel",
+    "voice",
+    "midi",
+    "root",
+)
+# Common function names for the voice: target. Users can type custom
+# names too — the parameter_router will route via slot.parameter_map.
+_LFO_VOICE_FUNCTIONS: tuple[str, ...] = (
+    "cutoff",
+    "resonance",
+    "glide",
+    "bend",
+    "detune",
+    "modulator",
+)
 
 
 class _LFOPanel(QFrame):
@@ -792,11 +809,23 @@ class _LFOPanel(QFrame):
         )
         depth.value_changed.connect(lambda v: self._on_depth_changed(lfo, float(v)))
 
+        samples = QSpinBox()
+        samples.setRange(1, 128)
+        samples.setPrefix("samples ")
+        samples.setValue(int(lfo.samples_per_bar))
+        samples.setToolTip(
+            "Sub-bar sampling for event-emitting targets (midi:/voice:). "
+            "Higher = smoother sweep, more events per bar. Knob-writing "
+            "targets ignore this (they sample once at bar start)."
+        )
+        samples.valueChanged.connect(lambda v: self._on_samples_changed(lfo, int(v)))
+
         grid = QGridLayout()
         grid.setHorizontalSpacing(12)
         grid.setVerticalSpacing(4)
         _add_labeled(grid, 0, 0, "NAME", name_edit, span=2)
         _add_labeled(grid, 0, 2, "SHAPE", shape_combo, span=1)
+        _add_labeled(grid, 0, 3, "SAMPLES/BAR", samples, span=1)
 
         knob_row = QHBoxLayout()
         knob_row.setSpacing(10)
@@ -871,6 +900,11 @@ class _LFOPanel(QFrame):
         lfo.depth = value
         self._on_dirty_and_refresh()
 
+    def _on_samples_changed(self, lfo: LFO, value: int) -> None:
+        if lfo.samples_per_bar != value:
+            lfo.samples_per_bar = max(1, value)
+            self._on_dirty()
+
     def _on_add_application(self, lfo: LFO) -> None:
         # Default to the first part + first voice's first pattern knob,
         # or root if no voices/knobs exist.
@@ -919,7 +953,9 @@ class _LFOApplicationRow(QFrame):
 
     Target syntax (per ``docs/SPEC.md`` §LFOs):
     * ``pattern:<voice>:<knob>``
-    * ``feel:<voice>:<knob>``
+    * ``mix:<voice>:<knob>``
+    * ``global_feel:<knob>``
+    * ``voice:<voice>:<function>``
     * ``midi:ch<N>:cc<M>``
     * ``root:<voice>``
     """
@@ -1002,10 +1038,13 @@ class _LFOApplicationRow(QFrame):
 
     def _sync_target(self) -> None:
         kind = self._kind_combo.currentText()
-        if kind == "pattern" or kind == "feel":
+        if kind in ("pattern", "mix", "voice"):
             voice = self._voice_combo.currentText()
             knob = self._knob_combo.currentText()
             target = f"{kind}:{voice}:{knob}"
+        elif kind == "global_feel":
+            knob = self._knob_combo.currentText()
+            target = f"global_feel:{knob}"
         elif kind == "midi":
             target = f"midi:ch{self._midi_channel.value()}:cc{self._midi_cc.value()}"
         elif kind == "root":
@@ -1039,8 +1078,9 @@ class _LFOApplicationRow(QFrame):
         self._sync_target()
 
     def _reveal_fields_for_kind(self, kind: str) -> None:
-        self._voice_combo.setVisible(kind in {"pattern", "feel", "root"})
-        self._knob_combo.setVisible(kind in {"pattern", "feel"})
+        self._voice_combo.setVisible(kind in {"pattern", "mix", "voice", "root"})
+        self._knob_combo.setVisible(kind in {"pattern", "mix", "global_feel", "voice"})
+        self._knob_combo.setEditable(kind == "voice")
         self._midi_channel.setVisible(kind == "midi")
         self._midi_cc.setVisible(kind == "midi")
 
@@ -1060,8 +1100,12 @@ class _LFOApplicationRow(QFrame):
         voice_name = self._voice_combo.currentText()
         current = initial if initial is not None else self._knob_combo.currentText()
         options: list[str] = []
-        if kind == "feel":
-            options = [k.name for k in FEEL_KNOBS]
+        if kind == "mix":
+            options = [k.name for k in FEEL_KNOBS]  # MIX_KNOBS aliased as FEEL_KNOBS
+        elif kind == "global_feel":
+            options = [k.name for k in GLOBAL_FEEL_KNOBS]
+        elif kind == "voice":
+            options = list(_LFO_VOICE_FUNCTIONS)
         elif kind == "pattern" and voice_name in self._song.voices:
             algo = self._song.voices[voice_name].algorithm
             options = list(SCHEMAS.pattern_by_algo.get(algo, {}).keys())
@@ -1084,8 +1128,10 @@ def _parse_target(target: str) -> tuple[str, str, str, int | None, int | None]:
     if not target:
         return ("pattern", "", "", None, None)
     parts = target.split(":")
-    if parts[0] in {"pattern", "feel"} and len(parts) >= 3:
+    if parts[0] in {"pattern", "mix", "voice"} and len(parts) >= 3:
         return (parts[0], parts[1], parts[2], None, None)
+    if parts[0] == "global_feel" and len(parts) >= 2:
+        return ("global_feel", "", parts[1], None, None)
     if parts[0] == "root" and len(parts) >= 2:
         return ("root", parts[1], "", None, None)
     if parts[0] == "midi" and len(parts) >= 3:
