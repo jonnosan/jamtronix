@@ -2,7 +2,7 @@
 
 from jtx.algorithms.acid_bass import AcidBass
 from jtx.algorithms.arp import Arp
-from jtx.algorithms.cc_lfo import CCLFO, CCEnvelope
+from jtx.algorithms.cc_envelope import CCEnvelope
 from jtx.algorithms.drum_kit import DrumKit
 from jtx.algorithms.drum_one_shot import DrumOneShot
 from jtx.algorithms.drum_pattern import DrumPattern
@@ -20,7 +20,6 @@ __all__ = [
     "AcidBass",
     "Arp",
     "CCEnvelope",
-    "CCLFO",
     "ChordStab",
     "DrumKit",
     "DrumOneShot",

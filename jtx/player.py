@@ -36,7 +36,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from jtx.algorithms import (
-    CCLFO,
     AcidBass,
     Arp,
     CCEnvelope,
@@ -129,8 +128,6 @@ def instantiate_algorithm(algorithm_name: str, voice_slot: VoiceSlot) -> Algorit
         return NoiseRiser()
     if algorithm_name == "reese_bass":
         return ReeseBass()
-    if algorithm_name == "cc_lfo":
-        return CCLFO()
     if algorithm_name == "cc_envelope":
         return CCEnvelope()
     if algorithm_name == "step_cc":

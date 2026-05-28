@@ -13,8 +13,10 @@ from __future__ import annotations
 import random
 
 from jtx.model import (
+    LFO,
     ChordProgression,
     Key,
+    LFOApplication,
     Part,
     Song,
     VoiceConfig,
@@ -64,7 +66,10 @@ _PROGRESSIONS: tuple[tuple[str, ...], ...] = (
 _BASS_ALGOS: tuple[str, ...] = ("acid_bass", "sub_drone", "melodic_line")
 _LEAD_ALGOS: tuple[str, ...] = ("arp", "melodic_line", "arp")  # arp weighted
 _POLY_ALGOS: tuple[str, ...] = ("chord_stab", "sustained_chord")
-_MOD_ALGOS: tuple[str, ...] = ("cc_lfo", "cc_envelope")
+_MOD_ALGOS: tuple[str, ...] = ("lfo", "cc_envelope")
+"""``lfo`` means a song-level LFO targeting ``voice:filter:cutoff``;
+``cc_envelope`` is still a modulator voice algorithm (envelope shapes
+aren't expressible as a single song-level LFO)."""
 _KIT_STYLES: tuple[str, ...] = ("acid", "techno", "psy")
 
 _CHORD_QUALITIES: tuple[str, ...] = (
@@ -94,8 +99,10 @@ def build(title: str, setup_ref: str) -> Song:
         "acid": _build_bass_voice(),
         "stab": _build_poly_voice(),
         "lead": _build_lead_voice(),
-        "filter": _build_modulator(),
     }
+    mod_filter_voice, song_lfos = _build_modulator()
+    if mod_filter_voice is not None:
+        voices["filter"] = mod_filter_voice
 
     parts = {
         "intro": Part(
@@ -156,6 +163,7 @@ def build(title: str, setup_ref: str) -> Song:
         parts=parts,
         arrangement=["intro", "groove", "main", "break", "main", "outro"],
         feel=feel,
+        lfos=song_lfos,
     )
 
 
@@ -275,31 +283,43 @@ def _build_lead_voice() -> VoiceConfig:
     )
 
 
-def _build_modulator() -> VoiceConfig:
+def _build_modulator() -> tuple[VoiceConfig | None, list[LFO]]:
+    """Pick a modulator approach for the filter slot.
+
+    Returns ``(filter_voice_config_or_None, song_level_lfos)``. A
+    song-level LFO needs no filter VoiceConfig (the LFO drives the
+    phantom slot directly); a cc_envelope still wants a VoiceConfig
+    on the filter voice.
+    """
     algo = random.choice(_MOD_ALGOS)
-    if algo == "cc_lfo":
-        return VoiceConfig(
-            algorithm="cc_lfo",
-            pattern={
-                "cc": random.choice((71, 74, 74, 74, 11, 1)),
-                "shape": random.choice(("sine", "tri", "saw", "square", "random")),
-                "period_bars": float(random.choice((1, 2, 4, 4, 8, 16))),
-                "phase": round(random.uniform(0.0, 1.0), 2),
-                "depth": round(random.uniform(0.5, 1.0), 2),
-                "offset": round(random.uniform(0.3, 0.7), 2),
-            },
+    if algo == "lfo":
+        lfo = LFO(
+            name="filter_sweep",
+            shape=random.choice(("sine", "tri", "saw", "square", "random")),
+            period_bars=float(random.choice((1, 2, 4, 4, 8, 16))),
+            phase=round(random.uniform(0.0, 1.0), 2),
+            depth=round(random.uniform(0.5, 1.0), 2),
+            samples_per_bar=16,
+            applications=[
+                LFOApplication(part=part, target="voice:filter:cutoff")
+                for part in ("intro", "groove", "main", "break", "outro")
+            ],
         )
-    return VoiceConfig(
-        algorithm="cc_envelope",
-        pattern={
-            "cc": random.choice((71, 74, 74)),
-            "pulses": random.choice((1, 2, 4, 4, 8)),
-            "offset": random.choice((0, 0, 2, 4)),
-            "attack_ticks": random.randint(20, 80),
-            "decay_ticks": random.randint(80, 240),
-            "release_ticks": random.randint(120, 360),
-            "peak_value": random.randint(90, 127),
-            "sustain_value": random.randint(60, 100),
-            "rest_value": random.randint(20, 60),
-        },
+        return None, [lfo]
+    return (
+        VoiceConfig(
+            algorithm="cc_envelope",
+            pattern={
+                "function": random.choice(("cutoff", "resonance")),
+                "pulses": random.choice((1, 2, 4, 4, 8)),
+                "offset": random.choice((0, 0, 2, 4)),
+                "attack_ticks": random.randint(20, 80),
+                "decay_ticks": random.randint(80, 240),
+                "release_ticks": random.randint(120, 360),
+                "peak_value": random.randint(90, 127),
+                "sustain_value": random.randint(60, 100),
+                "rest_value": random.randint(20, 60),
+            },
+        ),
+        [],
     )
