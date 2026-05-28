@@ -24,6 +24,7 @@ from jtx.model import (
     VoiceOverride,
     VoiceSlot,
 )
+from jtx.model.setup import KitPiece
 from jtx.persist import load_setup, load_song, save_setup, save_song
 
 
@@ -35,12 +36,17 @@ def _sample_setup() -> Setup:
         daw_template_path=None,
         voices=[
             VoiceSlot(
-                name="kick",
-                type="drum",
-                default_role="drum",
+                name="kit",
+                type="drum_kit",
+                default_role="drum_kit",
                 midi_channel=10,
-                kit_map={"kick": 36, "snare": 38, "hat": 42},
+                kit_map={
+                    "kick": KitPiece(note=36, channel=10),
+                    "snare": KitPiece(note=38, channel=10),
+                    "hat": KitPiece(note=42, channel=10),
+                },
             ),
+            VoiceSlot(name="kick", type="drum", default_role="drum", midi_channel=10, note=36),
             VoiceSlot(name="acid", type="mono", default_role="bass", midi_channel=2),
             VoiceSlot(name="organ", type="poly", default_role="stab", midi_channel=3),
             VoiceSlot(name="filt", type="modulator", default_role="modulator", midi_channel=2),
@@ -62,7 +68,7 @@ def _sample_song() -> Song:
             "acid": VoiceConfig(
                 algorithm="acid_bass",
                 pattern={"slide_prob": 0.4, "octave": 2},
-                feel={"swing": 6},
+                mix={"sidechain_floor": 80},
             ),
             "organ": VoiceConfig(algorithm="chord_stab", pattern={"steps": [4, 12]}),
             "filt": VoiceConfig(algorithm="cc_lfo", pattern={"cc": 74, "rate_beats": 4}),

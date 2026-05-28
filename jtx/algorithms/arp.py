@@ -37,18 +37,18 @@ from jtx.algorithms._subdivision import subdivision_grid
 from jtx.algorithms._theory import note_to_midi
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
-from jtx.engine.events import Event, NoteOff, NoteOn
+from jtx.model.events import AbstractEvent, Note
 
 
 class Arp(Algorithm):
-    """Chord-tone arpeggiator."""
+    """Chord-tone arpeggiator. MIDI-naive — emits :class:`Note` events."""
 
     name: ClassVar[str] = "arp"
 
-    def __init__(self, *, midi_channel: int) -> None:
-        self.midi_channel = midi_channel
+    def __init__(self) -> None:
+        pass
 
-    def generate_bar(self, ctx: BarContext) -> list[Event]:
+    def generate_bar(self, ctx: BarContext) -> list[AbstractEvent]:
         knobs = ctx.pattern_knobs
         jitter_rng = ctx.rng
         pitch_rng = ctx.rng_loop(parse_cycle_bars(knobs.get("pitch_cycle_bars", "off")))
@@ -79,14 +79,15 @@ class Arp(Algorithm):
 
         sequence = _build_sequence(mode, ladder, positions, pitch_rng)
 
-        events: list[Event] = []
+        events: list[AbstractEvent] = []
         for arp_idx in range(positions):
             pitch = max(0, min(127, sequence[arp_idx]))
             tick = arp_idx * spacing
             jitter = jitter_rng.randint(-3, 3)
             vel = max(1, min(127, base_vel + jitter))
-            events.append(NoteOn(tick=tick, channel=self.midi_channel, note=pitch, velocity=vel))
-            events.append(NoteOff(tick=tick + duration, channel=self.midi_channel, note=pitch))
+            events.append(
+                Note(pitch=pitch, velocity=vel, duration_ticks=duration, tick=tick)
+            )
 
         return events
 

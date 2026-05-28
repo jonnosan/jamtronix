@@ -12,6 +12,21 @@ from dataclasses import dataclass, field
 from jtx.model.parameter_target import CCTarget, ParameterTarget
 from jtx.model.types import ROLES_BY_TYPE, SCHEMA_VERSION, ClockMode, Role, VoiceType
 
+_GM_DRUM_KICK_NOTE = 36
+
+
+@dataclass(frozen=True)
+class KitPiece:
+    """One piece within a drum_kit voice's kit_map.
+
+    Each piece carries its own ``(channel, note)`` so a kit can spread
+    across multiple MIDI channels — e.g. kick on ch9, percussion on
+    ch11.
+    """
+
+    note: int  # 0..127
+    channel: int  # 1..16
+
 
 @dataclass
 class VoiceSlot:
@@ -22,8 +37,14 @@ class VoiceSlot:
     default_role: Role
     midi_channel: int  # 1..16
     midi_port: str | None = None  # None = inherit setup default
-    kit_map: dict[str, int] = field(default_factory=dict)
-    """For drum voices: piece name → MIDI note. Ignored for other types."""
+    note: int = _GM_DRUM_KICK_NOTE
+    """For single-piece ``drum`` voices: the MIDI note this voice
+    triggers. Ignored for ``drum_kit`` (which uses per-piece notes
+    in ``kit_map``) and for non-drum voice types."""
+    kit_map: dict[str, "KitPiece"] = field(default_factory=dict)
+    """For ``drum_kit`` voices: piece name → :class:`KitPiece`
+    ``(note, channel)``. Each piece can live on its own MIDI channel.
+    Empty / ignored for other voice types."""
     parameter_map: dict[str, ParameterTarget] = field(default_factory=dict)
     """Function-name → :class:`ParameterTarget` override.
 
@@ -50,14 +71,45 @@ class VoiceSlot:
         errors: list[str] = []
         if not (1 <= self.midi_channel <= 16):
             errors.append(f"voice {self.name!r}: midi_channel {self.midi_channel} not in 1..16")
+        if not (0 <= self.note <= 127):
+            errors.append(f"voice {self.name!r}: note {self.note} not in 0..127")
         valid_roles = ROLES_BY_TYPE[self.type]
         if self.default_role not in valid_roles:
             errors.append(
                 f"voice {self.name!r}: role {self.default_role!r} not valid for "
                 f"type {self.type!r} (allowed: {', '.join(valid_roles)})"
             )
-        if self.type != "drum" and self.kit_map:
-            errors.append(f"voice {self.name!r}: kit_map is only meaningful for drum voices")
+        if self.type != "drum_kit" and self.kit_map:
+            errors.append(
+                f"voice {self.name!r}: kit_map is only meaningful for drum_kit voices "
+                f"(single-piece drum voices use the `note` field)"
+            )
+        if self.type == "drum_kit":
+            if not self.kit_map:
+                errors.append(
+                    f"voice {self.name!r}: drum_kit voice requires at least one kit_map entry"
+                )
+            seen: dict[tuple[int, int], str] = {}
+            for piece_name, piece in self.kit_map.items():
+                if not (1 <= piece.channel <= 16):
+                    errors.append(
+                        f"voice {self.name!r}: kit_map[{piece_name!r}].channel "
+                        f"{piece.channel} not in 1..16"
+                    )
+                if not (0 <= piece.note <= 127):
+                    errors.append(
+                        f"voice {self.name!r}: kit_map[{piece_name!r}].note "
+                        f"{piece.note} not in 0..127"
+                    )
+                key = (piece.channel, piece.note)
+                if key in seen:
+                    errors.append(
+                        f"voice {self.name!r}: kit_map[{piece_name!r}] and "
+                        f"kit_map[{seen[key]!r}] share (channel={piece.channel}, "
+                        f"note={piece.note}); piece identity must be unique"
+                    )
+                else:
+                    seen[key] = piece_name
         for func, target in self.parameter_map.items():
             if isinstance(target, CCTarget) and not (0 <= int(target.cc) <= 127):
                 errors.append(

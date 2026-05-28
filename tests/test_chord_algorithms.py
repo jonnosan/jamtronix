@@ -1,4 +1,7 @@
-"""Tests for sustained_chord + chord_stab."""
+"""Tests for sustained_chord + chord_stab.
+
+Both emit abstract :class:`Note` events in schema v3.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +9,7 @@ import random
 
 from jtx.algorithms import ChordStab, SustainedChord
 from jtx.engine.context import BarContext
-from jtx.engine.events import NoteOff, NoteOn
+from jtx.model.events import Note
 from jtx.model.song import Key
 
 
@@ -25,107 +28,93 @@ def _ctx(
     )
 
 
+def _notes(events) -> list[Note]:
+    return [e for e in events if isinstance(e, Note)]
+
+
 # ----------------------------------------------------- sustained_chord
 
 
 def test_sustained_chord_default_minor_triad() -> None:
-    voice = SustainedChord(midi_channel=5)
+    voice = SustainedChord()
     events = voice.generate_bar(_ctx())
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    # A minor triad at octave 4: 69, 72, 76.
-    assert sorted(e.note for e in note_ons) == [69, 72, 76]
+    assert sorted(n.pitch for n in _notes(events)) == [69, 72, 76]
 
 
 def test_sustained_chord_intervals_override() -> None:
-    voice = SustainedChord(midi_channel=5)
+    voice = SustainedChord()
     events = voice.generate_bar(_ctx(pattern_knobs={"quality": "maj7"}))
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    # Maj7: 69, 73, 76, 80.
-    assert sorted(e.note for e in note_ons) == [69, 73, 76, 80]
+    assert sorted(n.pitch for n in _notes(events)) == [69, 73, 76, 80]
 
 
 def test_sustained_chord_gate_controls_duration() -> None:
-    voice = SustainedChord(midi_channel=5)
+    voice = SustainedChord()
     events = voice.generate_bar(_ctx(pattern_knobs={"gate": 0.5}))
-    offs = [e for e in events if isinstance(e, NoteOff)]
-    assert all(e.tick == 960 for e in offs)
+    # Bar = 1920 ticks; gate 0.5 → duration = 960.
+    assert all(n.duration_ticks == 960 for n in _notes(events))
 
 
 def test_sustained_chord_octave_shift() -> None:
-    voice = SustainedChord(midi_channel=5)
+    voice = SustainedChord()
     events = voice.generate_bar(_ctx(pattern_knobs={"octave": -1}))
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    # Octave -1 → root at A3 = 57.
-    assert min(e.note for e in note_ons) == 57
+    assert min(n.pitch for n in _notes(events)) == 57
 
 
 def test_sustained_chord_drift_drops_one_voice_octave() -> None:
-    voice = SustainedChord(midi_channel=5)
+    voice = SustainedChord()
     events = voice.generate_bar(_ctx(pattern_knobs={"drift_prob": 1.0}))
-    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.note)
-    # Without drift, lowest note would be 69 (root). With drift on every
-    # bar, one voice drops 12 semitones — lowest will be 57 (root) or
-    # 60 (third) or 64 (fifth).
-    assert note_ons[0].note in {57, 60, 64}
+    notes = sorted(_notes(events), key=lambda n: n.pitch)
+    assert notes[0].pitch in {57, 60, 64}
 
 
 def test_sustained_chord_chord_root_semitones_transposes() -> None:
-    voice = SustainedChord(midi_channel=5)
+    voice = SustainedChord()
     ctx = _ctx(pattern_knobs={"quality": "unison"})
     ctx.chord_root_semitones = 5
     events = voice.generate_bar(ctx)
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    assert note_ons[0].note == 74  # 69 + 5
+    notes = _notes(events)
+    assert notes[0].pitch == 74
 
 
 # --------------------------------------------------------- chord_stab
 
 
 def test_chord_stab_default_steps_are_off_beat_16ths() -> None:
-    voice = ChordStab(midi_channel=6)
-    events = voice.generate_bar(_ctx(pattern_knobs={"quality": "unison"}))  # one note for clarity
-    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
-    # Default pulses=4, offset=2 → euclid steps [2, 6, 10, 14]
-    # × step_ticks 120 = [240, 720, 1200, 1680].
-    assert [e.tick for e in note_ons] == [240, 720, 1200, 1680]
+    voice = ChordStab()
+    events = voice.generate_bar(_ctx(pattern_knobs={"quality": "unison"}))
+    notes = sorted(_notes(events), key=lambda n: n.tick)
+    assert [n.tick for n in notes] == [240, 720, 1200, 1680]
 
 
 def test_chord_stab_pulses_knob_overrides() -> None:
-    voice = ChordStab(midi_channel=6)
+    voice = ChordStab()
     events = voice.generate_bar(_ctx(pattern_knobs={"quality": "unison", "pulses": 2, "offset": 0}))
-    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
-    assert [e.tick for e in note_ons] == [0, 960]
+    notes = sorted(_notes(events), key=lambda n: n.tick)
+    assert [n.tick for n in notes] == [0, 960]
 
 
 def test_chord_stab_emits_full_chord_at_each_step() -> None:
-    voice = ChordStab(midi_channel=6)
+    voice = ChordStab()
     events = voice.generate_bar(_ctx(pattern_knobs={"quality": "minor", "pulses": 1, "offset": 4}))
-    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.note)
-    assert [e.note for e in note_ons] == [69, 72, 76]
-    assert all(e.tick == 480 for e in note_ons)
+    notes = sorted(_notes(events), key=lambda n: n.pitch)
+    assert [n.pitch for n in notes] == [69, 72, 76]
+    assert all(n.tick == 480 for n in notes)
 
 
 def test_chord_stab_gate_controls_duration() -> None:
-    voice = ChordStab(midi_channel=6)
+    voice = ChordStab()
     events = voice.generate_bar(_ctx(pattern_knobs={"quality": "unison", "gate": 0.25}))
-    durations = []
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    for on in note_ons:
-        off = next(
-            e for e in events if isinstance(e, NoteOff) and e.tick > on.tick and e.note == on.note
-        )
-        durations.append(off.tick - on.tick)
-    # step_ticks=120, gate=0.25 → duration = 30.
-    assert all(d == 30 for d in durations)
+    # step_ticks=120, gate=0.25 → duration_ticks = 30.
+    assert all(n.duration_ticks == 30 for n in _notes(events))
 
 
 def test_chord_stab_drop_prob_one_emits_nothing() -> None:
-    voice = ChordStab(midi_channel=6)
+    voice = ChordStab()
     events = voice.generate_bar(_ctx(pattern_knobs={"drop_prob": 1.0}))
-    assert not any(isinstance(e, NoteOn) for e in events)
+    assert _notes(events) == []
 
 
 def test_chord_stab_zero_pulses_emits_nothing() -> None:
-    voice = ChordStab(midi_channel=6)
+    voice = ChordStab()
     events = voice.generate_bar(_ctx(pattern_knobs={"quality": "unison", "pulses": 0}))
-    assert not [e for e in events if isinstance(e, NoteOn)]
+    assert _notes(events) == []

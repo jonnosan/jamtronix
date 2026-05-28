@@ -51,7 +51,7 @@ from typing import ClassVar
 from jtx.algorithms._theory import note_to_midi
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
-from jtx.engine.events import ControlChange, Event, NoteOff, NoteOn, PitchBend
+from jtx.model.events import AbstractEvent, Note, Param
 from jtx.model.parameter_target import CCTarget, ParameterTarget
 
 _CURVES = ("linear", "exp", "s_curve")
@@ -59,17 +59,21 @@ _TRIGGERS = ("once", "every", "last_bar_of_4", "last_bar_of_8", "last_bar_of_16"
 
 
 class NoiseRiser(Algorithm):
-    """Crescendo voice — retriggers + CC ramp + optional pitch rise."""
+    """Crescendo voice — retriggers + cutoff ramp + optional pitch rise.
+
+    MIDI-naive: emits :class:`Note` for the held tone and :class:`Param`
+    for the cutoff sweep / bend rise.
+    """
 
     name: ClassVar[str] = "noise_riser"
     DEFAULT_PARAM_MAP: ClassVar[dict[str, ParameterTarget]] = {
         "cutoff": CCTarget(74),
     }
 
-    def __init__(self, *, midi_channel: int) -> None:
-        self.midi_channel = midi_channel
+    def __init__(self) -> None:
+        pass
 
-    def generate_bar(self, ctx: BarContext) -> list[Event]:
+    def generate_bar(self, ctx: BarContext) -> list[AbstractEvent]:
         knobs = ctx.pattern_knobs
 
         trigger = str(knobs.get("trigger", "every"))
@@ -106,13 +110,9 @@ class NoiseRiser(Algorithm):
         bar_vel = vel_start + (vel_end - vel_start) * _shape(curve, position)
         velocity = _clamp_vel(int(round(bar_vel)))
 
-        events: list[Event] = [
-            NoteOn(tick=0, channel=self.midi_channel, note=pitch, velocity=velocity),
-            NoteOff(
-                tick=max(1, ctx.ticks_per_bar - 1),
-                channel=self.midi_channel,
-                note=pitch,
-            ),
+        held_duration = max(1, ctx.ticks_per_bar - 1)
+        events: list[AbstractEvent] = [
+            Note(pitch=pitch, velocity=velocity, duration_ticks=held_duration, tick=0)
         ]
 
         sample_ticks = max(1, ctx.ticks_per_bar // samples_per_bar)
@@ -121,29 +121,14 @@ class NoiseRiser(Algorithm):
             frac = i / samples_per_bar
             prog = _shape(curve, progress_at(frac))
             cutoff = int(round(cutoff_start + (cutoff_end - cutoff_start) * prog))
-            events.append(
-                ControlChange(
-                    tick=tick,
-                    channel=self.midi_channel,
-                    cc=74,
-                    value=_clamp_cc(cutoff),
-                    function="cutoff",
-                )
-            )
+            events.append(Param(name="cutoff", value=_clamp_cc(cutoff) / 127.0, tick=tick))
             if pitch_rise_cents > 0:
-                # Pitchwheel goes -8192..+8191; cents map depends on the
-                # synth's bend range. Assume ±2 semitones = ±200 cents
-                # (the GM default) so 8191 ≈ +200 cents.
+                # Assume ±2 semitones (±200 cents) on the synth's bend.
+                # Normalised to ±1 — voicing maps to the 14-bit PitchBend
+                # range (1.0 → 8191).
                 bend_cents = pitch_rise_cents * prog
-                bend = int(round(bend_cents / 200.0 * 8191))
-                events.append(
-                    PitchBend(
-                        tick=tick,
-                        channel=self.midi_channel,
-                        value=max(-8192, min(8191, bend)),
-                        function="bend",
-                    )
-                )
+                bend_norm = max(-1.0, min(1.0, bend_cents / 200.0))
+                events.append(Param(name="bend", value=bend_norm, tick=tick))
 
         return events
 

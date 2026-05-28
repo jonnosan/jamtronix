@@ -28,7 +28,7 @@ from jtx.model.parameter_target import (
     parameter_target_from_dict,
     parameter_target_to_dict,
 )
-from jtx.model.setup import Setup, VoiceSlot
+from jtx.model.setup import KitPiece, Setup, VoiceSlot
 from jtx.model.song import (
     ChordProgression,
     Key,
@@ -61,6 +61,22 @@ def _parameter_map_from_dict(
     return {}
 
 
+def _kit_map_from_dict(raw: dict[str, Any]) -> dict[str, KitPiece]:
+    """Parse a v3 kit_map: ``{piece_name: {"note": int, "channel": int}}``.
+
+    Only meaningful for ``drum_kit`` voices. Non-drum_kit voices store
+    an empty dict.
+    """
+    out: dict[str, KitPiece] = {}
+    for name, entry in raw.items():
+        if not isinstance(entry, dict):
+            raise ValueError(
+                f"kit_map[{name!r}]: expected object with 'note' and 'channel' keys, got {entry!r}"
+            )
+        out[name] = KitPiece(note=int(entry["note"]), channel=int(entry["channel"]))
+    return out
+
+
 def _voice_slot_from_dict(d: dict[str, Any], *, schema_version: int) -> VoiceSlot:
     return VoiceSlot(
         name=d["name"],
@@ -68,7 +84,8 @@ def _voice_slot_from_dict(d: dict[str, Any], *, schema_version: int) -> VoiceSlo
         default_role=cast("Role", d["default_role"]),
         midi_channel=d["midi_channel"],
         midi_port=d.get("midi_port"),
-        kit_map=dict(d.get("kit_map", {})),
+        note=int(d.get("note", 36)),
+        kit_map=_kit_map_from_dict(d.get("kit_map") or {}),
         parameter_map=_parameter_map_from_dict(d, schema_version=schema_version),
         mpe_mode=bool(d.get("mpe_mode", False)),
         mpe_channel_count=int(d.get("mpe_channel_count", 8)),
@@ -110,7 +127,11 @@ def _voice_slot_to_dict(slot: VoiceSlot) -> dict[str, Any]:
         "default_role": slot.default_role,
         "midi_channel": slot.midi_channel,
         "midi_port": slot.midi_port,
-        "kit_map": dict(slot.kit_map),
+        "note": slot.note,
+        "kit_map": {
+            name: {"note": piece.note, "channel": piece.channel}
+            for name, piece in slot.kit_map.items()
+        },
         "parameter_map": {
             fn: parameter_target_to_dict(target) for fn, target in slot.parameter_map.items()
         },
@@ -170,7 +191,7 @@ def _voice_config_from_dict(d: dict[str, Any]) -> VoiceConfig:
     return VoiceConfig(
         algorithm=d["algorithm"],
         pattern=dict(d.get("pattern", {})),
-        feel=dict(d.get("feel", {})),
+        mix=dict(d.get("mix", {})),
     )
 
 
@@ -180,13 +201,15 @@ def _voice_override_from_dict(d: dict[str, Any]) -> VoiceOverride:
         key=_key_from_dict(d["key"]) if d.get("key") else None,
         meter=d.get("meter"),
         pattern=dict(d.get("pattern", {})),
-        feel=dict(d.get("feel", {})),
+        mix=dict(d.get("mix", {})),
     )
 
 
 def _part_from_dict(d: dict[str, Any]) -> Part:
     return Part(
         bars=d["bars"],
+        intensity_start=float(d.get("intensity_start", 0.5)),
+        intensity_end=float(d.get("intensity_end", 0.5)),
         voice_overrides={
             name: _voice_override_from_dict(ov) for name, ov in d.get("voice_overrides", {}).items()
         },
@@ -211,10 +234,19 @@ def _lfo_from_dict(d: dict[str, Any]) -> LFO:
     )
 
 
+_DEFAULT_SONG_FEEL = {"pump": 0.0, "groove": 0.0, "drive": 0.0, "tension": 0.0, "wander": 0.0}
+
+
+def _song_feel_from_dict(raw: dict[str, Any] | None) -> dict[str, float]:
+    """Parse the song-level feel dict; default missing keys to zero."""
+    out = dict(_DEFAULT_SONG_FEEL)
+    if raw:
+        for k, v in raw.items():
+            out[str(k)] = float(v)
+    return out
+
+
 def song_from_dict(d: dict[str, Any]) -> Song:
-    # Song shape didn't change between v1 and v2 (only Setup did), so
-    # we silently bump the in-memory copy to current SCHEMA_VERSION.
-    # Save then re-writes with the current version.
     song = Song(
         title=d["title"],
         setup_ref=d["setup_ref"],
@@ -227,6 +259,7 @@ def song_from_dict(d: dict[str, Any]) -> Song:
         parts={name: _part_from_dict(p) for name, p in d.get("parts", {}).items()},
         arrangement=list(d.get("arrangement", [])),
         lfos=[_lfo_from_dict(lfo) for lfo in d.get("lfos", [])],
+        feel=_song_feel_from_dict(d.get("feel")),
         schema_version=SCHEMA_VERSION,
     )
     errors = validate_song(song)

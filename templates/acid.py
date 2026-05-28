@@ -1,13 +1,10 @@
 """Acid style template — 303 lead bass, four-on-floor, hat groove.
 
-Knob ranges below are picked fresh on every build so each new
-acid song lands in a different musical neighbourhood: tempo, key
-root, chord progression family, and the acid_bass / chord_stab
-character knobs all jitter within musically sensible bounds.
-
-Bar-by-bar variation (which steps fire, slide on/off, octave jumps)
-still flows from the title-derived SHA-256 seed — these jitters
-only affect the *macro* shape of the song.
+Schema v3: drums collapse to one ``kit`` voice with the drum_kit
+algorithm. Parts carry an intensity envelope and (in build / outro)
+a ``kit_focus`` override that morphs the drum pattern across the
+section. Five song-wide feel knobs randomised per build() pick this
+particular song's flavour of Pump / Groove / Drive / Tension / Wander.
 """
 
 from __future__ import annotations
@@ -20,6 +17,7 @@ from jtx.model import (
     Part,
     Song,
     VoiceConfig,
+    VoiceOverride,
 )
 
 # Progressions that fit acid's minor-scale, four-on-the-floor feel.
@@ -48,52 +46,22 @@ def build(title: str, setup_ref: str) -> Song:
         "base_vel": random.randint(88, 104),
         "intensity": round(random.uniform(0.9, 1.3), 2),
         "gate": round(random.uniform(0.45, 0.95), 2),
-        "cycle": random.choice((1, 2, 2, 4, 8)),  # 2-bar LFO most common
+        "cycle": random.choice((1, 2, 2, 4, 8)),
         "resonance": random.randint(80, 120),
-        "octave": random.choice((-1, 0, 0, 0, 1)),  # 0 most common
-        # Rare 303 breakdown roll — sparse on purpose; acid is straight 16ths.
+        "octave": random.choice((-1, 0, 0, 0, 1)),
         "triplet_prob": round(random.uniform(0.0, 0.10), 2),
         "triplet_subdiv": "16t",
     }
 
     voices = {
-        "kick": VoiceConfig(
-            # Genre signature — always strict 4-on-the-floor, no ghost
-            # notes / polyrhythm / per-step velocity drift. Variation
-            # belongs on the hats / snare / clap / percussion voices.
-            algorithm="drum_pattern",
-            pattern={"style": "four_floor", "velocity": 118},
-        ),
-        "snare": VoiceConfig(
-            algorithm="drum_one_shot",
+        "kit": VoiceConfig(
+            algorithm="drum_kit",
             pattern={
-                # 2-on-4 backbeat most of the time; occasionally
-                # delayed-snare (offset 6) or 1-hit (pulses 1, offset 4).
-                "pulses": random.choice((1, 2, 2, 2)),
-                "offset": random.choice((4, 4, 4, 6)),
-                "velocity": random.randint(94, 108),
-                "flam_count": random.choice((0, 0, 0, 1)),
-                "flam_spacing_ticks": 12,
-            },
-        ),
-        "chh": VoiceConfig(
-            algorithm="drum_pattern",
-            pattern={
-                "style": "euclid",
-                "pulses": random.choice((6, 8, 8, 10, 12)),
-                "offset": random.choice((0, 0, 0, 1, 2)),
-                "velocity": random.randint(80, 100),
-                "vel_curve": random.choice(("pulse", "drift", "ramp_up", "arc")),
-                "vel_curve_depth": round(random.uniform(0.15, 0.35), 2),
-            },
-            feel={"swing": round(random.uniform(0.0, 0.45), 2)},
-        ),
-        "ohh": VoiceConfig(
-            algorithm="drum_one_shot",
-            pattern={
-                "pulses": random.choice((1, 2, 2, 4)),
-                "offset": random.choice((2, 2, 6, 10)),
-                "velocity": random.randint(80, 92),
+                "style": "acid",
+                "kit_focus": "full",
+                "density": round(random.uniform(0.5, 0.75), 2),
+                "variation": round(random.uniform(0.2, 0.45), 2),
+                "perc_complexity": round(random.uniform(0.25, 0.5), 2),
             },
         ),
         "acid": VoiceConfig(
@@ -132,12 +100,46 @@ def build(title: str, setup_ref: str) -> Song:
         ),
     }
 
+    # Per-part intensity envelopes drive the drum_kit voice's density
+    # ramps; ``kit_focus`` overrides switch the kit between modes for
+    # the build (snare-density ramp) and outro (wind-down).
     parts = {
-        "intro": Part(bars=8),
-        "build": Part(bars=8),
-        "drop": Part(bars=16),
-        "drop2": Part(bars=16),
-        "outro": Part(bars=8),
+        "intro": Part(
+            bars=8,
+            intensity_start=0.2,
+            intensity_end=0.35,
+            voice_overrides={"kit": VoiceOverride(pattern={"kit_focus": "minimal"})},
+        ),
+        "build": Part(
+            bars=8,
+            intensity_start=0.35,
+            intensity_end=0.95,
+            voice_overrides={"kit": VoiceOverride(pattern={"kit_focus": "build"})},
+        ),
+        "drop": Part(
+            bars=16,
+            intensity_start=0.9,
+            intensity_end=0.85,
+        ),
+        "drop2": Part(
+            bars=16,
+            intensity_start=0.85,
+            intensity_end=0.95,
+        ),
+        "outro": Part(
+            bars=8,
+            intensity_start=0.7,
+            intensity_end=0.15,
+            voice_overrides={"kit": VoiceOverride(pattern={"kit_focus": "wind_down"})},
+        ),
+    }
+
+    feel = {
+        "pump": round(random.uniform(0.4, 0.55), 2),
+        "groove": round(random.uniform(0.1, 0.25), 2),
+        "drive": round(random.uniform(0.4, 0.6), 2),
+        "tension": round(random.uniform(0.4, 0.7), 2),
+        "wander": round(random.uniform(0.05, 0.15), 2),
     }
 
     return Song(
@@ -153,4 +155,5 @@ def build(title: str, setup_ref: str) -> Song:
         voices=voices,
         parts=parts,
         arrangement=["intro", "build", "drop", "build", "drop2", "outro"],
+        feel=feel,
     )

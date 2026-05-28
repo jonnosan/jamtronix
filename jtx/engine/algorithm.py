@@ -8,6 +8,19 @@ Algorithms are stateless across bars in v1. Anything that needs to
 remember (e.g. an arpeggiator's step position) gets re-derived from
 ``ctx.bar_index`` and ``ctx.rng``. This is what makes bar-by-bar regen
 work cleanly: rewriting a bar is just calling ``generate_bar`` again.
+
+Algorithms may return either:
+
+* :class:`jtx.engine.events.Event` — concrete MIDI events. Legacy
+  algorithms in the v3 codebase still emit these directly.
+* :class:`jtx.model.events.AbstractEvent` — abstract events (``Hit`` /
+  ``Note`` / ``Param`` / ``PolyAftertouch``) that name musical concepts
+  without MIDI plumbing. The voicing stage downstream translates these
+  to MIDI using the voice slot's ``kit_map`` / ``note`` / ``parameter_map``.
+  New algorithms (drum_kit, future work) should use this protocol.
+
+The two protocols can be mixed within a single ``generate_bar`` return
+list; the voicing stage passes concrete MIDI events through unchanged.
 """
 
 from __future__ import annotations
@@ -17,6 +30,7 @@ from typing import ClassVar
 
 from jtx.engine.context import BarContext
 from jtx.engine.events import Event
+from jtx.model.events import AbstractEvent
 from jtx.model.parameter_target import ParameterTarget
 
 
@@ -35,7 +49,7 @@ class Algorithm(ABC):
     """
 
     @abstractmethod
-    def generate_bar(self, ctx: BarContext) -> list[Event]:
+    def generate_bar(self, ctx: BarContext) -> list[Event] | list[AbstractEvent]:
         """Return the events for one bar.
 
         Each event's ``tick`` is **relative to the bar start** — i.e.

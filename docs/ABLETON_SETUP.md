@@ -24,10 +24,10 @@ Pick a style after you've worked through the fundamentals below.
   11000 and routes them to eight Live-mappable parameter sliders.
 * `daw_templates/JtxParameterRouter.amxd` — best-effort wrap of the
   `.maxpat`. **If Ableton refuses to load it**, regenerate from the
-  `.maxpat` (one click — see "Building the device" below).
-* `daw_templates/JtxParameterRouter.js` — the JS routing scriptlet
-  the `.maxpat` references. Must live next to the `.maxpat` (or be
-  bundled into the `.amxd` by Max).
+  `.maxpat` (one click — see "Building the device" below). The
+  patcher uses pure Max objects (`udpreceive`, `route`, `sprintf`,
+  `live.dial`) with no external dependencies — nothing to copy
+  alongside the `.amxd`.
 
 ## How parameter mapping works in practice
 

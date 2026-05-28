@@ -1,9 +1,16 @@
-"""Tests for the mix pass — fade-in/out + sidechain ducking."""
+"""Tests for the mix pass — fade-in/out + sidechain ducking.
+
+Schema v3: ``sidechain_from`` lists **instrument names**, not voice
+names. A drum_kit voice resolves the name via ``slot.kit_map``; a
+single-piece voice (drum/mono/poly) uses its own ``slot.name`` as its
+implicit instrument name.
+"""
 
 from __future__ import annotations
 
 from jtx.engine.events import ControlChange, Event, NoteOff, NoteOn
 from jtx.engine.mix import apply_mix_pass
+from jtx.model.setup import KitPiece, VoiceSlot
 
 
 def _notes(*specs: tuple[int, int, int, int, int]) -> list[Event]:
@@ -18,17 +25,47 @@ def _vels(events: list[Event]) -> list[int]:
     return [e.velocity for e in events if isinstance(e, NoteOn)]
 
 
+def _drum_slot(name: str, channel: int, note: int = 36) -> VoiceSlot:
+    return VoiceSlot(
+        name=name,
+        type="drum",
+        default_role="drum",
+        midi_channel=channel,
+        note=note,
+    )
+
+
+def _mono_slot(name: str, channel: int = 1) -> VoiceSlot:
+    return VoiceSlot(name=name, type="mono", default_role="bass", midi_channel=channel)
+
+
+def _kit_slot(name: str = "kit") -> VoiceSlot:
+    return VoiceSlot(
+        name=name,
+        type="drum_kit",
+        default_role="drum_kit",
+        midi_channel=10,
+        kit_map={
+            "kick": KitPiece(note=36, channel=10),
+            "snare": KitPiece(note=38, channel=10),
+            "chh": KitPiece(note=42, channel=11),
+        },
+    )
+
+
 def _mix(
     *,
     voice_events: dict[str, list[Event]],
-    feel_knobs: dict[str, dict[str, object]] | None = None,
+    voice_slots: dict[str, VoiceSlot],
+    mix_knobs: dict[str, dict[str, object]] | None = None,
     prev: dict[str, list[Event]] | None = None,
     bar_index: int = 0,
 ) -> dict[str, list[Event]]:
     return apply_mix_pass(
         voice_events=voice_events,
         prev_voice_events=prev or {},
-        feel_knobs_by_voice=feel_knobs or {},
+        mix_knobs_by_voice=mix_knobs or {},
+        voice_slots=voice_slots,
         bar_index=bar_index,
         ticks_per_bar=1920,
         ppq=480,
@@ -40,11 +77,12 @@ def _mix(
 
 def test_mix_pass_empty_knobs_is_identity() -> None:
     events = _notes((0, 1, 60, 100, 120))
-    out = _mix(voice_events={"v": events})
+    slots = {"v": _mono_slot("v", channel=1)}
+    out = _mix(voice_events={"v": events}, voice_slots=slots)
     assert out["v"] == events
 
 
-# ---------------------------------------------------------- sidechain
+# ---------------------------------------------------------- sidechain by instrument name
 
 
 def test_sidechain_trigger_in_same_bar_ducks() -> None:
@@ -54,7 +92,11 @@ def test_sidechain_trigger_in_same_bar_ducks() -> None:
             "kick": _notes((0, 10, 36, 110, 60)),
             "hat": _notes((120, 1, 42, 110, 60)),  # 120 ticks after kick
         },
-        feel_knobs={
+        voice_slots={
+            "kick": _drum_slot("kick", 10, 36),
+            "hat": _mono_slot("hat", channel=1),
+        },
+        mix_knobs={
             "hat": {
                 "sidechain_from": "kick",
                 "sidechain_floor": 60,
@@ -64,8 +106,86 @@ def test_sidechain_trigger_in_same_bar_ducks() -> None:
     )
     # distance = 120, release = 240, duck = 1 - 0.5 = 0.5.
     # vel = 110*(1-0.5) + 60*0.5 = 55 + 30 = 85.
-    hat_vels = _vels(out["hat"])
-    assert hat_vels == [85]
+    assert _vels(out["hat"]) == [85]
+
+
+def test_sidechain_from_drum_kit_piece_matches_channel_and_note() -> None:
+    """A Pump-style sidechain_from=["kick"] against a drum_kit voice
+    looks up the kit_map entry's (channel, note) and matches only those
+    NoteOns. Other kit pieces (e.g. snare) do NOT trigger."""
+    kit_events = (
+        # snare hit at tick 60 — should NOT trigger
+        [NoteOn(tick=60, channel=10, note=38, velocity=100), NoteOff(tick=120, channel=10, note=38)]
+        # kick hit at tick 0 — triggers
+        + _notes((0, 10, 36, 110, 60))
+    )
+    out = _mix(
+        voice_events={
+            "kit": kit_events,
+            "bass": _notes((120, 2, 40, 110, 60)),
+        },
+        voice_slots={
+            "kit": _kit_slot(),
+            "bass": _mono_slot("bass", channel=2),
+        },
+        mix_knobs={
+            "bass": {
+                "sidechain_from": ["kick"],
+                "sidechain_floor": 60,
+                "sidechain_release_beats": 0.5,
+            }
+        },
+    )
+    # distance = 120 ticks from the kick at 0 → duck 0.5 → vel 85.
+    # snare at 60 is closer (distance 60, duck 0.75 → vel ≈ 72) but it
+    # should NOT be a trigger since we asked only for "kick".
+    assert _vels(out["bass"]) == [85]
+
+
+def test_sidechain_from_drum_kit_snare_matches_only_snare_hits() -> None:
+    """sidechain_from=["snare"] picks up snare hits, not kicks."""
+    kit_events = _notes(
+        (0, 10, 36, 110, 60),  # kick — should NOT trigger
+        (120, 10, 38, 100, 60),  # snare — triggers
+    )
+    out = _mix(
+        voice_events={
+            "kit": kit_events,
+            "bass": _notes((180, 2, 40, 110, 60)),
+        },
+        voice_slots={
+            "kit": _kit_slot(),
+            "bass": _mono_slot("bass", channel=2),
+        },
+        mix_knobs={
+            "bass": {
+                "sidechain_from": ["snare"],
+                "sidechain_floor": 60,
+                "sidechain_release_beats": 0.5,
+            }
+        },
+    )
+    # snare at 120, bass at 180. Distance 60, release 240. Duck 0.75.
+    # vel = 110*0.25 + 60*0.75 = 27.5 + 45 = 72.5 → 72 (banker's rounding).
+    assert _vels(out["bass"]) == [72]
+
+
+def test_sidechain_unknown_instrument_is_no_op() -> None:
+    """sidechain_from naming an instrument no voice owns is a no-op."""
+    out = _mix(
+        voice_events={
+            "kick": _notes((0, 10, 36, 110, 60)),
+            "hat": _notes((100, 1, 42, 110, 60)),
+        },
+        voice_slots={
+            "kick": _drum_slot("kick", 10, 36),
+            "hat": _mono_slot("hat", channel=1),
+        },
+        mix_knobs={
+            "hat": {"sidechain_from": ["nonexistent"], "sidechain_floor": 60}
+        },
+    )
+    assert _vels(out["hat"]) == [110]  # untouched
 
 
 def test_sidechain_trigger_at_zero_distance_full_duck() -> None:
@@ -74,7 +194,11 @@ def test_sidechain_trigger_at_zero_distance_full_duck() -> None:
             "kick": _notes((0, 10, 36, 110, 60)),
             "hat": _notes((0, 1, 42, 110, 60)),  # simultaneous
         },
-        feel_knobs={"hat": {"sidechain_from": "kick", "sidechain_floor": 60}},
+        voice_slots={
+            "kick": _drum_slot("kick", 10, 36),
+            "hat": _mono_slot("hat", channel=1),
+        },
+        mix_knobs={"hat": {"sidechain_from": "kick", "sidechain_floor": 60}},
     )
     assert _vels(out["hat"]) == [60]
 
@@ -85,7 +209,11 @@ def test_sidechain_past_release_window_no_duck() -> None:
             "kick": _notes((0, 10, 36, 110, 60)),
             "hat": _notes((480, 1, 42, 110, 60)),  # 1 beat later
         },
-        feel_knobs={
+        voice_slots={
+            "kick": _drum_slot("kick", 10, 36),
+            "hat": _mono_slot("hat", channel=1),
+        },
+        mix_knobs={
             "hat": {
                 "sidechain_from": "kick",
                 "sidechain_floor": 60,
@@ -103,7 +231,12 @@ def test_sidechain_multiple_sources_strongest_wins() -> None:
             "snare": _notes((100, 10, 38, 100, 60)),
             "hat": _notes((110, 1, 42, 110, 60)),
         },
-        feel_knobs={
+        voice_slots={
+            "kick": _drum_slot("kick", 10, 36),
+            "snare": _drum_slot("snare", 10, 38),
+            "hat": _mono_slot("hat", channel=1),
+        },
+        mix_knobs={
             "hat": {
                 "sidechain_from": ["kick", "snare"],
                 "sidechain_floor": 60,
@@ -122,8 +255,12 @@ def test_sidechain_from_previous_bar_carries_over() -> None:
     curr_hat = _notes((0, 1, 42, 110, 60))  # tick 0 of current bar
     out = _mix(
         voice_events={"kick": [], "hat": curr_hat},
+        voice_slots={
+            "kick": _drum_slot("kick", 10, 36),
+            "hat": _mono_slot("hat", channel=1),
+        },
         prev={"kick": prev_kick},
-        feel_knobs={
+        mix_knobs={
             "hat": {
                 "sidechain_from": "kick",
                 "sidechain_floor": 60,
@@ -139,7 +276,8 @@ def test_sidechain_from_previous_bar_carries_over() -> None:
 def test_sidechain_no_source_is_passthrough() -> None:
     out = _mix(
         voice_events={"hat": _notes((100, 1, 42, 100, 60))},
-        feel_knobs={"hat": {"sidechain_floor": 60}},  # no source
+        voice_slots={"hat": _mono_slot("hat", channel=1)},
+        mix_knobs={"hat": {"sidechain_floor": 60}},  # no source
     )
     assert _vels(out["hat"]) == [100]
 
@@ -154,7 +292,11 @@ def test_sidechain_does_not_affect_non_noteon_events() -> None:
     ]
     out = _mix(
         voice_events={"kick": events, "filt": cc_voice},
-        feel_knobs={"filt": {"sidechain_from": "kick", "sidechain_floor": 0}},
+        voice_slots={
+            "kick": _drum_slot("kick", 10, 36),
+            "filt": _mono_slot("filt", channel=1),
+        },
+        mix_knobs={"filt": {"sidechain_from": "kick", "sidechain_floor": 0}},
     )
     # CCs pass through unchanged.
     assert out["filt"] == cc_voice
@@ -167,7 +309,8 @@ def test_fade_in_pre_start_silences_all_notes() -> None:
     """Notes scheduled before fade_in_at_bar are dropped (vel * 0)."""
     out = _mix(
         voice_events={"hat": _notes((0, 1, 42, 110, 60))},
-        feel_knobs={"hat": {"fade_in_at_bar": 4, "fade_in_beats": 8}},
+        voice_slots={"hat": _mono_slot("hat", channel=1)},
+        mix_knobs={"hat": {"fade_in_at_bar": 4, "fade_in_beats": 8}},
         bar_index=0,
     )
     # bar 0 << bar 4 → scale = 0 → vel * 0 = 0 → below min_velocity → dropped.
@@ -180,7 +323,8 @@ def test_fade_in_at_start_is_silent_during_ramp() -> None:
     """At the exact start of fade_in, velocity is 0 (silence)."""
     out = _mix(
         voice_events={"hat": _notes((0, 1, 42, 110, 60))},
-        feel_knobs={"hat": {"fade_in_at_bar": 0, "fade_in_beats": 4}},
+        voice_slots={"hat": _mono_slot("hat", channel=1)},
+        mix_knobs={"hat": {"fade_in_at_bar": 0, "fade_in_beats": 4}},
         bar_index=0,
     )
     # beat_position = 0, fade_in_start = 0, progress = 0 → scale 0 → dropped.
@@ -193,7 +337,8 @@ def test_fade_in_mid_ramp_scales_velocity() -> None:
     # progress = 4/8 = 0.5 → vel 100 * 0.5 = 50.
     out = _mix(
         voice_events={"hat": _notes((0, 1, 42, 100, 60))},
-        feel_knobs={"hat": {"fade_in_at_bar": 0, "fade_in_beats": 8}},
+        voice_slots={"hat": _mono_slot("hat", channel=1)},
+        mix_knobs={"hat": {"fade_in_at_bar": 0, "fade_in_beats": 8}},
         bar_index=1,
     )
     assert _vels(out["hat"]) == [50]
@@ -202,7 +347,8 @@ def test_fade_in_mid_ramp_scales_velocity() -> None:
 def test_fade_in_after_ramp_returns_to_sustain() -> None:
     out = _mix(
         voice_events={"hat": _notes((0, 1, 42, 100, 60))},
-        feel_knobs={"hat": {"fade_in_at_bar": 0, "fade_in_beats": 4}},
+        voice_slots={"hat": _mono_slot("hat", channel=1)},
+        mix_knobs={"hat": {"fade_in_at_bar": 0, "fade_in_beats": 4}},
         bar_index=4,  # well after fade_in completes (1 bar = 4 beats)
     )
     assert _vels(out["hat"]) == [100]
@@ -211,7 +357,8 @@ def test_fade_in_after_ramp_returns_to_sustain() -> None:
 def test_fade_sustain_level_below_one_attenuates_full_volume() -> None:
     out = _mix(
         voice_events={"hat": _notes((0, 1, 42, 100, 60))},
-        feel_knobs={
+        voice_slots={"hat": _mono_slot("hat", channel=1)},
+        mix_knobs={
             "hat": {
                 "fade_in_at_bar": 0,
                 "fade_in_beats": 4,
@@ -224,14 +371,17 @@ def test_fade_sustain_level_below_one_attenuates_full_volume() -> None:
 
 
 def test_fade_shape_exp_is_slower_at_start() -> None:
+    slots = {"hat": _mono_slot("hat", channel=1)}
     linear = _mix(
         voice_events={"hat": _notes((0, 1, 42, 100, 60))},
-        feel_knobs={"hat": {"fade_in_at_bar": 0, "fade_in_beats": 8, "fade_shape": "linear"}},
+        voice_slots=slots,
+        mix_knobs={"hat": {"fade_in_at_bar": 0, "fade_in_beats": 8, "fade_shape": "linear"}},
         bar_index=1,  # 50% through
     )
     exp = _mix(
         voice_events={"hat": _notes((0, 1, 42, 100, 60))},
-        feel_knobs={"hat": {"fade_in_at_bar": 0, "fade_in_beats": 8, "fade_shape": "exp"}},
+        voice_slots=slots,
+        mix_knobs={"hat": {"fade_in_at_bar": 0, "fade_in_beats": 8, "fade_shape": "exp"}},
         bar_index=1,
     )
     # At 50% progress: linear = 0.5, exp = 0.25 (quadratic ease-in).
@@ -242,7 +392,8 @@ def test_fade_shape_exp_is_slower_at_start() -> None:
 def test_fade_out_ramps_down() -> None:
     out = _mix(
         voice_events={"hat": _notes((0, 1, 42, 100, 60))},
-        feel_knobs={"hat": {"fade_out_at_bar": 4, "fade_out_beats": 8}},
+        voice_slots={"hat": _mono_slot("hat", channel=1)},
+        mix_knobs={"hat": {"fade_out_at_bar": 4, "fade_out_beats": 8}},
         bar_index=5,  # 50% through fade-out
     )
     # bar 5 tick 0 = beat 20. fade_out_start = 16. progress = 4/8 = 0.5.
@@ -255,7 +406,8 @@ def test_fade_in_dropped_notes_remove_matching_offs() -> None:
     events = _notes((0, 1, 42, 100, 60))
     out = _mix(
         voice_events={"hat": events},
-        feel_knobs={"hat": {"fade_in_at_bar": 4, "fade_in_beats": 8, "fade_min_velocity": 5}},
+        voice_slots={"hat": _mono_slot("hat", channel=1)},
+        mix_knobs={"hat": {"fade_in_at_bar": 4, "fade_in_beats": 8, "fade_min_velocity": 5}},
         bar_index=0,
     )
     assert out["hat"] == []  # no orphan NoteOff
@@ -273,7 +425,11 @@ def test_fade_in_and_sidechain_compose() -> None:
             "kick": _notes((0, 10, 36, 110, 60)),
             "hat": _notes((0, 1, 42, 100, 60)),
         },
-        feel_knobs={
+        voice_slots={
+            "kick": _drum_slot("kick", 10, 36),
+            "hat": _mono_slot("hat", channel=1),
+        },
+        mix_knobs={
             "hat": {
                 "fade_in_at_bar": 0,
                 "fade_in_beats": 8,  # 2 bars

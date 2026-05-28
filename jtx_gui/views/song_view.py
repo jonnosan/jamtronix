@@ -41,6 +41,7 @@ from jtx.model import (
 from jtx_gui import theme
 from jtx_gui.algorithm_meta import (
     FEEL_KNOBS,
+    GLOBAL_FEEL_KNOBS,
     SCHEMAS,
     KnobSpec,
     algorithms_for,
@@ -185,7 +186,7 @@ class VoicePanel(QFrame):
         row_widget, row_layout = _new_knob_row()
         row_count = 0
         for spec in FEEL_KNOBS:
-            current = self._config.feel.get(spec.name, spec.default)
+            current = self._config.mix.get(spec.name, spec.default)
             editor = _editor_for(spec, current, on_change=self._on_feel_value)
             row_layout.addWidget(editor)
             row_count += 1
@@ -200,7 +201,7 @@ class VoicePanel(QFrame):
         # Extra feel keys (e.g. sidechain_from / sidechain_floor — these
         # exist in saved songs but aren't part of the universal v1 schema).
         feel_seen = {spec.name for spec in FEEL_KNOBS}
-        feel_extras = {k: v for k, v in self._config.feel.items() if k not in feel_seen}
+        feel_extras = {k: v for k, v in self._config.mix.items() if k not in feel_seen}
         if feel_extras:
             extras_box = _RawDictEditor(
                 title="Extra Feel Keys",
@@ -236,7 +237,7 @@ class VoicePanel(QFrame):
         self.dirty.emit()
 
     def _on_feel_value(self, name: str, value: object) -> None:
-        self._config.feel[name] = value
+        self._config.mix[name] = value
         self.dirty.emit()
 
     def _on_extra_pattern(self, new_dict: dict[str, Any]) -> None:
@@ -249,9 +250,9 @@ class VoicePanel(QFrame):
 
     def _on_extra_feel(self, new_dict: dict[str, Any]) -> None:
         feel_seen = {spec.name for spec in FEEL_KNOBS}
-        kept = {k: v for k, v in self._config.feel.items() if k in feel_seen}
+        kept = {k: v for k, v in self._config.mix.items() if k in feel_seen}
         kept.update(new_dict)
-        self._config.feel = kept
+        self._config.mix = kept
         self.dirty.emit()
 
 
@@ -312,6 +313,11 @@ class SongView(QWidget):
 
         self._content_layout.addWidget(_HeaderPanel(song=song, on_dirty=self._state.mark_dirty))
 
+        # Song-wide GLOBAL FEEL knobs (pump / groove / drive / tension / wander).
+        self._content_layout.addWidget(
+            _GlobalFeelPanel(song=song, on_dirty=self._state.mark_dirty)
+        )
+
         # Voices section heading.
         voices_title = QLabel("VOICES")
         voices_title.setObjectName("SectionTitle")
@@ -351,6 +357,48 @@ def _infer_voice_type(algorithm: str) -> VoiceType:
     if meta is not None and meta.voice_types:
         return meta.voice_types[0]
     return "mono"
+
+
+# --------------------------------------------------------------------------
+#                          global feel panel (song-wide knobs)
+# --------------------------------------------------------------------------
+
+
+class _GlobalFeelPanel(QFrame):
+    """Song-wide ``Song.feel`` knobs — pump / groove / drive / tension / wander.
+
+    Each knob is bound to ``song.feel[name]``. Editing emits the
+    parent ``on_dirty`` callback so save state tracks correctly.
+    """
+
+    def __init__(self, *, song: Song, on_dirty) -> None:  # type: ignore[no-untyped-def]
+        super().__init__()
+        self.setObjectName("Panel")
+        self._song = song
+        self._on_dirty = on_dirty
+
+        self._section = CollapsibleSection(
+            "GLOBAL FEEL", expanded=True, parent=self
+        )
+        row_widget, row_layout = _new_knob_row()
+        for spec in GLOBAL_FEEL_KNOBS:
+            current = float(song.feel.get(spec.name, spec.default))
+            editor = _editor_for(spec, current, on_change=self._on_value)
+            row_layout.addWidget(editor)
+        row_layout.addStretch(1)
+        self._section.add_widget(row_widget)
+        self._section.set_header_hint(f"{len(GLOBAL_FEEL_KNOBS)} knobs")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._section)
+
+    def _on_value(self, name: str, value: object) -> None:
+        try:
+            self._song.feel[name] = float(value)
+        except (TypeError, ValueError):
+            return
+        self._on_dirty()
 
 
 # --------------------------------------------------------------------------

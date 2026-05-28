@@ -15,7 +15,8 @@ Knobs:
   generous range lets a single pulse hold for many steps; ``gate=15``
   with ``pulses=1`` gives a near-whole-bar sustained root.
 
-Deterministic (no RNG), stateless across bars.
+Deterministic (no RNG), stateless across bars. MIDI-naive — emits
+:class:`Note` events for the voicing stage to route.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ from jtx.algorithms._steps import step_ticks, steps_per_bar
 from jtx.algorithms._theory import note_to_midi
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
-from jtx.engine.events import Event, NoteOff, NoteOn
+from jtx.model.events import AbstractEvent, Note
 
 
 class RootPulse(Algorithm):
@@ -35,10 +36,10 @@ class RootPulse(Algorithm):
 
     name: ClassVar[str] = "root_pulse"
 
-    def __init__(self, *, midi_channel: int) -> None:
-        self.midi_channel = midi_channel
+    def __init__(self) -> None:
+        pass
 
-    def generate_bar(self, ctx: BarContext) -> list[Event]:
+    def generate_bar(self, ctx: BarContext) -> list[AbstractEvent]:
         knobs = ctx.pattern_knobs
 
         pulses = int(knobs.get("pulses", 4))
@@ -58,13 +59,12 @@ class RootPulse(Algorithm):
         duration = max(1, int(s * gate))
 
         pattern = euclid(pulses, total_steps, offset)
-        events: list[Event] = []
+        events: list[AbstractEvent] = []
         for step_idx, fires in enumerate(pattern):
             if not fires:
                 continue
             tick = step_idx * s
             events.append(
-                NoteOn(tick=tick, channel=self.midi_channel, note=pitch, velocity=velocity)
+                Note(pitch=pitch, velocity=velocity, duration_ticks=duration, tick=tick)
             )
-            events.append(NoteOff(tick=tick + duration, channel=self.midi_channel, note=pitch))
         return events

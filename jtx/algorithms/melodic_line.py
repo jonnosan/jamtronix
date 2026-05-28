@@ -49,18 +49,22 @@ from jtx.algorithms._subdivision import subdivision_grid
 from jtx.algorithms._theory import note_to_midi, scale_intervals
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
-from jtx.engine.events import Event, NoteOff, NoteOn
+from jtx.model.events import AbstractEvent, Note
 
 
 class MelodicLine(Algorithm):
-    """Step-sequenced melodic line drawing from a scale-degree palette."""
+    """Step-sequenced melodic line drawing from a scale-degree palette.
+
+    MIDI-naive: emits :class:`Note` events; the voicing stage adds
+    the channel from the voice slot.
+    """
 
     name: ClassVar[str] = "melodic_line"
 
-    def __init__(self, *, midi_channel: int) -> None:
-        self.midi_channel = midi_channel
+    def __init__(self) -> None:
+        pass
 
-    def generate_bar(self, ctx: BarContext) -> list[Event]:
+    def generate_bar(self, ctx: BarContext) -> list[AbstractEvent]:
         knobs = ctx.pattern_knobs
         jitter_rng = ctx.rng
 
@@ -87,7 +91,7 @@ class MelodicLine(Algorithm):
         register_octave = 4 + octave_shift
         tonic_midi = note_to_midi(ctx.key.tonic, register_octave) + ctx.chord_root_semitones
 
-        events: list[Event] = []
+        events: list[AbstractEvent] = []
         prev_pitch: int | None = None
 
         # Build a "skip" mask for positions that fall inside an inserted
@@ -129,7 +133,6 @@ class MelodicLine(Algorithm):
             pitch, vel = note
             _emit_note(
                 events,
-                channel=self.midi_channel,
                 tick=tick,
                 pitch=pitch,
                 velocity=vel,
@@ -168,7 +171,6 @@ class MelodicLine(Algorithm):
                     triplet_duration = max(1, int(triplet_spacing * gate))
                     _emit_note(
                         events,
-                        channel=self.midi_channel,
                         tick=tick,
                         pitch=pitch,
                         velocity=vel,
@@ -215,9 +217,8 @@ def _roll_note(
 
 
 def _emit_note(
-    events: list[Event],
+    events: list[AbstractEvent],
     *,
-    channel: int,
     tick: int,
     pitch: int,
     velocity: int,
@@ -236,18 +237,19 @@ def _emit_note(
         direction = 1 if pitch > prev_pitch else -1
         passing_pitch = max(0, min(127, pitch - direction))
         passing_tick = max(0, tick - base_spacing // 4)
+        passing_duration = max(1, tick - 1 - passing_tick)
         events.append(
-            NoteOn(
-                tick=passing_tick,
-                channel=channel,
-                note=passing_pitch,
+            Note(
+                pitch=passing_pitch,
                 velocity=max(1, velocity - 20),
+                duration_ticks=passing_duration,
+                tick=passing_tick,
             )
         )
-        events.append(NoteOff(tick=tick - 1, channel=channel, note=passing_pitch))
 
-    events.append(NoteOn(tick=tick, channel=channel, note=pitch, velocity=velocity))
-    events.append(NoteOff(tick=tick + duration, channel=channel, note=pitch))
+    events.append(
+        Note(pitch=pitch, velocity=velocity, duration_ticks=duration, tick=tick)
+    )
 
 
 def _degree_to_semitones(degree: int, scale: tuple[int, ...]) -> int:

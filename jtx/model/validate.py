@@ -21,12 +21,18 @@ class ValidationError(ValueError):
         super().__init__("; ".join(errors))
 
 
+_VALID_FEEL_KEYS: frozenset[str] = frozenset(
+    {"pump", "groove", "drive", "tension", "wander"}
+)
+
+
 def validate_song(song: Song) -> list[str]:
     """Return a list of structural problems with *song*.
 
     "Structural" means anything checkable without a Setup: schema
     version, arrangement-vs-parts, follower source existence + cycles,
-    LFO application parts.
+    LFO application parts, song-feel keys + ranges, part-intensity
+    bounds.
     """
     errors: list[str] = []
 
@@ -36,16 +42,43 @@ def validate_song(song: Song) -> list[str]:
             f"supported {SCHEMA_VERSION}"
         )
 
+    # Song-wide feel knobs.
+    extra_feel = set(song.feel) - _VALID_FEEL_KEYS
+    if extra_feel:
+        errors.append(
+            f"song {song.title!r}: unknown feel keys {sorted(extra_feel)!r} "
+            f"(allowed: {sorted(_VALID_FEEL_KEYS)!r})"
+        )
+    for key, value in song.feel.items():
+        if key not in _VALID_FEEL_KEYS:
+            continue
+        if not isinstance(value, int | float):
+            errors.append(
+                f"song {song.title!r}: feel[{key!r}] = {value!r} is not numeric"
+            )
+            continue
+        if not (0.0 <= float(value) <= 1.0):
+            errors.append(
+                f"song {song.title!r}: feel[{key!r}] = {value} not in [0, 1]"
+            )
+
     # Arrangement parts must exist.
     for name in song.arrangement:
         if name not in song.parts:
             errors.append(f"arrangement references unknown part {name!r}")
 
     # Voice override references must point at known song voices.
+    # Part intensity envelope bounds.
     for pname, part in song.parts.items():
         for vname in part.voice_overrides:
             if vname not in song.voices:
                 errors.append(f"part {pname!r} overrides unknown voice {vname!r}")
+        for field_name in ("intensity_start", "intensity_end"):
+            v = getattr(part, field_name)
+            if not (0.0 <= float(v) <= 1.0):
+                errors.append(
+                    f"part {pname!r}: {field_name} {v} not in [0, 1]"
+                )
 
     # Follower sources must exist and not form cycles.
     follower_source: dict[str, str] = {}

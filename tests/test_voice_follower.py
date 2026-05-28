@@ -9,6 +9,7 @@ import pytest
 from jtx.algorithms import VoiceFollower
 from jtx.engine.context import BarContext
 from jtx.engine.events import Event, NoteOff, NoteOn
+from jtx.model.events import Note
 from jtx.model.song import Key
 
 
@@ -42,34 +43,32 @@ def _source_notes(*specs: tuple[int, int, int, int]) -> list[Event]:
     return events
 
 
-def _extract_notes(events: list[Event]) -> list[tuple[int, int, int]]:
-    """Helper: return (tick, note, velocity) for each NoteOn."""
-    return [(e.tick, e.note, e.velocity) for e in events if isinstance(e, NoteOn)]
+def _extract_notes(events) -> list[tuple[int, int, int]]:
+    """Helper: return (tick, pitch, velocity) for each abstract Note."""
+    return [(n.tick, n.pitch, n.velocity) for n in events if isinstance(n, Note)]
 
 
 # ------------------------------------------------------------ basics
 
 
 def test_follower_with_no_source_emits_nothing() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     assert follower.generate_bar(_ctx(source_events=None)) == []
     assert follower.generate_bar(_ctx(source_events=[])) == []
 
 
 def test_follower_passthrough_with_defaults() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     src = _source_notes((0, 60, 100, 120), (480, 64, 100, 120))
     events = follower.generate_bar(_ctx(source_events=src))
     assert _extract_notes(events) == [(0, 60, 100), (480, 64, 100)]
-    # Output channel is the follower's, not the source's.
-    assert all(isinstance(e, NoteOn | NoteOff) and e.channel == 5 for e in events)
 
 
 # ------------------------------------------------------------ latch
 
 
 def test_follower_latch_first_per_bar() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     src = _source_notes((0, 60, 100, 120), (480, 64, 100, 120), (960, 67, 100, 120))
     events = follower.generate_bar(
         _ctx(source_events=src, pattern_knobs={"latch": "first_per_bar"})
@@ -78,7 +77,7 @@ def test_follower_latch_first_per_bar() -> None:
 
 
 def test_follower_latch_every_nth() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     src = _source_notes(
         (0, 60, 100, 60), (120, 62, 100, 60), (240, 64, 100, 60), (360, 65, 100, 60)
     )
@@ -89,7 +88,7 @@ def test_follower_latch_every_nth() -> None:
 
 
 def test_follower_latch_accent_only() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     src = _source_notes((0, 60, 110, 120), (120, 62, 80, 120), (240, 64, 105, 120))
     events = follower.generate_bar(
         _ctx(
@@ -104,7 +103,7 @@ def test_follower_latch_accent_only() -> None:
 
 
 def test_follower_latch_unknown_raises() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     with pytest.raises(ValueError, match="unknown latch"):
         follower.generate_bar(
             _ctx(source_events=_source_notes((0, 60, 100, 120)), pattern_knobs={"latch": "bogus"})
@@ -115,7 +114,7 @@ def test_follower_latch_unknown_raises() -> None:
 
 
 def test_follower_transform_invert_mirrors_around_axis() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     src = _source_notes((0, 60, 100, 120), (240, 67, 100, 120))
     events = follower.generate_bar(
         _ctx(source_events=src, pattern_knobs={"transform": "invert", "invert_axis": 60})
@@ -125,7 +124,7 @@ def test_follower_transform_invert_mirrors_around_axis() -> None:
 
 
 def test_follower_transform_retrograde_reverses_in_bar() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     src = _source_notes((0, 60, 100, 120), (960, 64, 100, 120))
     events = follower.generate_bar(
         _ctx(source_events=src, pattern_knobs={"transform": "retrograde"})
@@ -138,7 +137,7 @@ def test_follower_transform_retrograde_reverses_in_bar() -> None:
 
 
 def test_follower_transform_thin_drops_some_notes() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     src = _source_notes(*[(i * 120, 60 + i, 100, 60) for i in range(16)])
     events = follower.generate_bar(
         _ctx(
@@ -152,7 +151,7 @@ def test_follower_transform_thin_drops_some_notes() -> None:
 
 
 def test_follower_transform_unknown_raises() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     with pytest.raises(ValueError, match="unknown transform"):
         follower.generate_bar(
             _ctx(
@@ -166,7 +165,7 @@ def test_follower_transform_unknown_raises() -> None:
 
 
 def test_follower_transpose_semitones() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     src = _source_notes((0, 60, 100, 120))
     events = follower.generate_bar(
         _ctx(source_events=src, pattern_knobs={"transpose_semitones": 5})
@@ -175,7 +174,7 @@ def test_follower_transpose_semitones() -> None:
 
 
 def test_follower_transpose_octaves() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     src = _source_notes((0, 60, 100, 120))
     events = follower.generate_bar(_ctx(source_events=src, pattern_knobs={"transpose_octaves": 1}))
     assert _extract_notes(events) == [(0, 72, 100)]
@@ -185,15 +184,15 @@ def test_follower_transpose_octaves() -> None:
 
 
 def test_follower_chord_emits_one_note_per_interval() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     src = _source_notes((0, 60, 100, 120))
     events = follower.generate_bar(_ctx(source_events=src, pattern_knobs={"quality": "major"}))
-    pitches = sorted(e.note for e in events if isinstance(e, NoteOn))
+    pitches = sorted(n.pitch for n in events if isinstance(n, Note))
     assert pitches == [60, 64, 67]
 
 
 def test_follower_chord_default_zero_no_change() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     src = _source_notes((0, 60, 100, 120))
     events = follower.generate_bar(_ctx(source_events=src, pattern_knobs={"quality": "unison"}))
     assert _extract_notes(events) == [(0, 60, 100)]
@@ -203,42 +202,42 @@ def test_follower_chord_default_zero_no_change() -> None:
 
 
 def test_follower_quantize_nearest_snaps_to_scale() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     # A natural minor pcs: {9, 11, 0, 2, 4, 5, 7} = A B C D E F G.
     # MIDI 73 (C#, pc=1) is NOT in A minor. Nearest scale: 72 (C, pc=0)
     # or 74 (D, pc=2). Both 1 semitone away.
     src = _source_notes((0, 73, 100, 120))
     events = follower.generate_bar(_ctx(source_events=src, pattern_knobs={"quantize": "nearest"}))
-    note = next(e for e in events if isinstance(e, NoteOn))
-    assert note.note in (72, 74)
+    note = next(n for n in events if isinstance(n, Note))
+    assert note.pitch in (72, 74)
 
 
 def test_follower_quantize_up_snaps_upward() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     src = _source_notes((0, 73, 100, 120))  # C# — out of A minor.
     events = follower.generate_bar(_ctx(source_events=src, pattern_knobs={"quantize": "up"}))
-    note = next(e for e in events if isinstance(e, NoteOn))
-    assert note.note == 74  # D, pc 2 — first scale member going up.
+    note = next(n for n in events if isinstance(n, Note))
+    assert note.pitch == 74  # D, pc 2 — first scale member going up.
 
 
 def test_follower_quantize_down_snaps_downward() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     src = _source_notes((0, 73, 100, 120))  # C#
     events = follower.generate_bar(_ctx(source_events=src, pattern_knobs={"quantize": "down"}))
-    note = next(e for e in events if isinstance(e, NoteOn))
-    assert note.note == 72  # C, pc 0.
+    note = next(n for n in events if isinstance(n, Note))
+    assert note.pitch == 72  # C, pc 0.
 
 
 def test_follower_quantize_off_passes_through() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     src = _source_notes((0, 73, 100, 120))
     events = follower.generate_bar(_ctx(source_events=src, pattern_knobs={"quantize": "off"}))
-    note = next(e for e in events if isinstance(e, NoteOn))
-    assert note.note == 73
+    note = next(n for n in events if isinstance(n, Note))
+    assert note.pitch == 73
 
 
 def test_follower_quantize_scale_override() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     # In A major (pcs {9, 11, 1, 2, 4, 6, 8}), MIDI 73 (C#, pc 1) IS in scale.
     src = _source_notes((0, 73, 100, 120))
     events = follower.generate_bar(
@@ -247,31 +246,31 @@ def test_follower_quantize_scale_override() -> None:
             pattern_knobs={"quantize": "nearest", "quantize_scale": "major"},
         )
     )
-    note = next(e for e in events if isinstance(e, NoteOn))
-    assert note.note == 73  # already in A major, no change.
+    note = next(n for n in events if isinstance(n, Note))
+    assert note.pitch == 73  # already in A major, no change.
 
 
 # ---------------------------------------------------------- ratchet
 
 
 def test_follower_ratchet_one_no_change() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     src = _source_notes((0, 60, 100, 120))
     events = follower.generate_bar(_ctx(source_events=src, pattern_knobs={"ratchet": 1}))
     assert _extract_notes(events) == [(0, 60, 100)]
 
 
 def test_follower_ratchet_four_emits_four_evenly_spaced() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     src = _source_notes((0, 60, 100, 120))
     events = follower.generate_bar(_ctx(source_events=src, pattern_knobs={"ratchet": 4}))
-    ticks = sorted(e.tick for e in events if isinstance(e, NoteOn))
+    ticks = sorted(n.tick for n in events if isinstance(n, Note))
     # 4 retriggers over 120-tick duration → 30-tick spacing.
     assert ticks == [0, 30, 60, 90]
 
 
 def test_follower_ratchet_curve_last_beat_only_triplets_inside_beat_four() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     # One note on beat 1 (tick 0) + one note inside beat 4 (tick 1440).
     src = _source_notes((0, 60, 100, 240), (1440, 60, 100, 240))
     events = follower.generate_bar(
@@ -280,7 +279,7 @@ def test_follower_ratchet_curve_last_beat_only_triplets_inside_beat_four() -> No
             pattern_knobs={"ratchet": 3, "ratchet_curve": "last_beat"},
         )
     )
-    ticks = sorted(e.tick for e in events if isinstance(e, NoteOn))
+    ticks = sorted(n.tick for n in events if isinstance(n, Note))
     # Beat 1 note: ratchet=1 (curve filters); beat 4 note: ratchet=3.
     # First note untouched at tick 0. Second note at 1440 splits into
     # 3 retriggers across 240-tick duration → 80-tick spacing.
@@ -288,7 +287,7 @@ def test_follower_ratchet_curve_last_beat_only_triplets_inside_beat_four() -> No
 
 
 def test_follower_ratchet_curve_pulse_only_triplets_on_downbeats() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     # Notes at ticks 0 (downbeat), 240 (off-beat), 480 (downbeat), 720 (off-beat).
     src = _source_notes(
         (0, 60, 100, 240),
@@ -302,14 +301,14 @@ def test_follower_ratchet_curve_pulse_only_triplets_on_downbeats() -> None:
             pattern_knobs={"ratchet": 3, "ratchet_curve": "pulse"},
         )
     )
-    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
+    note_ons = sorted((n for n in events if isinstance(n, Note)), key=lambda n: n.tick)
     # Downbeat notes (0, 480) split into 3 retriggers each = 6 notes.
     # Off-beat notes (240, 720) stay as singletons = 2 notes.
     assert len(note_ons) == 6 + 2
 
 
 def test_follower_ratchet_curve_unknown_raises() -> None:
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     src = _source_notes((0, 60, 100, 120))
     with pytest.raises(ValueError, match="unknown ratchet_curve"):
         follower.generate_bar(
@@ -325,7 +324,7 @@ def test_follower_ratchet_curve_unknown_raises() -> None:
 
 def test_follower_shift_one_uses_prev_bar_source() -> None:
     """``shift_bars=1`` echoes the previous bar's source into this bar."""
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     curr = _source_notes((0, 60, 100, 60), (480, 64, 100, 60))
     prev = _source_notes((0, 67, 100, 60), (960, 72, 100, 60))
     events = follower.generate_bar(
@@ -341,7 +340,7 @@ def test_follower_shift_one_uses_prev_bar_source() -> None:
 
 def test_follower_shift_one_with_no_prev_emits_nothing() -> None:
     """First bar of a part with shift_bars=1 is silent."""
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     curr = _source_notes((0, 60, 100, 60))
     assert (
         follower.generate_bar(
@@ -357,7 +356,7 @@ def test_follower_shift_one_with_no_prev_emits_nothing() -> None:
 
 def test_follower_shift_zero_is_default_behaviour() -> None:
     """Explicit shift_bars=0 reads current-bar source like the default."""
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     curr = _source_notes((240, 65, 100, 60))
     prev = _source_notes((0, 99, 100, 60))
     events = follower.generate_bar(
@@ -372,7 +371,7 @@ def test_follower_shift_zero_is_default_behaviour() -> None:
 
 def test_follower_shift_greater_than_one_returns_empty() -> None:
     """v1 only caches one bar; deeper shifts return nothing."""
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     curr = _source_notes((0, 60, 100, 60))
     prev = _source_notes((0, 64, 100, 60))
     assert (
@@ -390,7 +389,7 @@ def test_follower_shift_greater_than_one_returns_empty() -> None:
 def test_follower_shift_negative_raises() -> None:
     import pytest
 
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     curr = _source_notes((0, 60, 100, 60))
     with pytest.raises(ValueError, match="shift_bars"):
         follower.generate_bar(_ctx(source_events=curr, pattern_knobs={"shift_bars": -1}))
@@ -398,7 +397,7 @@ def test_follower_shift_negative_raises() -> None:
 
 def test_follower_shift_composes_with_pipeline_steps() -> None:
     """Shifted source still goes through latch/transpose/chord/etc."""
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     prev = _source_notes((0, 60, 100, 60), (480, 62, 100, 60), (960, 64, 100, 60))
     events = follower.generate_bar(
         _ctx(
@@ -420,7 +419,7 @@ def test_follower_shift_composes_with_pipeline_steps() -> None:
 
 def test_follower_full_pipeline_composes_correctly() -> None:
     """Latch first → transpose +12 → chord [0,4,7] → ratchet 2."""
-    follower = VoiceFollower(midi_channel=5)
+    follower = VoiceFollower()
     src = _source_notes(
         (0, 60, 100, 120),
         (240, 64, 100, 120),
@@ -437,14 +436,14 @@ def test_follower_full_pipeline_composes_correctly() -> None:
             },
         )
     )
-    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: (e.tick, e.note))
+    note_ons = sorted((n for n in events if isinstance(n, Note)), key=lambda n: (n.tick, n.pitch))
     # first_per_bar → only source[0] survives.
     # +1 octave → pitch 72.
     # chord [0,4,7] → pitches 72, 76, 79.
     # ratchet=2 → each at tick 0 + tick 60.
     pitches_by_tick: dict[int, list[int]] = {}
     for n in note_ons:
-        pitches_by_tick.setdefault(n.tick, []).append(n.note)
+        pitches_by_tick.setdefault(n.tick, []).append(n.pitch)
     assert sorted(pitches_by_tick) == [0, 60]
     assert sorted(pitches_by_tick[0]) == [72, 76, 79]
     assert sorted(pitches_by_tick[60]) == [72, 76, 79]

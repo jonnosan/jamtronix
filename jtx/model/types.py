@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Literal
 
-VoiceType = Literal["drum", "mono", "poly", "modulator", "follower"]
+VoiceType = Literal["drum", "drum_kit", "mono", "poly", "modulator", "follower"]
 
 Role = Literal[
     "drum",
+    "drum_kit",
     "bass",
     "lead",
     "pad",
@@ -19,6 +20,7 @@ Role = Literal[
 
 ROLES_BY_TYPE: dict[VoiceType, tuple[Role, ...]] = {
     "drum": ("drum",),
+    "drum_kit": ("drum_kit",),
     "mono": ("bass", "lead"),
     "poly": ("pad", "stab", "chord"),
     "modulator": ("modulator",),
@@ -35,11 +37,21 @@ its concrete binding is deferred (see ``jtx.engine.AbletonLinkClock``);
 selecting it will raise until that's resolved.
 """
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 """Bump when the on-disk JSON shape changes incompatibly.
 
 * v1 → v2 (Phase A): ``VoiceSlot.cc_map: {fn: cc}`` replaced by
   ``parameter_map: {fn: ParameterTarget}``; added ``mpe_mode`` +
   ``mpe_channel_count``. ``persist.json_io.load_setup`` auto-migrates
   v1 files at load time (cc_map entries become ``CCTarget``s).
+* v2 → v3 (drum-kit + global feel): adds ``drum_kit`` voice type;
+  ``VoiceSlot.kit_map`` now maps piece-name → ``KitPiece(note,
+  channel)`` (drum_kit voices only) and a new ``VoiceSlot.note``
+  carries the MIDI note for single-piece ``drum`` voices.
+  ``VoiceConfig.feel`` / ``VoiceOverride.feel`` are renamed to
+  ``mix`` and shrunk to mix-pass keys (sidechain / fade / evolution).
+  ``Song.feel`` becomes a song-level dict with five keys
+  (pump, groove, drive, tension, wander). ``Part.intensity_start``
+  + ``intensity_end`` envelope each part. No migration path —
+  re-generate songs from templates.
 """

@@ -1,4 +1,9 @@
-"""Tests for cc_lfo + cc_envelope (modulator-voice algorithms)."""
+"""Tests for cc_lfo + cc_envelope (modulator-voice algorithms).
+
+Schema v3: MIDI-naive. Emit ``Param(name="cc<N>")`` events; voicing
+stage parses the embedded CC# and emits a :class:`ControlChange` on
+the voice slot's channel.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +13,7 @@ import pytest
 
 from jtx.algorithms import CCLFO, CCEnvelope
 from jtx.engine.context import BarContext
-from jtx.engine.events import ControlChange
+from jtx.model.events import Param
 from jtx.model.song import Key
 
 
@@ -27,27 +32,30 @@ def _ctx(
     )
 
 
+def _params(events) -> list[Param]:
+    return [e for e in events if isinstance(e, Param)]
+
+
 # ----------------------------------------------------------- cc_lfo
 
 
 def test_cc_lfo_default_emits_sine_at_cc74() -> None:
-    lfo = CCLFO(midi_channel=2)
+    lfo = CCLFO()
     events = lfo.generate_bar(_ctx())
-    ccs = [e for e in events if isinstance(e, ControlChange)]
-    assert len(ccs) == 16  # default samples_per_bar
-    assert all(c.cc == 74 for c in ccs)
-    assert all(0 <= c.value <= 127 for c in ccs)
+    params = _params(events)
+    assert len(params) == 16
+    assert all(p.name == "cc74" for p in params)
+    assert all(0.0 <= p.value <= 1.0 for p in params)
 
 
 def test_cc_lfo_samples_per_bar_knob() -> None:
-    lfo = CCLFO(midi_channel=2)
+    lfo = CCLFO()
     events = lfo.generate_bar(_ctx(pattern_knobs={"samples_per_bar": 4}))
-    ccs = [e for e in events if isinstance(e, ControlChange)]
-    assert len(ccs) == 4
+    assert len(_params(events)) == 4
 
 
 def test_cc_lfo_square_alternates_extremes() -> None:
-    lfo = CCLFO(midi_channel=2)
+    lfo = CCLFO()
     events = lfo.generate_bar(
         _ctx(
             pattern_knobs={
@@ -59,15 +67,13 @@ def test_cc_lfo_square_alternates_extremes() -> None:
             }
         )
     )
-    ccs = sorted((e for e in events if isinstance(e, ControlChange)), key=lambda e: e.tick)
-    # First half = 127 (high), second half = 0 (low) given square wave
-    # and depth/offset configured for full swing.
-    assert ccs[0].value == 127
-    assert ccs[-1].value == 0
+    params = sorted(_params(events), key=lambda p: p.tick)
+    assert params[0].value == pytest.approx(1.0)
+    assert params[-1].value == pytest.approx(0.0)
 
 
 def test_cc_lfo_saw_ramps_up() -> None:
-    lfo = CCLFO(midi_channel=2)
+    lfo = CCLFO()
     events = lfo.generate_bar(
         _ctx(
             pattern_knobs={
@@ -79,44 +85,33 @@ def test_cc_lfo_saw_ramps_up() -> None:
             }
         )
     )
-    ccs = sorted((e for e in events if isinstance(e, ControlChange)), key=lambda e: e.tick)
-    values = [c.value for c in ccs]
-    # Saw ramps roughly monotonically (allowing for rounding noise).
+    values = [p.value for p in sorted(_params(events), key=lambda p: p.tick)]
     diffs = [b - a for a, b in zip(values, values[1:], strict=False)]
     assert sum(1 for d in diffs if d > 0) >= len(diffs) - 2
 
 
 def test_cc_lfo_continuous_phase_across_bars() -> None:
-    """End of bar N's LFO ≈ start of bar N+1's LFO."""
-    lfo = CCLFO(midi_channel=2)
-    bar0 = lfo.generate_bar(
-        _ctx(pattern_knobs={"shape": "sine", "period_bars": 4.0, "samples_per_bar": 8}, bar_index=0)
-    )
-    bar1 = lfo.generate_bar(
-        _ctx(pattern_knobs={"shape": "sine", "period_bars": 4.0, "samples_per_bar": 8}, bar_index=1)
-    )
-    ccs0 = sorted((e for e in bar0 if isinstance(e, ControlChange)), key=lambda e: e.tick)
-    ccs1 = sorted((e for e in bar1 if isinstance(e, ControlChange)), key=lambda e: e.tick)
-    # Sine over 4 bars at 8 samples/bar = 32 samples per cycle — successive
-    # samples are smooth, so end of bar 0 ≈ start of bar 1.
-    assert abs(ccs0[-1].value - ccs1[0].value) <= 15
+    lfo = CCLFO()
+    knobs = {"shape": "sine", "period_bars": 4.0, "samples_per_bar": 8}
+    bar0 = sorted(_params(lfo.generate_bar(_ctx(pattern_knobs=knobs, bar_index=0))), key=lambda p: p.tick)
+    bar1 = sorted(_params(lfo.generate_bar(_ctx(pattern_knobs=knobs, bar_index=1))), key=lambda p: p.tick)
+    assert abs(bar0[-1].value - bar1[0].value) <= 15 / 127.0
 
 
-def test_cc_lfo_cc_knob_changes_controller() -> None:
-    lfo = CCLFO(midi_channel=2)
+def test_cc_lfo_cc_knob_changes_function_name() -> None:
+    lfo = CCLFO()
     events = lfo.generate_bar(_ctx(pattern_knobs={"cc": 71}))
-    ccs = [e for e in events if isinstance(e, ControlChange)]
-    assert all(c.cc == 71 for c in ccs)
+    assert all(p.name == "cc71" for p in _params(events))
 
 
 def test_cc_lfo_period_zero_raises() -> None:
-    lfo = CCLFO(midi_channel=2)
+    lfo = CCLFO()
     with pytest.raises(ValueError, match="period_bars must be > 0"):
         lfo.generate_bar(_ctx(pattern_knobs={"period_bars": 0}))
 
 
 def test_cc_lfo_unknown_shape_raises() -> None:
-    lfo = CCLFO(midi_channel=2)
+    lfo = CCLFO()
     with pytest.raises(ValueError, match="unknown shape"):
         lfo.generate_bar(_ctx(pattern_knobs={"shape": "bogus"}))
 
@@ -125,15 +120,14 @@ def test_cc_lfo_unknown_shape_raises() -> None:
 
 
 def test_cc_envelope_default_emits_four_envelopes() -> None:
-    env = CCEnvelope(midi_channel=2)
+    env = CCEnvelope()
     events = env.generate_bar(_ctx())
-    ccs = [e for e in events if isinstance(e, ControlChange)]
-    # 4 triggers × 3 segments × 8 samples = 96 CC events.
-    assert len(ccs) == 4 * 3 * 8
+    # 4 triggers × 3 segments × 8 samples = 96 events.
+    assert len(_params(events)) == 4 * 3 * 8
 
 
 def test_cc_envelope_starts_from_rest_peaks_returns_to_rest() -> None:
-    env = CCEnvelope(midi_channel=2)
+    env = CCEnvelope()
     events = env.generate_bar(
         _ctx(
             pattern_knobs={
@@ -149,28 +143,26 @@ def test_cc_envelope_starts_from_rest_peaks_returns_to_rest() -> None:
             }
         )
     )
-    ccs = sorted((e for e in events if isinstance(e, ControlChange)), key=lambda e: e.tick)
-    # Attack starts at rest (30), reaches peak (120). Release ends at rest (30).
-    assert ccs[0].value == 30
-    assert max(c.value for c in ccs) == 120
-    assert ccs[-1].value == 30
+    params = sorted(_params(events), key=lambda p: p.tick)
+    assert params[0].value == pytest.approx(30 / 127.0)
+    assert max(p.value for p in params) == pytest.approx(120 / 127.0)
+    assert params[-1].value == pytest.approx(30 / 127.0)
 
 
 def test_cc_envelope_pulses_drive_trigger_count() -> None:
-    env = CCEnvelope(midi_channel=2)
+    env = CCEnvelope()
     events = env.generate_bar(_ctx(pattern_knobs={"pulses": 2, "offset": 0, "samples": 4}))
-    ccs = [e for e in events if isinstance(e, ControlChange)]
     # 2 triggers × 3 segments × 4 samples = 24.
-    assert len(ccs) == 24
+    assert len(_params(events)) == 24
 
 
 def test_cc_envelope_zero_pulses_emits_nothing() -> None:
-    env = CCEnvelope(midi_channel=2)
+    env = CCEnvelope()
     events = env.generate_bar(_ctx(pattern_knobs={"pulses": 0, "samples": 2}))
-    assert [e for e in events if isinstance(e, ControlChange)] == []
+    assert _params(events) == []
 
 
-def test_cc_envelope_cc_knob_changes_controller() -> None:
-    env = CCEnvelope(midi_channel=2)
+def test_cc_envelope_cc_knob_changes_function_name() -> None:
+    env = CCEnvelope()
     events = env.generate_bar(_ctx(pattern_knobs={"cc": 11, "samples": 2}))
-    assert all(isinstance(e, ControlChange) and e.cc == 11 for e in events)
+    assert all(p.name == "cc11" for p in _params(events))

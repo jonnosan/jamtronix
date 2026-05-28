@@ -18,6 +18,7 @@ from jtx.algorithms import DrumOneShot, DrumPattern
 from jtx.engine.context import BarContext
 from jtx.engine.events import Event, NoteOff, NoteOn
 from jtx.engine.mix import apply_mix_pass
+from jtx.model.events import Hit
 from jtx.model.setup import Setup, VoiceSlot
 from jtx.model.song import ChordProgression, Key, Part, Song, VoiceConfig
 from jtx.player import SongPlayer
@@ -40,14 +41,19 @@ def _vels(events: list[Event]) -> list[int]:
 def _mix(
     *,
     voice_events: dict[str, list[Event]],
-    feel_knobs: dict[str, dict[str, object]] | None = None,
+    mix_knobs: dict[str, dict[str, object]] | None = None,
     bar_index: int = 0,
     part_bars: int = 1,
 ) -> dict[str, list[Event]]:
+    slots = {
+        name: VoiceSlot(name=name, type="mono", default_role="bass", midi_channel=1)
+        for name in voice_events
+    }
     return apply_mix_pass(
         voice_events=voice_events,
         prev_voice_events={},
-        feel_knobs_by_voice=feel_knobs or {},
+        mix_knobs_by_voice=mix_knobs or {},
+        voice_slots=slots,
         bar_index=bar_index,
         ticks_per_bar=1920,
         ppq=480,
@@ -64,7 +70,7 @@ def test_evolution_defaults_no_op() -> None:
 def test_evolution_start_scales_first_bar() -> None:
     out = _mix(
         voice_events={"v": _notes((0, 1, 60, 100, 60))},
-        feel_knobs={"v": {"evolution_start": 0.5, "evolution_end": 1.0}},
+        mix_knobs={"v": {"evolution_start": 0.5, "evolution_end": 1.0}},
         bar_index=0,
         part_bars=16,
     )
@@ -74,7 +80,7 @@ def test_evolution_start_scales_first_bar() -> None:
 def test_evolution_end_scales_last_bar() -> None:
     out = _mix(
         voice_events={"v": _notes((0, 1, 60, 100, 60))},
-        feel_knobs={"v": {"evolution_start": 0.5, "evolution_end": 1.0}},
+        mix_knobs={"v": {"evolution_start": 0.5, "evolution_end": 1.0}},
         bar_index=15,
         part_bars=16,
     )
@@ -84,7 +90,7 @@ def test_evolution_end_scales_last_bar() -> None:
 def test_evolution_midpoint_interpolates() -> None:
     out = _mix(
         voice_events={"v": _notes((0, 1, 60, 100, 60))},
-        feel_knobs={"v": {"evolution_start": 0.5, "evolution_end": 1.0}},
+        mix_knobs={"v": {"evolution_start": 0.5, "evolution_end": 1.0}},
         bar_index=7,
         part_bars=15,  # progress 7/14 = 0.5
     )
@@ -95,7 +101,7 @@ def test_evolution_midpoint_interpolates() -> None:
 def test_evolution_can_ramp_down() -> None:
     out = _mix(
         voice_events={"v": _notes((0, 1, 60, 100, 60))},
-        feel_knobs={"v": {"evolution_start": 1.0, "evolution_end": 0.2}},
+        mix_knobs={"v": {"evolution_start": 1.0, "evolution_end": 0.2}},
         bar_index=15,
         part_bars=16,
     )
@@ -119,7 +125,7 @@ def _ctx_for_drum() -> BarContext:
 
 
 def test_flam_count_emits_extra_hits() -> None:
-    clap = DrumOneShot(midi_channel=10, midi_note=39)
+    clap = DrumOneShot()
     ctx = _ctx_for_drum()
     ctx.pattern_knobs = {
         "pulses": 1,
@@ -129,15 +135,14 @@ def test_flam_count_emits_extra_hits() -> None:
         "flam_spacing_ticks": 12,
     }
     events = clap.generate_bar(ctx)
-    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
-    # 1 main hit + 2 flam hits = 3.
-    assert len(note_ons) == 3
+    hits = sorted((e for e in events if isinstance(e, Hit)), key=lambda e: e.tick)
+    assert len(hits) == 3
     main_tick = 4 * (480 // 4)  # step 4 → tick 480
-    assert [e.tick for e in note_ons] == [main_tick, main_tick + 12, main_tick + 24]
+    assert [h.tick for h in hits] == [main_tick, main_tick + 12, main_tick + 24]
 
 
 def test_flam_count_velocity_decays() -> None:
-    clap = DrumOneShot(midi_channel=10, midi_note=39)
+    clap = DrumOneShot()
     ctx = _ctx_for_drum()
     ctx.pattern_knobs = {
         "pulses": 1,
@@ -148,32 +153,31 @@ def test_flam_count_velocity_decays() -> None:
         "flam_decay": 0.5,
     }
     events = clap.generate_bar(ctx)
-    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
-    # Main = 100, flam1 = 100*0.5 = 50, flam2 = 50*0.5 = 25.
-    assert [e.velocity for e in note_ons] == [100, 50, 25]
+    hits = sorted((e for e in events if isinstance(e, Hit)), key=lambda e: e.tick)
+    assert [h.velocity for h in hits] == [100, 50, 25]
 
 
 def test_flam_count_zero_means_no_flam() -> None:
-    clap = DrumOneShot(midi_channel=10, midi_note=39)
+    clap = DrumOneShot()
     ctx = _ctx_for_drum()
     ctx.pattern_knobs = {"pulses": 1, "offset": 0}
     events = clap.generate_bar(ctx)
-    assert len([e for e in events if isinstance(e, NoteOn)]) == 1
+    assert len([e for e in events if isinstance(e, Hit)]) == 1
 
 
 # --------------------------------------- drum_pattern vel_curve
 
 
 def test_vel_curve_flat_is_unchanged() -> None:
-    kick = DrumPattern(piece="kick", midi_channel=10, midi_note=36)
+    kick = DrumPattern(piece="kick")
     ctx = _ctx_for_drum()
     ctx.pattern_knobs = {"style": "four_floor", "velocity": 100, "vel_curve": "flat"}
     events = kick.generate_bar(ctx)
-    assert all(e.velocity == 100 for e in events if isinstance(e, NoteOn))
+    assert all(h.velocity == 100 for h in events if isinstance(h, Hit))
 
 
 def test_vel_curve_depth_zero_is_unchanged() -> None:
-    kick = DrumPattern(piece="kick", midi_channel=10, midi_note=36)
+    kick = DrumPattern(piece="kick")
     ctx = _ctx_for_drum()
     ctx.pattern_knobs = {
         "style": "four_floor",
@@ -182,11 +186,11 @@ def test_vel_curve_depth_zero_is_unchanged() -> None:
         "vel_curve_depth": 0,
     }
     events = kick.generate_bar(ctx)
-    assert all(e.velocity == 100 for e in events if isinstance(e, NoteOn))
+    assert all(h.velocity == 100 for h in events if isinstance(h, Hit))
 
 
 def test_vel_curve_ramp_up_increases_across_bar() -> None:
-    kick = DrumPattern(piece="kick", midi_channel=10, midi_note=36)
+    kick = DrumPattern(piece="kick")
     ctx = _ctx_for_drum()
     ctx.pattern_knobs = {
         "style": "four_floor",
@@ -195,15 +199,13 @@ def test_vel_curve_ramp_up_increases_across_bar() -> None:
         "vel_curve_depth": 0.4,
     }
     events = kick.generate_bar(ctx)
-    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
-    vels = [e.velocity for e in note_ons]
-    # 4 hits at steps 0, 4, 8, 12 with progress 0, 4/15, 8/15, 12/15.
-    # multiplier = 1 + 0.4 * (progress - 0.5) → starts low, ends high.
+    hits = sorted((e for e in events if isinstance(e, Hit)), key=lambda e: e.tick)
+    vels = [h.velocity for h in hits]
     assert vels[0] < vels[-1]
 
 
 def test_vel_curve_arc_peaks_in_middle() -> None:
-    kick = DrumPattern(piece="kick", midi_channel=10, midi_note=36)
+    kick = DrumPattern(piece="kick")
     ctx = _ctx_for_drum()
     ctx.pattern_knobs = {
         "style": "four_floor",
@@ -212,14 +214,13 @@ def test_vel_curve_arc_peaks_in_middle() -> None:
         "vel_curve_depth": 0.4,
     }
     events = kick.generate_bar(ctx)
-    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
-    vels = [e.velocity for e in note_ons]
-    # Middle hits (steps 4, 8) should be louder than edges (0, 12).
+    hits = sorted((e for e in events if isinstance(e, Hit)), key=lambda e: e.tick)
+    vels = [h.velocity for h in hits]
     assert max(vels[1], vels[2]) > max(vels[0], vels[3])
 
 
 def test_vel_curve_pulse_accents_downbeats() -> None:
-    hat = DrumPattern(piece="hat", midi_channel=10, midi_note=42)
+    hat = DrumPattern(piece="hat")
     ctx = _ctx_for_drum()
     ctx.pattern_knobs = {
         "style": "euclid",
@@ -229,16 +230,14 @@ def test_vel_curve_pulse_accents_downbeats() -> None:
         "vel_curve_depth": 0.4,
     }
     events = hat.generate_bar(ctx)
-    note_ons = sorted((e for e in events if isinstance(e, NoteOn)), key=lambda e: e.tick)
+    hits = sorted((e for e in events if isinstance(e, Hit)), key=lambda e: e.tick)
     s = 480 // 4
-    # Hits at every step that's a multiple of 4 get +depth (vel ~112);
-    # other hits stay near base (vel 80).
-    for e in note_ons:
-        step = e.tick // s
+    for h in hits:
+        step = h.tick // s
         if step % 4 == 0:
-            assert e.velocity > 100
+            assert h.velocity > 100
         else:
-            assert e.velocity == 80
+            assert h.velocity == 80
 
 
 def test_vel_curve_drift_is_seed_deterministic() -> None:
@@ -254,9 +253,11 @@ def test_vel_curve_drift_is_seed_deterministic() -> None:
     ctx_b = _ctx_for_drum()
     ctx_b.rng = random.Random(42)
     ctx_b.pattern_knobs = ctx_a.pattern_knobs
-    a = DrumPattern(piece="kick", midi_channel=10, midi_note=36).generate_bar(ctx_a)
-    b = DrumPattern(piece="kick", midi_channel=10, midi_note=36).generate_bar(ctx_b)
-    assert _vels(a) == _vels(b)
+    a = DrumPattern(piece="kick").generate_bar(ctx_a)
+    b = DrumPattern(piece="kick").generate_bar(ctx_b)
+    assert [h.velocity for h in a if isinstance(h, Hit)] == [
+        h.velocity for h in b if isinstance(h, Hit)
+    ]
 
 
 def test_vel_curve_drift_differs_for_different_seeds() -> None:
@@ -273,13 +274,15 @@ def test_vel_curve_drift_differs_for_different_seeds() -> None:
     ctx_b = _ctx_for_drum()
     ctx_b.rng = random.Random(2)
     ctx_b.pattern_knobs = base_knobs
-    a = DrumPattern(piece="kick", midi_channel=10, midi_note=36).generate_bar(ctx_a)
-    b = DrumPattern(piece="kick", midi_channel=10, midi_note=36).generate_bar(ctx_b)
-    assert _vels(a) != _vels(b)
+    a = DrumPattern(piece="kick").generate_bar(ctx_a)
+    b = DrumPattern(piece="kick").generate_bar(ctx_b)
+    assert [h.velocity for h in a if isinstance(h, Hit)] != [
+        h.velocity for h in b if isinstance(h, Hit)
+    ]
 
 
 def test_vel_curve_unknown_raises() -> None:
-    kick = DrumPattern(piece="kick", midi_channel=10, midi_note=36)
+    kick = DrumPattern(piece="kick")
     ctx = _ctx_for_drum()
     ctx.pattern_knobs = {
         "style": "four_floor",
@@ -304,7 +307,7 @@ def _player_with_voices(*, follow_kick: bool = True, follow_bass: bool = True) -
                 type="drum",
                 default_role="drum",
                 midi_channel=10,
-                kit_map={"kick": 36},
+                note=36,
             ),
             VoiceSlot(name="bass", type="mono", default_role="bass", midi_channel=1),
         ],

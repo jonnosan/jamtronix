@@ -41,6 +41,7 @@ from jtx.algorithms import (
     Arp,
     CCEnvelope,
     ChordStab,
+    DrumKit,
     DrumOneShot,
     DrumPattern,
     MelodicLine,
@@ -57,18 +58,18 @@ from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
 from jtx.engine.events import Event
 from jtx.engine.feel import apply_feel
+from jtx.engine.global_feel import compile_global_feel, merge_synthetic_into_mix
 from jtx.engine.lfo import apply_lfos_to_bar
 from jtx.engine.meter import ticks_per_bar
 from jtx.engine.mix import apply_mix_pass
 from jtx.engine.osc_client import OscClientProtocol
 from jtx.engine.parameter_router import ParameterRouter
 from jtx.engine.root_provider import ProgressionRootProvider, RootProvider
+from jtx.engine.voicing import translate_abstract_events
 from jtx.model.parameter_target import OscTarget
 from jtx.model.setup import Setup, VoiceSlot
 from jtx.model.song import KnobDict, Song, VoiceConfig, VoiceOverride
 from jtx.seed import derive_bar_seed, derive_part_voice_seed, seed_from_title
-
-_GM_DRUM_DEFAULT = 36  # GM kick — last-resort fallback when no kit_map entry.
 
 
 def _setup_uses_osc(setup: Setup) -> bool:
@@ -87,50 +88,52 @@ def _setup_uses_osc(setup: Setup) -> bool:
 def instantiate_algorithm(algorithm_name: str, voice_slot: VoiceSlot) -> Algorithm:
     """Build the right :class:`Algorithm` subclass for *algorithm_name*.
 
-    For drum algorithms the voice's name doubles as the kit-piece key
-    into ``voice_slot.kit_map`` (so a voice called ``kick`` with
-    ``kit_map={"kick": 36}`` plays note 36).
+    Drum + drum_kit voices have distinct identity:
+
+    * ``drum`` voice + ``drum_pattern`` / ``drum_one_shot`` algorithm:
+      single MIDI note. The note lives on ``slot.note``; the algorithm
+      itself still emits concrete MIDI (legacy protocol — refactored
+      to emit ``Hit`` events later).
+    * ``drum_kit`` voice + ``drum_kit`` algorithm: emits abstract
+      :class:`Hit` events keyed by instrument name. The voicing stage
+      downstream resolves each instrument to ``(channel, note)`` via
+      ``slot.kit_map``.
     """
     ch = voice_slot.midi_channel
+    if algorithm_name == "drum_kit":
+        return DrumKit(kit_map=dict(voice_slot.kit_map))
     if algorithm_name == "drum_pattern":
-        return DrumPattern(
-            piece=voice_slot.name,
-            midi_channel=ch,
-            midi_note=voice_slot.kit_map.get(voice_slot.name, _GM_DRUM_DEFAULT),
-        )
+        return DrumPattern(piece=voice_slot.name)
     if algorithm_name == "drum_one_shot":
-        return DrumOneShot(
-            midi_channel=ch,
-            midi_note=voice_slot.kit_map.get(voice_slot.name, _GM_DRUM_DEFAULT),
-        )
-    if algorithm_name == "acid_bass":
-        return AcidBass(midi_channel=ch)
+        return DrumOneShot()
     if algorithm_name == "sub_drone":
-        return SubDrone(midi_channel=ch)
+        return SubDrone()
     if algorithm_name == "melodic_line":
-        return MelodicLine(midi_channel=ch)
+        return MelodicLine()
     if algorithm_name == "motif_phrase":
-        return MotifPhrase(midi_channel=ch)
+        return MotifPhrase()
     if algorithm_name == "arp":
-        return Arp(midi_channel=ch)
+        return Arp()
     if algorithm_name == "sustained_chord":
-        return SustainedChord(midi_channel=ch)
+        return SustainedChord()
     if algorithm_name == "chord_stab":
-        return ChordStab(midi_channel=ch)
-    if algorithm_name == "cc_lfo":
-        return CCLFO(midi_channel=ch)
-    if algorithm_name == "cc_envelope":
-        return CCEnvelope(midi_channel=ch)
-    if algorithm_name == "step_cc":
-        return StepCC(midi_channel=ch)
-    if algorithm_name == "noise_riser":
-        return NoiseRiser(midi_channel=ch)
-    if algorithm_name == "reese_bass":
-        return ReeseBass(midi_channel=ch)
-    if algorithm_name == "voice_follower":
-        return VoiceFollower(midi_channel=ch)
+        return ChordStab()
     if algorithm_name == "root_pulse":
-        return RootPulse(midi_channel=ch)
+        return RootPulse()
+    if algorithm_name == "acid_bass":
+        return AcidBass()
+    if algorithm_name == "noise_riser":
+        return NoiseRiser()
+    if algorithm_name == "reese_bass":
+        return ReeseBass()
+    if algorithm_name == "cc_lfo":
+        return CCLFO()
+    if algorithm_name == "cc_envelope":
+        return CCEnvelope()
+    if algorithm_name == "step_cc":
+        return StepCC()
+    if algorithm_name == "voice_follower":
+        return VoiceFollower()
     raise ValueError(f"unknown algorithm: {algorithm_name!r}")
 
 
@@ -279,6 +282,25 @@ class SongPlayer:
     def events_for_bar(self, bar_idx: int) -> list[Event]:
         chord_root = self.root_provider.root_semitones_for_bar(bar_idx)
 
+        # Compute part-level progress + intensity (Tension-scaled).
+        # Shared between all voices for this bar.
+        part_bars = max(1, self.part.bars)
+        if part_bars > 1:
+            part_progress = (bar_idx % part_bars) / (part_bars - 1)
+        else:
+            part_progress = 1.0
+        intensity_raw = self.part.intensity_start + (
+            self.part.intensity_end - self.part.intensity_start
+        ) * part_progress
+        tension = float(self.song.feel.get("tension", 0.0))
+        part_intensity = max(
+            0.0,
+            min(1.0, 0.5 + (intensity_raw - 0.5) * (0.5 + tension * 1.5)),
+        )
+        # Single shared dict so LFO global_feel: mutations broadcast to
+        # every voice for this bar.
+        shared_song_feel: dict[str, float] = {k: float(v) for k, v in self.song.feel.items()}
+
         # Build BarContext per voice + collect for LFO application.
         contexts: dict[str, BarContext] = {}
         for v in self._voices:
@@ -287,7 +309,7 @@ class SongPlayer:
             import random as _r
 
             song_voice = self.song.voices[v.name]
-            pattern_knobs, feel_knobs = self._resolve_knobs(v.name, song_voice)
+            pattern_knobs, mix_knobs = self._resolve_knobs(v.name, song_voice)
             # ``follow_progression`` lets a voice opt out of the chord
             # progression resolver — useful for sub bass that drones
             # on the root while pads/stabs cycle through changes.
@@ -302,7 +324,10 @@ class SongPlayer:
                 key=self.song.key,
                 chord_root_semitones=voice_chord_root,
                 pattern_knobs=pattern_knobs,
-                feel_knobs=feel_knobs,
+                mix_knobs=mix_knobs,
+                song_feel=shared_song_feel,
+                part_progress=part_progress,
+                part_intensity=part_intensity,
                 rng=_r.Random(bar_seed),
                 part_voice_seed=pv_seed,
             )
@@ -321,6 +346,19 @@ class SongPlayer:
             _r.Random(lfo_seed),
         )
 
+        # Compile song-wide feel knobs (Pump) into per-voice mix knobs.
+        # Runs after LFOs so global_feel: LFO targets are reflected in
+        # the snapshot. Explicit user values in ``ctx.mix_knobs`` win on
+        # key collision — synthetic Pump only fills in unset keys.
+        synthetic_mix = compile_global_feel(
+            shared_song_feel,
+            [(v.name, v.slot) for v in self._voices],
+        )
+        for v in self._voices:
+            voice_synthetic = synthetic_mix.get(v.name)
+            if voice_synthetic:
+                merge_synthetic_into_mix(contexts[v.name].mix_knobs, voice_synthetic)
+
         # Did the caller request consecutive bars? Only then does the
         # cached previous bar count as "history" for cross-bar lookback.
         # If they jumped (e.g. asked for bar 5 cold), prev = empty.
@@ -331,6 +369,11 @@ class SongPlayer:
             prev_voice_events = {}
 
         # Run algorithms in topological order; feed follower source_events.
+        # The voicing stage immediately translates abstract events
+        # (Hit/Note/Param/PolyAftertouch) to concrete MIDI so the mix
+        # pass and feel pass can operate on a uniform representation.
+        # Legacy algorithms that emit concrete MIDI directly pass
+        # through unchanged.
         raw_voice_events: dict[str, list[Event]] = {}
         for v in self._voices:
             ctx = contexts[v.name]
@@ -339,17 +382,20 @@ class SongPlayer:
                 if isinstance(src, str):
                     ctx.source_events = raw_voice_events.get(src, [])
                     ctx.prev_source_events = prev_voice_events.get(src)
-            raw_voice_events[v.name] = v.algorithm.generate_bar(ctx)
+            algo_out = v.algorithm.generate_bar(ctx)
+            raw_voice_events[v.name] = translate_abstract_events(algo_out, v.slot)
 
         # Mix pass — sidechain ducking (cross-voice, cross-bar) +
         # fade-in/out envelope per voice. Runs before the per-voice
         # feel pass so jitter / accent layer on top of the ducked /
         # faded velocities.
-        feel_knobs_by_voice = {v.name: contexts[v.name].feel_knobs for v in self._voices}
+        mix_knobs_by_voice = {v.name: contexts[v.name].mix_knobs for v in self._voices}
+        voice_slots = {v.name: v.slot for v in self._voices}
         mixed_voice_events = apply_mix_pass(
             raw_voice_events,
             prev_voice_events,
-            feel_knobs_by_voice,
+            mix_knobs_by_voice,
+            voice_slots,
             bar_idx,
             self.ticks_per_bar,
             self.ppq,
@@ -362,7 +408,13 @@ class SongPlayer:
         voice_events: dict[str, list[Event]] = {}
         for v in self._voices:
             ctx = contexts[v.name]
-            shaped = apply_feel(mixed_voice_events[v.name], ctx.feel_knobs, self.ppq, ctx.rng)
+            shaped = apply_feel(
+                mixed_voice_events[v.name],
+                ctx.song_feel,
+                v.slot,
+                self.ppq,
+                ctx.rng,
+            )
             voice_events[v.name] = self._routers[v.name].route(shaped)
 
         # Cache for next bar's lookback. We cache the *post-mix* events
@@ -377,7 +429,7 @@ class SongPlayer:
         return all_events
 
     def _resolve_knobs(self, voice_name: str, song_voice: VoiceConfig) -> tuple[KnobDict, KnobDict]:
-        """Return (pattern, feel) merged with any part override.
+        """Return (pattern, mix) merged with any part override.
 
         Resolution order: part override > song-level > algorithm default.
         Algorithm defaults are baked into algorithm code (each
@@ -386,8 +438,8 @@ class SongPlayer:
         """
         override: VoiceOverride | None = self.part.voice_overrides.get(voice_name)
         pattern: dict[str, Any] = dict(song_voice.pattern)
-        feel: dict[str, Any] = dict(song_voice.feel)
+        mix: dict[str, Any] = dict(song_voice.mix)
         if override is not None:
             pattern.update(override.pattern)
-            feel.update(override.feel)
-        return pattern, feel
+            mix.update(override.mix)
+        return pattern, mix

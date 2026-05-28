@@ -39,11 +39,16 @@ class ChordProgression:
 
 @dataclass
 class VoiceConfig:
-    """Song-level configuration for one voice slot."""
+    """Song-level configuration for one voice slot.
+
+    ``mix`` carries per-voice mix-pass knobs (sidechain, fade,
+    evolution). Per-voice "feel" knobs are gone — feel is now song-wide
+    in :class:`Song.feel`.
+    """
 
     algorithm: str
     pattern: KnobDict = field(default_factory=dict)
-    feel: KnobDict = field(default_factory=dict)
+    mix: KnobDict = field(default_factory=dict)
 
 
 @dataclass
@@ -59,12 +64,20 @@ class VoiceOverride:
     key: Key | None = None
     meter: str | None = None
     pattern: KnobDict = field(default_factory=dict)
-    feel: KnobDict = field(default_factory=dict)
+    mix: KnobDict = field(default_factory=dict)
 
 
 @dataclass
 class Part:
     bars: int
+    intensity_start: float = 0.5
+    """Normalized 0..1 intensity at the part's first bar. Algorithms
+    that read ``BarContext.part_intensity`` shape their density / fill
+    behaviour from this. Combine with :attr:`intensity_end` to define
+    an envelope across the part (e.g. 0.35 → 0.95 in a build-up)."""
+    intensity_end: float = 0.5
+    """Normalized 0..1 intensity at the part's last bar (linear interp
+    from :attr:`intensity_start`)."""
     voice_overrides: dict[str, VoiceOverride] = field(default_factory=dict)
     loop: bool = False
     """When the part's last bar finishes, ``loop`` decides what plays next.
@@ -77,6 +90,11 @@ class Part:
     """Part-level tempo override in BPM. ``None`` = use the song tempo."""
     meter: str | None = None
     """Part-level meter override (e.g. ``"3/4"``). ``None`` = song meter."""
+
+
+def _default_global_feel() -> dict[str, float]:
+    """Five song-wide feel knobs, all default zero (no effect)."""
+    return {"pump": 0.0, "groove": 0.0, "drive": 0.0, "tension": 0.0, "wander": 0.0}
 
 
 @dataclass
@@ -92,4 +110,9 @@ class Song:
     parts: dict[str, Part] = field(default_factory=dict)
     arrangement: list[str] = field(default_factory=list)
     lfos: list[LFO] = field(default_factory=list)
+    feel: dict[str, float] = field(default_factory=_default_global_feel)
+    """Song-wide feel knobs: ``pump``, ``groove``, ``drive``,
+    ``tension``, ``wander``. Each in ``[0, 1]``. See
+    :mod:`jtx.engine.feel` and :mod:`jtx.engine.global_feel` for the
+    technical translations to mix-pass + feel-pass behaviours."""
     schema_version: int = SCHEMA_VERSION

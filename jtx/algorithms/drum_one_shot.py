@@ -28,21 +28,24 @@ from jtx.algorithms._steps import step_ticks, steps_per_bar
 from jtx.algorithms._subdivision import subdivision_grid
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
-from jtx.engine.events import Event, NoteOff, NoteOn
+from jtx.model.events import AbstractEvent, Hit
 
 _NOTE_OFF_OFFSET_TICKS = 30
 
 
 class DrumOneShot(Algorithm):
-    """One drum piece, hits distributed by euclid(pulses, offset)."""
+    """One drum piece, hits distributed by euclid(pulses, offset).
+
+    MIDI-naive: emits :class:`Hit` events; the voicing stage resolves
+    each hit to ``(slot.midi_channel, slot.note)``.
+    """
 
     name: ClassVar[str] = "drum_one_shot"
 
-    def __init__(self, *, midi_channel: int, midi_note: int) -> None:
-        self.midi_channel = midi_channel
-        self.midi_note = midi_note
+    def __init__(self, *, instrument_name: str | None = None) -> None:
+        self._instrument_name = instrument_name
 
-    def generate_bar(self, ctx: BarContext) -> list[Event]:
+    def generate_bar(self, ctx: BarContext) -> list[AbstractEvent]:
         knobs = ctx.pattern_knobs
 
         pulses = int(knobs.get("pulses", 1))
@@ -61,18 +64,18 @@ class DrumOneShot(Algorithm):
 
         pattern = euclid(pulses, total_steps, offset)
         v = max(1, min(127, velocity))
-        events: list[Event] = []
+        events: list[AbstractEvent] = []
         for step_idx, fires in enumerate(pattern):
             if not fires:
                 continue
             tick = step_idx * s
-            self._emit(events, tick, v, duration)
+            events.append(self._hit(tick, v, duration))
             flam_vel = float(v)
             for flam_idx in range(flam_count):
                 flam_vel *= flam_decay
                 vel_int = max(1, int(round(flam_vel)))
                 ftick = tick + (flam_idx + 1) * flam_spacing
-                self._emit(events, ftick, vel_int, duration)
+                events.append(self._hit(ftick, vel_int, duration))
 
         roll_pos = str(knobs.get("roll_pos", "none"))
         if roll_pos != "none" and _roll_active(roll_pos, ctx.bar_index, ctx.rng):
@@ -91,15 +94,17 @@ class DrumOneShot(Algorithm):
                 window_progress = (tick - roll_start) / max(1, roll_end - roll_start)
                 vel_mult = 0.7 + 0.4 * window_progress
                 roll_vel = max(1, min(127, int(v * vel_mult)))
-                self._emit(events, tick, roll_vel, duration)
+                events.append(self._hit(tick, roll_vel, duration))
 
         return events
 
-    def _emit(self, events: list[Event], tick: int, velocity: int, duration: int) -> None:
-        events.append(
-            NoteOn(tick=tick, channel=self.midi_channel, note=self.midi_note, velocity=velocity)
+    def _hit(self, tick: int, velocity: int, duration: int) -> Hit:
+        return Hit(
+            instrument=self._instrument_name,
+            velocity=max(1, min(127, velocity)),
+            duration_ticks=duration,
+            tick=tick,
         )
-        events.append(NoteOff(tick=tick + duration, channel=self.midi_channel, note=self.midi_note))
 
 
 _ROLL_POSITIONS = ("none", "last_beat", "last_bar_of_4", "last_bar_of_8", "random_sparse")

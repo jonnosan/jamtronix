@@ -12,7 +12,7 @@ import random
 
 from jtx.algorithms import MotifPhrase
 from jtx.engine.context import BarContext
-from jtx.engine.events import NoteOn
+from jtx.model.events import Note
 from jtx.model.song import Key
 from jtx.seed import derive_part_voice_seed, seed_from_title
 
@@ -42,18 +42,18 @@ def _ctx(
 
 
 def _pitches(events: list) -> tuple[int, ...]:
-    return tuple(e.note for e in events if isinstance(e, NoteOn))
+    return tuple(e.pitch for e in events if isinstance(e, Note))
 
 
 def _ticks(events: list) -> tuple[int, ...]:
-    return tuple(e.tick for e in events if isinstance(e, NoteOn))
+    return tuple(e.tick for e in events if isinstance(e, Note))
 
 
 # -- determinism ------------------------------------------------------------
 
 
 def test_motif_phrase_deterministic() -> None:
-    line = MotifPhrase(midi_channel=4)
+    line = MotifPhrase()
     knobs = {"phrase_shape": "A_A_A_B", "phrase_length_bars": 4}
     a = line.generate_bar(_ctx(bar_index=0, pattern_knobs=knobs))
     b = line.generate_bar(_ctx(bar_index=0, pattern_knobs=knobs))
@@ -68,7 +68,7 @@ def test_a_bars_share_motif_pitch_sequence() -> None:
     # phrase_shape=A_A_A_B with phrase_length_bars=4:
     # bars 0/1/2 are A → should share underlying motif content (pre-transform).
     # We use A_A_A_A to remove the B slot and density to keep the test stable.
-    line = MotifPhrase(midi_channel=4)
+    line = MotifPhrase()
     knobs = {
         "phrase_shape": "A_A_A_A",
         "phrase_length_bars": 4,
@@ -83,7 +83,7 @@ def test_a_bars_share_motif_pitch_sequence() -> None:
 
 
 def test_a_a_a_b_b_bar_differs_from_a_bars() -> None:
-    line = MotifPhrase(midi_channel=4)
+    line = MotifPhrase()
     knobs = {
         "phrase_shape": "A_A_A_B",
         "phrase_length_bars": 4,
@@ -100,7 +100,7 @@ def test_a_a_a_b_b_bar_differs_from_a_bars() -> None:
 
 
 def test_a_b_a_b_pattern_alternates() -> None:
-    line = MotifPhrase(midi_channel=4)
+    line = MotifPhrase()
     knobs = {
         "phrase_shape": "A_B_A_B",
         "phrase_length_bars": 4,
@@ -124,7 +124,7 @@ def test_a_b_a_b_pattern_alternates() -> None:
 
 
 def test_aprime_can_differ_from_a_with_variation_depth() -> None:
-    line = MotifPhrase(midi_channel=4)
+    line = MotifPhrase()
     knobs = {
         "phrase_shape": "A_A'_A_A''",
         "phrase_length_bars": 4,
@@ -143,7 +143,7 @@ def test_aprime_can_differ_from_a_with_variation_depth() -> None:
 
 
 def test_zero_variation_depth_keeps_aprime_equal_to_a() -> None:
-    line = MotifPhrase(midi_channel=4)
+    line = MotifPhrase()
     knobs = {
         "phrase_shape": "A_A'_A_A''",
         "phrase_length_bars": 4,
@@ -161,7 +161,7 @@ def test_zero_variation_depth_keeps_aprime_equal_to_a() -> None:
 
 
 def test_random_walk_uses_bar_fresh_rng() -> None:
-    line = MotifPhrase(midi_channel=4)
+    line = MotifPhrase()
     knobs = {
         "phrase_shape": "random_walk",
         "rhythm_template": "eighth_eighth",
@@ -178,7 +178,7 @@ def test_random_walk_uses_bar_fresh_rng() -> None:
 
 
 def test_progression_fifths_transposes_second_half_of_phrase() -> None:
-    line = MotifPhrase(midi_channel=4)
+    line = MotifPhrase()
     knobs = {
         "phrase_shape": "A_A_A_A",
         "phrase_length_bars": 4,
@@ -201,17 +201,15 @@ def test_progression_fifths_transposes_second_half_of_phrase() -> None:
 
 
 def test_motif_phrase_emits_note_on_off_pairs() -> None:
-    line = MotifPhrase(midi_channel=4)
+    line = MotifPhrase()
     events = line.generate_bar(_ctx(pattern_knobs={"density": 1.0}))
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    note_offs = [e for e in events if not isinstance(e, NoteOn)]
-    assert len(note_ons) > 0
-    assert len(note_ons) == len(note_offs)
-    assert all(0 <= e.tick < 1920 for e in note_ons)
+    notes = [e for e in events if isinstance(e, Note)]
+    assert len(notes) > 0
+    assert all(0 <= e.tick < 1920 for e in notes)
 
 
 def test_motif_phrase_pitches_in_midi_range() -> None:
-    line = MotifPhrase(midi_channel=4)
+    line = MotifPhrase()
     # Extreme knobs that could push pitches out of range; algorithm clamps.
     events = line.generate_bar(
         _ctx(
@@ -225,14 +223,14 @@ def test_motif_phrase_pitches_in_midi_range() -> None:
             bar_index=1,
         )
     )
-    note_ons = [e for e in events if isinstance(e, NoteOn)]
-    assert all(0 <= e.note <= 127 for e in note_ons)
+    note_ons = [e for e in events if isinstance(e, Note)]
+    assert all(0 <= e.pitch <= 127 for e in note_ons)
 
 
 def test_a_b_a_b_within_phrase_shares_motif_per_slot() -> None:
     # A_B_A_B pattern (length 2) cycles twice within phrase_length_bars=4,
     # so bars 0/2 are both A in the same phrase → identical motif.
-    line = MotifPhrase(midi_channel=4)
+    line = MotifPhrase()
     knobs = {
         "phrase_shape": "A_B_A_B",
         "phrase_length_bars": 4,
@@ -256,7 +254,7 @@ def test_motif_evolves_across_phrases() -> None:
     # 2-3 are phrase 1 — content RNG epoch advances → motifs differ.
     # Use 'auto' rhythm template so the template itself can vary per phrase
     # (single-template + same-start-degree can collide).
-    line = MotifPhrase(midi_channel=4)
+    line = MotifPhrase()
     knobs = {
         "phrase_shape": "A_A_A_A",
         "phrase_length_bars": 2,

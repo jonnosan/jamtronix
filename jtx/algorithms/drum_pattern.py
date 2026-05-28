@@ -49,7 +49,7 @@ from jtx.algorithms._steps import step_ticks, steps_per_bar
 from jtx.algorithms._subdivision import subdivision_grid
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
-from jtx.engine.events import Event, NoteOff, NoteOn
+from jtx.model.events import AbstractEvent, Hit
 from jtx.model.song import KnobDict
 
 # Per-piece (pulses, offset, velocity) defaults at 16 steps/bar.
@@ -140,16 +140,23 @@ _NOTE_OFF_OFFSET_TICKS = 30
 
 
 class DrumPattern(Algorithm):
-    """Single-piece drum generator (euclid / four_floor / break)."""
+    """Single-piece drum generator (euclid / four_floor / break).
+
+    MIDI-naive: emits :class:`Hit` events tagged with the voice's
+    instrument name. The voicing stage resolves the instrument to
+    ``(slot.midi_channel, slot.note)``.
+    """
 
     name: ClassVar[str] = "drum_pattern"
 
-    def __init__(self, *, piece: str, midi_channel: int, midi_note: int) -> None:
+    def __init__(self, *, piece: str, instrument_name: str | None = None) -> None:
         self.piece = piece.lower()
-        self.midi_channel = midi_channel
-        self.midi_note = midi_note
+        # Hit.instrument is None on a single-piece drum slot (voicing
+        # uses slot.note + slot.midi_channel). We accept an explicit
+        # name for tests / future drum_kit-style reuse.
+        self._instrument_name = instrument_name
 
-    def generate_bar(self, ctx: BarContext) -> list[Event]:
+    def generate_bar(self, ctx: BarContext) -> list[AbstractEvent]:
         knobs = ctx.pattern_knobs
         defaults = _PIECE_DEFAULTS.get(self.piece, {})
 
@@ -173,7 +180,7 @@ class DrumPattern(Algorithm):
         duration = _NOTE_OFF_OFFSET_TICKS
 
         pattern = self._make_pattern(style, knobs, defaults, total_steps)
-        events: list[Event] = []
+        events: list[AbstractEvent] = []
 
         for step, hit in enumerate(pattern):
             if not hit:
@@ -183,7 +190,7 @@ class DrumPattern(Algorithm):
                 vel_curve, step, total_steps, vel_curve_depth, ctx.rng
             )
             step_vel = int(round(velocity * curve_mult))
-            events.extend(self._note(tick, step_vel, duration))
+            events.append(self._hit(tick, step_vel, duration))
 
         if ghost_prob > 0.0 and ghost_ratio > 0.0:
             ghost_vel = max(1, int(velocity * ghost_ratio))
@@ -195,7 +202,7 @@ class DrumPattern(Algorithm):
                 if step % 2 == 0:
                     continue
                 if ctx.rng.random() < ghost_prob:
-                    events.extend(self._note(step * s, ghost_vel, duration))
+                    events.append(self._hit(step * s, ghost_vel, duration))
 
         if polyrhythm > 0:
             poly_vel = max(1, int(velocity * 0.65))
@@ -210,7 +217,7 @@ class DrumPattern(Algorithm):
                 tick = poly_idx * poly_spacing
                 if tick in base_hit_ticks:
                     continue  # don't double-hit the main pattern
-                events.extend(self._note(tick, poly_vel, duration))
+                events.append(self._hit(tick, poly_vel, duration))
 
         roll_pos = str(knobs.get("roll_pos", "none"))
         if roll_pos != "none":
@@ -225,7 +232,7 @@ class DrumPattern(Algorithm):
         ctx: BarContext,
         velocity: int,
         duration: int,
-    ) -> list[Event]:
+    ) -> list[AbstractEvent]:
         if not _roll_active(roll_pos, ctx.bar_index, ctx.rng):
             return []
         roll_subdiv = str(knobs.get("roll_subdiv", "16t"))
@@ -234,23 +241,17 @@ class DrumPattern(Algorithm):
         beats_per_bar = ctx.ticks_per_bar // ctx.ppq
         roll_start = (beats_per_bar - 1) * ctx.ppq
         roll_end = ctx.ticks_per_bar
-        # The roll is overlaid as a layer — base pattern hits inside
-        # the window stay, the fill stacks on top. That's the actual
-        # sound of a roll fill (denser, not "different notes").
-        events: list[Event] = []
+        events: list[AbstractEvent] = []
         for i in range(positions):
             tick = i * spacing
             if tick < roll_start or tick >= roll_end:
                 continue
             if ctx.rng.random() >= roll_depth:
                 continue
-            # Build a velocity ramp inside the fill (crescendo into the
-            # next bar) — multiplier from 0.7 at the start of the fill
-            # to 1.1 at the end.
             window_progress = (tick - roll_start) / max(1, roll_end - roll_start)
             vel_mult = 0.7 + 0.4 * window_progress
             roll_vel = max(1, min(127, int(velocity * vel_mult)))
-            events.extend(self._note(tick, roll_vel, duration))
+            events.append(self._hit(tick, roll_vel, duration))
         return events
 
     def _make_pattern(
@@ -282,12 +283,13 @@ class DrumPattern(Algorithm):
             f"drum_pattern: unknown style {style!r} (expected 'four_floor' | 'euclid' | 'break')"
         )
 
-    def _note(self, tick: int, velocity: int, duration: int) -> list[Event]:
-        v = max(1, min(127, velocity))
-        return [
-            NoteOn(tick=tick, channel=self.midi_channel, note=self.midi_note, velocity=v),
-            NoteOff(tick=tick + duration, channel=self.midi_channel, note=self.midi_note),
-        ]
+    def _hit(self, tick: int, velocity: int, duration: int) -> Hit:
+        return Hit(
+            instrument=self._instrument_name,
+            velocity=max(1, min(127, velocity)),
+            duration_ticks=duration,
+            tick=tick,
+        )
 
 
 def _vel_curve_multiplier(

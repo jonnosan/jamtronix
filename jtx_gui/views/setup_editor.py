@@ -123,7 +123,7 @@ def _default_osc_address(voice_name: str, function: str) -> str:
     return f"/jtx/{voice_name}/{function}"
 
 
-_VOICE_TYPES: tuple[str, ...] = ("drum", "mono", "poly", "modulator", "follower")
+_VOICE_TYPES: tuple[str, ...] = ("drum", "drum_kit", "mono", "poly", "modulator", "follower")
 
 # Note pitches used for the per-voice audition buttons by role. Drum
 # pitches come from each kit_map row, so they're not in this table.
@@ -135,6 +135,8 @@ _AUDITION_PITCHES: dict[str, list[int]] = {
     "chord": [69, 72, 76],  # A minor triad at A4
     "modulator": [],  # use the CC audition instead
     "follower": [],  # follower has no own pitch
+    "drum_kit": [],  # use per-piece audition in the kit-map editor
+    "drum": [],  # use per-voice audition in the note editor
 }
 _CLOCK_LABELS: tuple[tuple[ClockMode, str], ...] = (
     ("internal_master", "Internal master"),
@@ -616,9 +618,14 @@ class _VoiceSlotEditor(QFrame):
         self._note_audition_btn.clicked.connect(self._on_note_audition)
         self._note_audition_btn.setVisible(slot.type in {"mono", "poly"})
 
-        # Kit-map editor — only visible for drum voices.
+        # Kit-map editor — visible for drum_kit voices (multi-piece
+        # editor) or drum voices (single MIDI note spinbox).
         self._kit_panel = _KitMapEditor(slot=slot, note_audition_fn=note_audition_fn)
-        self._kit_panel.setVisible(slot.type == "drum")
+        self._kit_panel.setVisible(slot.type == "drum_kit")
+        self._drum_note_panel = _DrumNoteEditor(
+            slot=slot, note_audition_fn=note_audition_fn
+        )
+        self._drum_note_panel.setVisible(slot.type == "drum")
 
         # Parameter-map section — function rows from FUNCTIONS_BY_VOICE_TYPE.
         self._param_section = _ParameterMapSection(
@@ -635,6 +642,7 @@ class _VoiceSlotEditor(QFrame):
         layout.addWidget(title)
         layout.addLayout(form)
         layout.addWidget(self._note_audition_btn, 0, Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(self._drum_note_panel)
         layout.addWidget(self._kit_panel)
         layout.addWidget(self._param_section)
 
@@ -668,7 +676,8 @@ class _VoiceSlotEditor(QFrame):
         if roles and self._slot.default_role not in roles:
             self._slot.default_role = roles[0]  # type: ignore[assignment]
             self._role_combo.setCurrentText(roles[0])
-        self._kit_panel.setVisible(new_type == "drum")
+        self._kit_panel.setVisible(new_type == "drum_kit")
+        self._drum_note_panel.setVisible(new_type == "drum")
         self._note_audition_btn.setVisible(new_type in {"mono", "poly"})
         self._param_section.refresh_rows()
         self._on_changed()
@@ -711,31 +720,95 @@ class _VoiceSlotEditor(QFrame):
 # --------------------------------------------------------------------------
 
 
-class _KitMapEditor(QFrame):
-    """Free-form ``piece_name → MIDI note`` editor for drum voices."""
+class _DrumNoteEditor(QFrame):
+    """Single-piece drum voice: one MIDI note spinbox + audition.
+
+    Used for ``drum`` voices (schema v3 drops the legacy single-entry
+    ``kit_map`` on these in favour of the top-level ``slot.note``).
+    """
 
     def __init__(self, *, slot: VoiceSlot, note_audition_fn: NoteAuditionFn) -> None:
         super().__init__()
         self.setObjectName("Panel")
         self._slot = slot
         self._note_audition_fn = note_audition_fn
-        # Track per-row (line_edit, spinner) so we never have to call
-        # findChildren — that introduced Qt cleanup ordering issues.
-        self._rows: list[tuple[QLineEdit, QSpinBox]] = []
+
+        title = QLabel("MIDI NOTE")
+        title.setObjectName("FieldLabel")
+
+        self._note_spin = QSpinBox()
+        self._note_spin.setRange(0, 127)
+        self._note_spin.setValue(int(slot.note))
+        self._note_spin.valueChanged.connect(self._on_note_changed)
+
+        audition_btn = QPushButton("PLAY")
+        audition_btn.setMaximumWidth(72)
+        audition_btn.setToolTip("Send this voice's note on its MIDI channel")
+        audition_btn.clicked.connect(self._on_audition)
+
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+        row.addWidget(self._note_spin)
+        row.addWidget(audition_btn)
+        row.addStretch(1)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 8, 10, 10)
+        layout.setSpacing(6)
+        layout.addWidget(title)
+        layout.addLayout(row)
+
+    def _on_note_changed(self, value: int) -> None:
+        self._slot.note = int(value)
+
+    def _on_audition(self) -> None:
+        try:
+            self._note_audition_fn(self._slot, [int(self._note_spin.value())])
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.critical(self, "Audition failed", f"Couldn't audition: {exc}")
+
+
+class _KitMapEditor(QFrame):
+    """Multi-piece ``piece_name → KitPiece(note, channel)`` editor for ``drum_kit`` voices.
+
+    Schema v3: each piece carries its own MIDI channel, letting a kit
+    span ch 9 (kick), ch 10 (snare + hats), ch 11 (perc), etc.
+    """
+
+    def __init__(self, *, slot: VoiceSlot, note_audition_fn: NoteAuditionFn) -> None:
+        super().__init__()
+        self.setObjectName("Panel")
+        self._slot = slot
+        self._note_audition_fn = note_audition_fn
+        # Per-row tuple: (piece_edit, note_spin, channel_spin).
+        self._rows: list[tuple[QLineEdit, QSpinBox, QSpinBox]] = []
 
         title = QLabel("KIT MAP")
         title.setObjectName("FieldLabel")
+
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.setSpacing(6)
+        for caption, width in (("piece", 180), ("note", 70), ("channel", 80)):
+            lbl = QLabel(caption)
+            lbl.setStyleSheet(f"color: {theme.INK_DIM.name()};")
+            lbl.setMinimumWidth(width)
+            header_row.addWidget(lbl)
+        header_row.addStretch(1)
+        header_widget = QWidget()
+        header_widget.setLayout(header_row)
 
         self._rows_holder = QWidget()
         self._rows_layout = QVBoxLayout(self._rows_holder)
         self._rows_layout.setContentsMargins(0, 0, 0, 0)
         self._rows_layout.setSpacing(4)
 
-        for piece, note in slot.kit_map.items():
-            self._add_row(piece, int(note))
+        for piece, piece_data in slot.kit_map.items():
+            self._add_row(piece, int(piece_data.note), int(piece_data.channel))
 
         if not slot.kit_map:
-            self._add_row(slot.name, 36)
+            self._add_row(slot.name, 36, slot.midi_channel)
 
         add_btn = QPushButton("ADD PIECE")
         add_btn.clicked.connect(self._on_add)
@@ -744,18 +817,25 @@ class _KitMapEditor(QFrame):
         layout.setContentsMargins(10, 8, 10, 10)
         layout.setSpacing(6)
         layout.addWidget(title)
+        layout.addWidget(header_widget)
         layout.addWidget(self._rows_holder)
         layout.addWidget(add_btn, 0, Qt.AlignmentFlag.AlignLeft)
 
-    def _add_row(self, piece: str, note: int) -> None:
+    def _add_row(self, piece: str, note: int, channel: int) -> None:
         piece_edit = QLineEdit(piece)
         piece_edit.setMaximumWidth(180)
         note_spin = QSpinBox()
         note_spin.setRange(0, 127)
         note_spin.setValue(int(note))
+        note_spin.setMinimumWidth(70)
+        channel_spin = QSpinBox()
+        channel_spin.setRange(1, 16)
+        channel_spin.setValue(int(channel))
+        channel_spin.setMinimumWidth(80)
+
         audition_btn = QPushButton("PLAY")
         audition_btn.setMaximumWidth(64)
-        audition_btn.setToolTip("Send this drum's MIDI note on the voice's channel")
+        audition_btn.setToolTip("Send this piece's note on its own channel")
         remove_btn = QPushButton("×")
         remove_btn.setMaximumWidth(32)
 
@@ -765,23 +845,33 @@ class _KitMapEditor(QFrame):
         row.setSpacing(6)
         row.addWidget(piece_edit)
         row.addWidget(note_spin)
+        row.addWidget(channel_spin)
         row.addWidget(audition_btn)
         row.addWidget(remove_btn)
 
-        entry = (piece_edit, note_spin)
+        entry = (piece_edit, note_spin, channel_spin)
         self._rows.append(entry)
 
         piece_edit.editingFinished.connect(self._rebuild_map)
         note_spin.valueChanged.connect(lambda _v: self._rebuild_map())
+        channel_spin.valueChanged.connect(lambda _v: self._rebuild_map())
 
         def on_audition() -> None:
+            # Build a transient single-piece view of the slot on the
+            # piece's own channel so audition reaches the right
+            # instrument even when pieces are spread across channels.
             try:
-                self._note_audition_fn(self._slot, [int(note_spin.value())])
+                temp_slot = VoiceSlot(
+                    name=self._slot.name,
+                    type="drum",
+                    default_role="drum",
+                    midi_channel=int(channel_spin.value()),
+                    note=int(note_spin.value()),
+                )
+                self._note_audition_fn(temp_slot, [int(note_spin.value())])
             except Exception as exc:  # noqa: BLE001
                 QMessageBox.critical(
-                    self,
-                    "Audition failed",
-                    f"Couldn't audition note: {exc}",
+                    self, "Audition failed", f"Couldn't audition piece: {exc}"
                 )
 
         audition_btn.clicked.connect(on_audition)
@@ -798,16 +888,21 @@ class _KitMapEditor(QFrame):
         self._rows_layout.addWidget(row_widget)
 
     def _on_add(self) -> None:
-        self._add_row("piece", 36)
+        self._add_row("piece", 36, self._slot.midi_channel)
         self._rebuild_map()
 
     def _rebuild_map(self) -> None:
-        kit_map: dict[str, int] = {}
-        for piece_edit, note_spin in self._rows:
+        from jtx.model.setup import KitPiece
+
+        kit_map: dict[str, KitPiece] = {}
+        for piece_edit, note_spin, channel_spin in self._rows:
             piece = piece_edit.text().strip()
             if not piece:
                 continue
-            kit_map[piece] = int(note_spin.value())
+            kit_map[piece] = KitPiece(
+                note=int(note_spin.value()),
+                channel=int(channel_spin.value()),
+            )
         self._slot.kit_map = kit_map
 
 
