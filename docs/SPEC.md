@@ -227,11 +227,12 @@ anywhere.
 
 ### Voice Types and Roles
 
-Five types. The type constrains which roles and which algorithms are valid.
+Six types. The type constrains which roles and which algorithms are valid.
 
 | Type | Roles | What it emits |
 |------|-------|---------------|
-| `drum` | `drum` | Note-on/off on the kit channel using kit map names |
+| `drum` | `drum` | Single MIDI note on the slot's channel (slot.note) |
+| `drum_kit` | `drum_kit` | Multi-piece kit: each piece carries its own `(channel, note)` via `kit_map` |
 | `mono` | `bass`, `lead` | One note at a time + optional CC modulation |
 | `poly` | `pad`, `stab`, `chord` | Multiple simultaneous notes |
 | `modulator` | `modulator` | CCs and PitchBend only — no notes |
@@ -243,6 +244,47 @@ voice and a lead voice running the same algorithm with the same knob values
 produce identical music up to MIDI channel — a useful property for
 double-tracking and for `follower` voices' source-of-truth checks.
 
+#### `drum` vs `drum_kit`
+
+* A `drum` voice represents one piece (kick or snare or hat). Its
+  emissions land on `slot.midi_channel` at `slot.note`. The legacy
+  single-entry `kit_map` field is gone in schema v3.
+* A `drum_kit` voice represents an entire kit. `slot.kit_map` is a
+  dict of `piece_name → KitPiece(note, channel)` — each piece can sit
+  on its own MIDI channel (kick on ch9, hats on ch10, perc on ch11).
+  Algorithms emit abstract `Hit(instrument=name)` events; the voicing
+  stage looks the name up in the slot's `kit_map`.
+
+### Abstract Events
+
+Algorithms know about *musical concepts* (instruments, parameter
+functions, pitches) and **not** about MIDI plumbing (channels, CC
+numbers, voice routing). They emit abstract events; a **voicing
+stage** at the end of the pipeline translates abstract → MIDI using
+the voice's slot.
+
+Event types (`jtx/model/events.py`):
+
+* `Hit(instrument: str | None, velocity, duration_ticks, tick)` — a
+  drum hit. On a `drum_kit` slot, `instrument` keys into `kit_map`
+  for `(channel, note)`. On any other slot, `instrument=None` (or
+  the voice's own name) lands on `(slot.midi_channel, slot.note)`.
+* `Note(pitch, velocity, duration_ticks, tick)` — a pitched note.
+  `pitch` is a MIDI note number used as a *universal integer pitch
+  encoding* (not MIDI plumbing). The voicing stage adds the channel.
+* `Param(name, value, tick)` — a parameter set on a function name
+  (`cutoff`, `resonance`, `glide`, `bend`). The voicing stage routes
+  via `slot.parameter_map` / algorithm `DEFAULT_PARAM_MAP`. `value`
+  is normalised (`[0,1]` for CC-style, `[-1,1]` for bend).
+* `PolyAftertouch(pitch, pressure, tick)` — per-note expression on
+  poly / MPE voices.
+
+Why this matters: cross-cutting features (sidechain, parameter
+mapping, LFO targeting) operate on instrument / function *names*
+rather than channel/note tuples. Pump's
+`sidechain_from=["kick"]` works uniformly whether the kick is a
+standalone `drum` voice or a piece inside a `drum_kit`.
+
 ### Algorithm Library (~10–12 classes)
 
 Consolidated from slackbeatz's 57 generators. Each algorithm declares its
@@ -251,6 +293,7 @@ overridden per role.
 
 | Type | Algorithm | Notes / knobs in scope |
 |------|-----------|-----------------------|
+| drum_kit | `drum_kit` | Headline drum algorithm. Coordinates kick/snare/hats/perc across the voice's `kit_map` based on `style` (acid/techno/psy), `kit_focus` (full/minimal/kick_only/no_kick/percussion/build/wind_down), `density`, `variation`, `perc_complexity`, and `ctx.part_intensity` / `ctx.part_progress`. MIDI-naive: emits `Hit(instrument=name)`; voicing stage maps each piece to its `(channel, note)`. |
 | drum | `drum_pattern` | Unified euclidean + four-on-floor + breakbeat via knobs (`style=euclid|four_floor|break`, per-piece pulses/offsets, ghost layer, polyrhythm + `polyrhythm_subdiv` for continuous triplet hat, `roll_pos`/`roll_subdiv`/`roll_depth` for triplet roll fills) |
 | drum | `drum_one_shot` | Single hits at given steps; useful for claps, crashes, tom rolls (`roll_pos`/`roll_subdiv`/`roll_depth`) |
 | mono | `acid_bass` | 303-style step sequencer (probabilistic note picks, octave jumps, slide, internal CC74/CC71 sweep, pitch-bend wobble, optional `triplet_prob` for breakdown rolls) — covers slackbeatz `acid_303` |
@@ -305,27 +348,52 @@ Follower voices can chain: a follower can be the source of another follower, so
 any required reordering of the pipeline is built up by chaining. Cycles are
 forbidden and detected at song-load time.
 
-### Pattern vs Feel Knobs
+### Pattern vs Mix vs Global Feel Knobs
 
-- **Pattern knobs**: algorithm-specific. They control *what notes are emitted*.
-  Schema declared by the algorithm class. Examples: `acid_bass.slide_prob`,
-  `drum_pattern.kick_pulses`, `arp.rate`.
-- **Feel knobs**: universal across every voice type. They control *how* notes
-  are emitted — micro-timing, dynamics, drop-outs. Applied at the scheduler
-  level as a post-emit pass, so every algorithm gets identical feel handling.
-  v1 set, mirroring slackbeatz `feel.py`:
-  - `humanize` (±N ticks per event, default varies by role),
-  - `vel_jitter` (±N velocity per note-on),
-  - `gate_jitter` (±fraction of note duration),
-  - `swing` (delay every other 16th — 0=straight, 1.0=full 16th-triplet feel),
-  - `accent` (velocity boost on configurable beats),
-  - `mute_prob` (per-bar drop chance),
-  - `evolution` (linear velocity ramp across part),
-  - `octave_jump` (per-event ±12 chance),
-  - `passing_tones` (chromatic neighbour swap chance).
+Schema v3 introduces three distinct knob surfaces:
 
-Same set on every voice; role determines defaults. (Drum role gets higher
-`accent` defaults; bass role gets higher `swing` default; etc.)
+- **Pattern knobs** (per voice): algorithm-specific. They control
+  *what notes are emitted*. Schema declared by the algorithm class.
+  Examples: `acid_bass.slide_prob`, `drum_kit.kit_focus`, `arp.rate`.
+
+- **Mix knobs** (per voice, `VoiceConfig.mix`): mix-pass shaping —
+  *how velocities + envelope behave for this voice*. Run after the
+  algorithm emits, before the post-emit feel pass:
+  - `sidechain_from` (list of **instrument names** — e.g. `["kick"]`),
+    `sidechain_floor`, `sidechain_release_beats`.
+  - `fade_in_at_bar`, `fade_in_beats`, `fade_out_at_bar`,
+    `fade_out_beats`, `fade_sustain_level`, `fade_shape`,
+    `fade_min_velocity`.
+  - `evolution_start`, `evolution_end` (linear velocity ramp across
+    the part).
+
+- **Global feel knobs** (song-wide, `Song.feel`): five knobs that
+  span every voice and compose across mix-pass + feel-pass +
+  algorithm-side reads:
+  - **Pump** (0..1) — compiles to synthetic `sidechain_from=["kick"]`
+    on every non-kit voice via `jtx.engine.global_feel`. The depth
+    scales the sidechain floor (`127 - pump*80`). Explicit user
+    `sidechain_from` wins on key collision.
+  - **Groove** (0..1) — feel-pass: swing on hat instruments
+    (`chh`/`hh`/`ohh`/`hat`) and on lead/stab/chord NoteOns; humanize
+    ≈ `groove*8` ticks; accent +`groove*14` velocity on beats 2 & 4.
+  - **Drive** (0..1) — feel-pass: +`drive*15` velocity on every
+    NoteOn. drum_kit additionally reads `ctx.song_feel["drive"]` for
+    ghost-note + roll-fill probability boosts.
+  - **Tension** (0..1) — applied directly in `SongPlayer`:
+    `intensity_eff = clamp(0.5 + (intensity - 0.5) * (0.5 + tension*1.5))`.
+    At 0 the per-part intensity envelope collapses to 0.5; at 1 it
+    exaggerates 1.5×.
+  - **Wander** (0..1) — feel-pass: per-bar mute probability
+    ≤ `wander*0.1`; per-NoteOn octave-jump probability
+    ≤ `wander*0.15` (melodic voices only).
+
+The deleted v1/v2 per-voice feel grab-bag (humanize / swing / accent /
+mute_prob / octave_jump / passing_tones / gate_jitter / vel_jitter)
+is gone. The functionality it represented is now expressed via
+Groove / Drive / Wander — and (for the cases that legitimately want
+*per-voice* behaviour like a build-up reese-bass fade-in) via the
+surviving Mix knobs.
 
 ### Knob Scope (Override Model)
 
@@ -357,9 +425,15 @@ Named, song-level LFOs as in slackbeatz Phase #65. Each LFO has:
 LFOs are *applied* by binding them to a target in a part. Target scopes:
 
 - `pattern:<voice>:<knob>` — modulates a pattern knob,
-- `feel:<voice>:<knob>` — modulates a feel knob,
+- `mix:<voice>:<knob>` — modulates a per-voice mix knob
+  (sidechain / fade / evolution),
+- `global_feel:<knob>` — modulates a song-wide feel knob
+  (`pump`/`groove`/`drive`/`tension`/`wander`),
 - `midi:ch<N>:cc<M>` — direct CC output,
 - `root:<voice>` — modulates the root note (in semitones or scale degrees).
+
+The legacy `feel:<voice>:<knob>` target was removed in schema v3 —
+`mix:` covers per-voice surface, `global_feel:` covers song-wide.
 
 Applications are part-scoped (you can apply `slow_sweep` in `build` but not in
 `drop`). This is strictly more powerful than the modulator voice type
@@ -483,32 +557,70 @@ Switching modes is allowed only while stopped.
 files. Schema version field at the top so we can migrate later. No round-tripping
 to a text DSL in v1.
 
-Shape (sketch):
+Shape (schema v3 sketch):
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 3,
   "title": "Phuture",
   "seed_override": null,
-  "setup_ref": "iac-default",
+  "setup_ref": "ableton",
   "key": { "tonic": "A", "scale": "minor" },
   "meter": "4/4",
   "tempo": 122,
   "chord_progression": { "degrees": ["i","VI","III","VII"], "bars_per_chord": 4 },
+  "feel": { "pump": 0.5, "groove": 0.2, "drive": 0.5, "tension": 0.5, "wander": 0.1 },
   "voices": {
-    "kick":    { "algorithm": "drum_pattern", "pattern": {...}, "feel": {...} },
-    "acid":    { "algorithm": "acid_bass",    "pattern": {...}, "feel": {...} },
-    "organ":   { "algorithm": "chord_stab",   "pattern": {...}, "feel": {...} }
+    "kit":   { "algorithm": "drum_kit",   "pattern": {"style":"acid","kit_focus":"full"}, "mix": {} },
+    "acid":  { "algorithm": "acid_bass",  "pattern": {...}, "mix": {} },
+    "organ": { "algorithm": "chord_stab", "pattern": {...}, "mix": {"fade_in_at_bar":4, "fade_in_beats":8} }
   },
   "parts": {
-    "intro": { "bars": 16, "voice_overrides": { "acid": { "pattern": { "drop_prob": 0.5 } } } },
-    "drop":  { "bars": 32, "voice_overrides": {} }
+    "intro": {
+      "bars": 8,
+      "intensity_start": 0.2, "intensity_end": 0.35,
+      "voice_overrides": { "kit": { "pattern": { "kit_focus": "minimal" } } }
+    },
+    "build": {
+      "bars": 8,
+      "intensity_start": 0.35, "intensity_end": 0.95,
+      "voice_overrides": { "kit": { "pattern": { "kit_focus": "build" } } }
+    },
+    "drop":  { "bars": 32, "intensity_start": 0.9, "intensity_end": 0.85 }
   },
   "arrangement": ["intro", "build", "drop", "build", "drop", "outro"],
   "lfos": [
-    { "name": "slow_sweep", "shape": "sine", "period_bars": 8, "depth": 0.6,
-      "applications": [ { "part": "build", "target": "midi:ch2:cc74" } ] }
+    { "name": "slow_pump", "shape": "sine", "period_bars": 32, "depth": 0.6,
+      "applications": [ { "part": "drop", "target": "global_feel:pump" } ] }
   ]
+}
+```
+
+Setup file (`.jtx-setup`) shape for a drum_kit voice:
+
+```json
+{
+  "name": "kit",
+  "type": "drum_kit",
+  "default_role": "drum_kit",
+  "midi_channel": 9,
+  "kit_map": {
+    "kick":  {"note": 36, "channel": 9},
+    "snare": {"note": 38, "channel": 10},
+    "chh":   {"note": 42, "channel": 10}
+  }
+}
+```
+
+…and for a single-piece drum voice:
+
+```json
+{
+  "name": "kick",
+  "type": "drum",
+  "default_role": "drum",
+  "midi_channel": 10,
+  "note": 36
 }
 ```
 
