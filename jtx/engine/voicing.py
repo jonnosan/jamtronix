@@ -81,12 +81,12 @@ def translate_abstract_events(
 
     Pure function: returns un-routed MIDI events in input order. The
     caller (typically :class:`jtx.player.SongPlayer`) feeds the result
-    through the mix pass, feel pass, and parameter router downstream.
+    through the parameter router downstream.
 
-    Mixed inputs (abstract + already-MIDI events) are allowed —
-    instances of the concrete MIDI event classes pass through
-    unchanged, so a transition-period algorithm that emits some
-    abstract events alongside legacy concrete events still works.
+    Schema v3: the pipeline order is algo → mix → feel → voicing →
+    router, so by the time we get here the events have already been
+    shaped (ducked, faded, swung, accented). Every algorithm in the
+    repo emits abstract events; legacy MIDI pass-through is gone.
     """
     out: list[Event] = []
     for ev in abstract_events:
@@ -100,9 +100,6 @@ def translate_abstract_events(
                 out.append(event)
         elif isinstance(ev, PolyAftertouch):
             out.append(_polyaftertouch_to_midi(ev, slot))
-        elif isinstance(ev, NoteOn | NoteOff | ControlChange | PitchBend | ChannelPressure):
-            # Pass-through for algorithms still emitting concrete MIDI.
-            out.append(ev)
         else:  # pragma: no cover — narrowed by union
             raise TypeError(f"voicing: unsupported event {type(ev).__name__}")
     return out

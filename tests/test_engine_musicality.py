@@ -16,9 +16,9 @@ import pytest
 
 from jtx.algorithms import DrumOneShot, DrumPattern
 from jtx.engine.context import BarContext
-from jtx.engine.events import Event, NoteOff, NoteOn
+from jtx.engine.events import NoteOn  # only used by SongPlayer integration tests below
 from jtx.engine.mix import apply_mix_pass
-from jtx.model.events import Hit
+from jtx.model.events import AbstractEvent, Hit, Note
 from jtx.model.setup import Setup, VoiceSlot
 from jtx.model.song import ChordProgression, Key, Part, Song, VoiceConfig
 from jtx.player import SongPlayer
@@ -26,34 +26,29 @@ from jtx.player import SongPlayer
 # ----------------------------------------------------- mix evolution
 
 
-def _notes(*specs: tuple[int, int, int, int, int]) -> list[Event]:
-    out: list[Event] = []
-    for tick, ch, note, vel, dur in specs:
-        out.append(NoteOn(tick=tick, channel=ch, note=note, velocity=vel))
-        out.append(NoteOff(tick=tick + dur, channel=ch, note=note))
-    return out
+def _notes(*specs: tuple[int, int, int, int]) -> list[AbstractEvent]:
+    """Build Note events from (tick, pitch, vel, duration) specs."""
+    return [
+        Note(pitch=pitch, tick=tick, velocity=vel, duration_ticks=dur)
+        for tick, pitch, vel, dur in specs
+    ]
 
 
-def _vels(events: list[Event]) -> list[int]:
-    return [e.velocity for e in events if isinstance(e, NoteOn)]
+def _vels(events: list[AbstractEvent]) -> list[int]:
+    return [e.velocity for e in events if isinstance(e, Note)]
 
 
 def _mix(
     *,
-    voice_events: dict[str, list[Event]],
+    voice_events: dict[str, list[AbstractEvent]],
     mix_knobs: dict[str, dict[str, object]] | None = None,
     bar_index: int = 0,
     part_bars: int = 1,
-) -> dict[str, list[Event]]:
-    slots = {
-        name: VoiceSlot(name=name, type="mono", default_role="bass", midi_channel=1)
-        for name in voice_events
-    }
+) -> dict[str, list[AbstractEvent]]:
     return apply_mix_pass(
         voice_events=voice_events,
         prev_voice_events={},
         mix_knobs_by_voice=mix_knobs or {},
-        voice_slots=slots,
         bar_index=bar_index,
         ticks_per_bar=1920,
         ppq=480,
@@ -62,14 +57,14 @@ def _mix(
 
 
 def test_evolution_defaults_no_op() -> None:
-    events = _notes((0, 1, 60, 100, 60))
+    events = _notes((0, 60, 100, 60))
     out = _mix(voice_events={"v": events}, bar_index=0, part_bars=16)
     assert out["v"] == events
 
 
 def test_evolution_start_scales_first_bar() -> None:
     out = _mix(
-        voice_events={"v": _notes((0, 1, 60, 100, 60))},
+        voice_events={"v": _notes((0, 60, 100, 60))},
         mix_knobs={"v": {"evolution_start": 0.5, "evolution_end": 1.0}},
         bar_index=0,
         part_bars=16,
@@ -79,7 +74,7 @@ def test_evolution_start_scales_first_bar() -> None:
 
 def test_evolution_end_scales_last_bar() -> None:
     out = _mix(
-        voice_events={"v": _notes((0, 1, 60, 100, 60))},
+        voice_events={"v": _notes((0, 60, 100, 60))},
         mix_knobs={"v": {"evolution_start": 0.5, "evolution_end": 1.0}},
         bar_index=15,
         part_bars=16,
@@ -89,7 +84,7 @@ def test_evolution_end_scales_last_bar() -> None:
 
 def test_evolution_midpoint_interpolates() -> None:
     out = _mix(
-        voice_events={"v": _notes((0, 1, 60, 100, 60))},
+        voice_events={"v": _notes((0, 60, 100, 60))},
         mix_knobs={"v": {"evolution_start": 0.5, "evolution_end": 1.0}},
         bar_index=7,
         part_bars=15,  # progress 7/14 = 0.5
@@ -100,7 +95,7 @@ def test_evolution_midpoint_interpolates() -> None:
 
 def test_evolution_can_ramp_down() -> None:
     out = _mix(
-        voice_events={"v": _notes((0, 1, 60, 100, 60))},
+        voice_events={"v": _notes((0, 60, 100, 60))},
         mix_knobs={"v": {"evolution_start": 1.0, "evolution_end": 0.2}},
         bar_index=15,
         part_bars=16,
@@ -326,7 +321,7 @@ def _player_with_voices(*, follow_kick: bool = True, follow_bass: bool = True) -
         title="t",
         setup_ref="t",
         key=Key(tonic="A", scale="minor"),
-        chord_progression=ChordProgression(degrees=["i", "VI", "III", "VII"], bars_per_chord=1),
+        chord_progression=ChordProgression(degrees=["i", "III", "VII"], bars_per_chord=1),
         voices={
             "kick": VoiceConfig(algorithm="drum_pattern", pattern=kick_pattern),
             "bass": VoiceConfig(algorithm="acid_bass", pattern=bass_pattern),

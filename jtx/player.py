@@ -57,6 +57,7 @@ from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
 from jtx.engine.events import Event
 from jtx.engine.feel import apply_feel
+from jtx.model.events import AbstractEvent
 from jtx.engine.global_feel import compile_global_feel, merge_synthetic_into_mix
 from jtx.engine.lfo import apply_lfos_to_bar
 from jtx.engine.meter import ticks_per_bar
@@ -253,7 +254,7 @@ class SongPlayer:
         # no history); after a full pass through the part it
         # naturally provides modular wraparound when the CLI loops.
         self._last_bar: int | None = None
-        self._prev_voice_events: dict[str, list[Event]] = {}
+        self._prev_voice_events: dict[str, list[AbstractEvent]] = {}
 
     def _topo_sort(self) -> list[_ResolvedVoice]:
         # Sources first, followers after. For followers, the source
@@ -388,39 +389,35 @@ class SongPlayer:
             prev_voice_events = {}
 
         # Run algorithms in topological order; feed follower source_events.
-        # The voicing stage immediately translates abstract events
-        # (Hit/Note/Param/PolyAftertouch) to concrete MIDI so the mix
-        # pass and feel pass can operate on a uniform representation.
-        # Legacy algorithms that emit concrete MIDI directly pass
-        # through unchanged.
-        raw_voice_events: dict[str, list[Event]] = {}
+        # All algorithms emit abstract events (Hit / Note / Param /
+        # PolyAftertouch); mix + feel operate on that abstract stream.
+        # The voicing stage translates to MIDI at the end of the
+        # pipeline, just before the parameter_router.
+        abstract_voice_events: dict[str, list[AbstractEvent]] = {}
         for v in self._voices:
             ctx = contexts[v.name]
             if v.algorithm_name == "voice_follower":
                 src = self.song.voices[v.name].pattern.get("source")
                 if isinstance(src, str):
-                    ctx.source_events = raw_voice_events.get(src, [])
+                    ctx.source_events = abstract_voice_events.get(src, [])
                     ctx.prev_source_events = prev_voice_events.get(src)
             algo_out = list(v.algorithm.generate_bar(ctx))
             # Merge any voice:<v>:<function> LFO emissions for this
-            # voice — they ride the same voicing → parameter_router
-            # pipeline as algorithm-emitted Params.
+            # voice — they ride the same mix / feel / voicing /
+            # parameter_router pipeline as algorithm-emitted Params.
             lfo_params = lfo_voice_params.get(v.name)
             if lfo_params:
                 algo_out.extend(lfo_params)
-            raw_voice_events[v.name] = translate_abstract_events(algo_out, v.slot)
+            abstract_voice_events[v.name] = algo_out
 
         # Mix pass — sidechain ducking (cross-voice, cross-bar) +
-        # fade-in/out envelope per voice. Runs before the per-voice
-        # feel pass so jitter / accent layer on top of the ducked /
-        # faded velocities.
+        # fade-in/out envelope per voice. Operates on abstract events;
+        # sidechain matches Hit.instrument directly, no slot needed.
         mix_knobs_by_voice = {v.name: contexts[v.name].mix_knobs for v in self._voices}
-        voice_slots = {v.name: v.slot for v in self._voices}
         mixed_voice_events = apply_mix_pass(
-            raw_voice_events,
+            abstract_voice_events,
             prev_voice_events,
             mix_knobs_by_voice,
-            voice_slots,
             bar_idx,
             self.ticks_per_bar,
             self.ppq,
@@ -428,8 +425,7 @@ class SongPlayer:
         )
 
         # Feel post-emit pass per voice (bar-internal jitter/accent/swing).
-        # Then route through the parameter router for CC remapping +
-        # MPE channel allocation.
+        # Still abstract events at this point. Then voicing → router.
         voice_events: dict[str, list[Event]] = {}
         for v in self._voices:
             ctx = contexts[v.name]
@@ -440,11 +436,13 @@ class SongPlayer:
                 self.ppq,
                 ctx.rng,
             )
-            voice_events[v.name] = self._routers[v.name].route(shaped)
+            midi_events = translate_abstract_events(shaped, v.slot)
+            voice_events[v.name] = self._routers[v.name].route(midi_events)
 
-        # Cache for next bar's lookback. We cache the *post-mix* events
-        # because that's what next-bar sidechain triggers reference —
-        # ducking a voice that itself got ducked is musically sane.
+        # Cache for next bar's lookback as ABSTRACT events — that's
+        # what next-bar mix-pass sidechain triggers operate on. Caching
+        # the *post-mix* abstract events (ducked-twice scenario stays
+        # musically sane).
         self._last_bar = bar_idx
         self._prev_voice_events = {n: list(es) for n, es in mixed_voice_events.items()}
 
