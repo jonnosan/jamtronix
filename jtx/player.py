@@ -233,6 +233,23 @@ class SongPlayer:
             for v in self._voices
         }
 
+        # Phantom voices — setup slots present but with no song-level
+        # VoiceConfig. They exist purely as routing destinations for
+        # song-level LFO ``voice:`` targets (e.g. a "filter" modulator
+        # slot driven entirely by an LFO). Build a router + slot map
+        # so events_for_bar can flush LFO-emitted Params through the
+        # same voicing → parameter_router pipeline.
+        voice_names_with_algos = {v.name for v in self._voices}
+        self._phantom_slots: dict[str, VoiceSlot] = {
+            slot.name: slot
+            for slot in setup.voices
+            if slot.name not in voice_names_with_algos
+        }
+        self._phantom_routers: dict[str, ParameterRouter] = {
+            name: ParameterRouter(slot, {}, osc_client=self._osc_client)
+            for name, slot in self._phantom_slots.items()
+        }
+
         # Previous-bar event cache for cross-bar sidechain lookback
         # and (later) follower lookback. Updated at the end of every
         # ``events_for_bar``. Initially empty (the part's bar 0 has
@@ -434,7 +451,20 @@ class SongPlayer:
         self._last_bar = bar_idx
         self._prev_voice_events = {n: list(es) for n, es in mixed_voice_events.items()}
 
-        all_events: list[Event] = list(lfo_events)
+        # Phantom-voice LFO emissions — setup slots with no algorithm
+        # but with voice:<v>:<fn> LFO targets pointing at them. Translate
+        # the LFO-emitted Params through their slot's parameter_router
+        # so the function name resolves to the actual MIDI / OSC target.
+        # These bypass mix + feel (no algorithm-emitted events to shape).
+        phantom_events: list[Event] = []
+        for phantom_name, params in lfo_voice_params.items():
+            if phantom_name in self._phantom_slots and params:
+                slot = self._phantom_slots[phantom_name]
+                midi_events = translate_abstract_events(params, slot)
+                routed = self._phantom_routers[phantom_name].route(midi_events)
+                phantom_events.extend(routed)
+
+        all_events: list[Event] = list(lfo_events) + phantom_events
         for v in self._voices:
             all_events.extend(voice_events[v.name])
         return all_events

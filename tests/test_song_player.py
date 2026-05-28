@@ -308,3 +308,62 @@ def test_song_player_routes_osc_target_via_injected_client() -> None:
     # Values stay in the 0..1 normalised range.
     assert all(0.0 <= v <= 1.0 for _, v in osc.sent)
     player.close()
+
+
+def test_song_player_routes_lfo_voice_target_to_phantom_slot() -> None:
+    """A song-level LFO with voice:<slot>:<fn> can drive a setup slot
+    that has no song-level VoiceConfig — the phantom slot acts as a
+    routing destination only.
+    """
+    from jtx.model import CCTarget
+
+    setup = Setup(
+        id="t",
+        name="t",
+        default_midi_port="IAC",
+        voices=[
+            VoiceSlot(name="acid", type="mono", default_role="bass", midi_channel=2),
+            # Phantom modulator slot — no song.voices entry, but has a
+            # parameter_map so the voice:filter:cutoff LFO routes to CC74.
+            VoiceSlot(
+                name="filter",
+                type="modulator",
+                default_role="modulator",
+                midi_channel=5,
+                parameter_map={"cutoff": CCTarget(74)},
+            ),
+        ],
+    )
+    song = Song(
+        title="Phantom Filter",
+        setup_ref="t",
+        key=Key(tonic="A", scale="minor"),
+        chord_progression=ChordProgression(degrees=["i"], bars_per_chord=1),
+        voices={
+            "acid": VoiceConfig(
+                algorithm="acid_bass",
+                pattern={"drop_prob": 1.0, "bend": 0, "cycle": 0},
+            ),
+        },
+        parts={"main": Part(bars=1)},
+        arrangement=["main"],
+        lfos=[
+            LFO(
+                name="filt_sweep",
+                shape="saw",
+                period_bars=4.0,
+                samples_per_bar=8,
+                applications=[
+                    LFOApplication(part="main", target="voice:filter:cutoff")
+                ],
+            )
+        ],
+    )
+    player = SongPlayer(song, setup, "main")
+    events = player.events_for_bar(0)
+    # Eight CC events on the filter slot's channel routed to CC 74.
+    filter_ccs = [
+        e for e in events if isinstance(e, ControlChange) and e.channel == 5 and e.cc == 74
+    ]
+    assert len(filter_ccs) == 8
+    player.close()
