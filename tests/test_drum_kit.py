@@ -215,3 +215,29 @@ def test_drum_kit_build_snare_ceiling_is_style_aware() -> None:
     assert acid <= 24
     # Techno full ceiling check: at least 28 snare hits at the drop.
     assert techno >= 28
+
+
+def test_drum_kit_auto_snare_ceiling_is_style_aware() -> None:
+    """Default (kit_focus='full') snare auto-ramp caps lower for acid
+    so the drop stays around backbeat + light syncopation. Techno +
+    psy keep their driving 18-20 snare density at high intensity.
+    """
+    slot = _slot()
+    kit = DrumKit(kit_map=slot.kit_map)
+
+    def drop_snares(style: str) -> int:
+        hits = kit.generate_bar(
+            _ctx(
+                pattern={"style": style, "kit_focus": "full"},
+                intensity=0.9,
+                progress=0.5,
+            )
+        )
+        return sum(1 for h in hits if h.instrument == "snare")
+
+    acid = drop_snares("acid")
+    techno = drop_snares("techno")
+    psy = drop_snares("psy")
+    assert acid <= 10, f"acid drop snare too dense: {acid}"
+    assert techno >= 16, f"techno drop snare too sparse: {techno}"
+    assert psy >= 16, f"psy drop snare too sparse: {psy}"

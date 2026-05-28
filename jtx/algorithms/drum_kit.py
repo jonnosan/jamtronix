@@ -95,6 +95,10 @@ class _StyleProfile:
     # Curve exponent for the build snare ramp; >1 back-loads the rise.
     # Higher = more sudden density spike near the drop.
     build_snare_curve: float
+    # Ceiling for the **auto** snare-pulse ramp at eff=1.0 in non-build
+    # modes (i.e. the main "drop" groove). Acid stays around backbeat
+    # + light syncopation; techno + psy drive harder.
+    default_snare_max: int
 
 
 _STYLE_PROFILES: dict[str, _StyleProfile] = {
@@ -107,6 +111,7 @@ _STYLE_PROFILES: dict[str, _StyleProfile] = {
         ghost_bias=0.8,
         build_snare_max=16,  # 16th-note ceiling — acid build stays tense, not frantic
         build_snare_curve=1.3,
+        default_snare_max=8,  # 8th-note ceiling in the drop — backbeat + a little syncopation
     ),
     "techno": _StyleProfile(
         name="techno",
@@ -117,6 +122,7 @@ _STYLE_PROFILES: dict[str, _StyleProfile] = {
         ghost_bias=1.0,
         build_snare_max=32,  # full machine-gun ramp into the drop
         build_snare_curve=1.6,
+        default_snare_max=24,  # current driving-techno snare density
     ),
     "psy": _StyleProfile(
         name="psy",
@@ -127,6 +133,7 @@ _STYLE_PROFILES: dict[str, _StyleProfile] = {
         ghost_bias=1.2,
         build_snare_max=32,
         build_snare_curve=1.6,
+        default_snare_max=24,
     ),
 }
 
@@ -264,12 +271,21 @@ class DrumKit(Algorithm):
             ceiling = style.build_snare_max
             pulses = int(round(2 + (ceiling - 2) * ramp))
         elif snare_subdiv == "auto":
+            # Two-zone ramp with per-style ceiling. Low-ceiling styles
+            # (acid) cap their snare density well before the techno /
+            # psy ramp would; high-ceiling styles keep the familiar
+            # 12 → 24 driving snare in the drop.
+            max_pulses = style.default_snare_max
+            mid_max = min(12, max_pulses)
             if eff < 0.4:
                 pulses = 2  # 2 & 4
             elif eff < 0.7:
-                pulses = int(round(4 + 8 * (eff - 0.4) / 0.3))
+                pulses = int(round(4 + (mid_max - 4) * (eff - 0.4) / 0.3))
+            elif max_pulses <= 12:
+                # Low-ceiling style — already at the cap.
+                pulses = max_pulses
             else:
-                pulses = int(round(12 + 12 * (eff - 0.7) / 0.3))
+                pulses = int(round(12 + (max_pulses - 12) * (eff - 0.7) / 0.3))
         elif snare_subdiv == "16":
             pulses = 16
         elif snare_subdiv == "32":
