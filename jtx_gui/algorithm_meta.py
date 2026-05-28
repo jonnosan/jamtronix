@@ -867,74 +867,16 @@ _CHORD_STAB = (
     ),
 )
 
-_CC_LFO = (
-    KnobSpec(
-        "cc",
-        "int",
-        default=74,
-        minimum=0,
-        maximum=127,
-        description="MIDI CC number to modulate (default 74 = filter cutoff).",
-    ),
-    KnobSpec(
-        "shape",
-        "choice",
-        default="sine",
-        choices=("sine", "tri", "saw", "ramp", "square", "random", "sh"),
-        description="LFO waveform: sine / tri / saw / ramp / square / random / sample+hold.",
-    ),
-    KnobSpec(
-        "period_bars",
-        "float",
-        default=4.0,
-        minimum=0.25,
-        maximum=64.0,
-        step=0.25,
-        decimals=2,
-        description="Cycle length in bars (0.25 = beat, 1 = bar, 4 = 4 bars).",
-    ),
-    KnobSpec(
-        "phase",
-        "float",
-        default=0.0,
-        minimum=0.0,
-        maximum=1.0,
-        description="Starting phase of the cycle (0–1).",
-    ),
-    KnobSpec(
-        "depth",
-        "float",
-        default=1.0,
-        minimum=0.0,
-        maximum=1.0,
-        description="How wide the LFO swings around the offset (0=flat, 1=full range).",
-    ),
-    KnobSpec(
-        "offset",
-        "float",
-        default=0.5,
-        minimum=0.0,
-        maximum=1.0,
-        description="Centre value (0=bottom, 0.5=middle, 1=top).",
-    ),
-    KnobSpec(
-        "samples_per_bar",
-        "int",
-        default=16,
-        minimum=1,
-        maximum=128,
-        description="How many CC values to emit per bar (higher = smoother).",
-    ),
-)
-
 _CC_ENVELOPE = (
     KnobSpec(
-        "cc",
-        "int",
-        default=74,
-        minimum=0,
-        maximum=127,
-        description="MIDI CC number to send the envelope on (74 = filter cutoff).",
+        "function",
+        "string",
+        default="cutoff",
+        description=(
+            "Semantic parameter name (cutoff / resonance / glide / …). "
+            "The voice slot's parameter_map decides whether this becomes "
+            "a CC / MPE / OSC message."
+        ),
     ),
     KnobSpec(
         "pulses",
@@ -1362,42 +1304,43 @@ _REESE_BASS = (
 
 _STEP_CC = (
     KnobSpec(
-        "cc",
-        "int",
-        default=74,
-        minimum=0,
-        maximum=127,
-        description="Controller number to modulate.",
+        "function",
+        "string",
+        default="cutoff",
+        description=(
+            "Semantic parameter name (cutoff / resonance / glide / …). "
+            "The voice slot's parameter_map decides the concrete target."
+        ),
     ),
     KnobSpec(
         "subdivision",
         "choice",
         default="16",
         choices=SUBDIVISION_CHOICES,
-        description="Step grid (16t/8t = triplet-feel rhythmic CC).",
+        description="Step grid (16t/8t = triplet-feel rhythmic sweep).",
     ),
     KnobSpec(
         "value_curve",
         "choice",
         default="ramp_up",
         choices=("flat", "ramp_up", "ramp_down", "arc", "valley", "pulse", "drift", "surprise"),
-        description="Per-step CC value shape across the bar.",
+        description="Per-step value shape across the bar.",
     ),
     KnobSpec(
-        "cc_min",
+        "value_min",
         "int",
         default=40,
         minimum=0,
         maximum=127,
-        description="Low end of the CC value range.",
+        description="Low end of the value range (0..127).",
     ),
     KnobSpec(
-        "cc_max",
+        "value_max",
         "int",
         default=110,
         minimum=0,
         maximum=127,
-        description="High end of the CC value range.",
+        description="High end of the value range (0..127).",
     ),
     KnobSpec(
         "depth",
@@ -1430,7 +1373,6 @@ ALGORITHMS: dict[str, AlgorithmMeta] = {
     "noise_riser": AlgorithmMeta("noise_riser", ("mono",), _NOISE_RISER),
     "sustained_chord": AlgorithmMeta("sustained_chord", ("poly",), _SUSTAINED_CHORD),
     "chord_stab": AlgorithmMeta("chord_stab", ("poly",), _CHORD_STAB),
-    "cc_lfo": AlgorithmMeta("cc_lfo", ("modulator",), _CC_LFO),
     "cc_envelope": AlgorithmMeta("cc_envelope", ("modulator",), _CC_ENVELOPE),
     "step_cc": AlgorithmMeta("step_cc", ("modulator",), _STEP_CC),
     "root_pulse": AlgorithmMeta("root_pulse", ("drum", "mono", "poly"), _ROOT_PULSE),

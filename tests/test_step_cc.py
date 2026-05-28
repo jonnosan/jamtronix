@@ -1,7 +1,9 @@
 """Tests for the step_cc modulator algorithm.
 
-Schema v3: MIDI-naive. Emits ``Param(name="cc<N>")`` events with
-normalised [0,1] values.
+Schema v3: MIDI-naive. Emits :class:`Param` events tagged with a
+semantic ``function`` name (default ``"cutoff"``); the voicing stage
++ parameter_router resolve concrete routing via the voice slot's
+``parameter_map`` or the algorithm's ``DEFAULT_PARAM_MAP``.
 """
 
 from __future__ import annotations
@@ -39,6 +41,18 @@ def test_step_cc_emits_one_value_per_step_at_default_subdivision() -> None:
     assert len(_params(events)) == 16
 
 
+def test_step_cc_default_function_is_cutoff() -> None:
+    mod = StepCC()
+    events = mod.generate_bar(_ctx())
+    assert all(p.name == "cutoff" for p in _params(events))
+
+
+def test_step_cc_function_knob_overrides_default() -> None:
+    mod = StepCC()
+    events = mod.generate_bar(_ctx(pattern_knobs={"function": "resonance"}))
+    assert all(p.name == "resonance" for p in _params(events))
+
+
 def test_step_cc_triplet_subdivision() -> None:
     mod = StepCC()
     events = mod.generate_bar(_ctx(pattern_knobs={"subdivision": "16t", "value_curve": "ramp_up"}))
@@ -52,8 +66,8 @@ def test_step_cc_ramp_up_ascends() -> None:
             pattern_knobs={
                 "subdivision": "16",
                 "value_curve": "ramp_up",
-                "cc_min": 0,
-                "cc_max": 120,
+                "value_min": 0,
+                "value_max": 120,
                 "depth": 1.0,
             }
         )
@@ -68,8 +82,8 @@ def test_step_cc_flat_curve_at_centre() -> None:
         _ctx(
             pattern_knobs={
                 "value_curve": "flat",
-                "cc_min": 30,
-                "cc_max": 110,
+                "value_min": 30,
+                "value_max": 110,
                 "depth": 1.0,
             }
         )
@@ -84,19 +98,13 @@ def test_step_cc_depth_zero_collapses_to_centre() -> None:
         _ctx(
             pattern_knobs={
                 "value_curve": "ramp_up",
-                "cc_min": 30,
-                "cc_max": 110,
+                "value_min": 30,
+                "value_max": 110,
                 "depth": 0.0,
             }
         )
     )
     assert all(p.value == pytest.approx(70 / 127.0) for p in _params(events))
-
-
-def test_step_cc_uses_configured_cc_number_as_function_name() -> None:
-    mod = StepCC()
-    events = mod.generate_bar(_ctx(pattern_knobs={"cc": 71}))
-    assert all(p.name == "cc71" for p in _params(events))
 
 
 def test_step_cc_samples_per_step_smooths() -> None:
@@ -126,8 +134,8 @@ def test_step_cc_pulse_curve_emphasises_downbeats() -> None:
             pattern_knobs={
                 "subdivision": "16",
                 "value_curve": "pulse",
-                "cc_min": 0,
-                "cc_max": 120,
+                "value_min": 0,
+                "value_max": 120,
                 "depth": 1.0,
             }
         )

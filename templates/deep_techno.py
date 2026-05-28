@@ -12,8 +12,10 @@ from __future__ import annotations
 import random
 
 from jtx.model import (
+    LFO,
     ChordProgression,
     Key,
+    LFOApplication,
     Part,
     Song,
     VoiceConfig,
@@ -79,17 +81,22 @@ def build(title: str, setup_ref: str) -> Song:
                 "gate": round(random.uniform(0.85, 1.0), 2),
             },
         ),
-        "filter": VoiceConfig(
-            algorithm="cc_lfo",
-            pattern={
-                "cc": 74,
-                "shape": random.choice(("sine", "sine", "tri")),
-                "period_bars": float(random.choice((8, 16, 16, 32))),
-                "depth": round(random.uniform(0.5, 0.8), 2),
-                "offset": round(random.uniform(0.4, 0.55), 2),
-            },
-        ),
     }
+
+    # Filter sweep — song-level LFO targeting the phantom "filter"
+    # modulator voice's "cutoff" function. The setup's filter slot
+    # routes "cutoff" to a concrete MIDI/OSC destination.
+    filter_lfo = LFO(
+        name="filter_sweep",
+        shape=random.choice(("sine", "sine", "tri")),
+        period_bars=float(random.choice((8, 16, 16, 32))),
+        depth=round(random.uniform(0.5, 0.8), 2),
+        samples_per_bar=16,
+        applications=[
+            LFOApplication(part=part, target="voice:filter:cutoff")
+            for part in ("intro", "groove", "main", "breakdown", "outro")
+        ],
+    )
 
     parts = {
         "intro": Part(
@@ -145,4 +152,5 @@ def build(title: str, setup_ref: str) -> Song:
         parts=parts,
         arrangement=["intro", "groove", "main", "breakdown", "main", "outro"],
         feel=feel,
+        lfos=[filter_lfo],
     )

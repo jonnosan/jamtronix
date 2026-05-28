@@ -11,8 +11,10 @@ from __future__ import annotations
 import random
 
 from jtx.model import (
+    LFO,
     ChordProgression,
     Key,
+    LFOApplication,
     Part,
     Song,
     VoiceConfig,
@@ -82,17 +84,19 @@ def build(title: str, setup_ref: str) -> Song:
                 "quality": random.choice(("min7", "minor", "min9", "power")),
             },
         ),
-        "filter": VoiceConfig(
-            algorithm="cc_lfo",
-            pattern={
-                "cc": 74,
-                "shape": random.choice(("sine", "tri", "saw")),
-                "period_bars": float(random.choice((1, 2, 2, 4))),
-                "depth": round(random.uniform(0.7, 0.95), 2),
-                "offset": round(random.uniform(0.5, 0.7), 2),
-            },
-        ),
     }
+
+    filter_lfo = LFO(
+        name="filter_sweep",
+        shape=random.choice(("sine", "tri", "saw")),
+        period_bars=float(random.choice((1, 2, 2, 4))),
+        depth=round(random.uniform(0.7, 0.95), 2),
+        samples_per_bar=16,
+        applications=[
+            LFOApplication(part=part, target="voice:filter:cutoff")
+            for part in ("intro", "rolling", "lead", "breakdown", "outro")
+        ],
+    )
 
     parts = {
         "intro": Part(
@@ -151,4 +155,5 @@ def build(title: str, setup_ref: str) -> Song:
         parts=parts,
         arrangement=["intro", "rolling", "lead", "breakdown", "lead", "outro"],
         feel=feel,
+        lfos=[filter_lfo],
     )

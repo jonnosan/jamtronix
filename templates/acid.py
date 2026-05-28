@@ -12,8 +12,10 @@ from __future__ import annotations
 import random
 
 from jtx.model import (
+    LFO,
     ChordProgression,
     Key,
+    LFOApplication,
     Part,
     Song,
     VoiceConfig,
@@ -88,17 +90,26 @@ def build(title: str, setup_ref: str) -> Song:
                 "palette": random.choice(("tones_only", "triad", "pentatonic")),
             },
         ),
-        "filter": VoiceConfig(
-            algorithm="cc_lfo",
-            pattern={
-                "cc": 74,
-                "shape": random.choice(("sine", "sine", "tri", "saw")),
-                "period_bars": float(random.choice((4, 8, 8, 16))),
-                "depth": round(random.uniform(0.6, 0.95), 2),
-                "offset": round(random.uniform(0.4, 0.7), 2),
-            },
-        ),
     }
+
+    # Filter sweep — song-level LFO targeting the phantom "filter"
+    # modulator voice's "cutoff" function. The setup's filter slot
+    # routes "cutoff" to whichever CC / MPE / OSC target the user
+    # wires up; templates stay abstract.
+    filter_shape = random.choice(("sine", "sine", "tri", "saw"))
+    filter_period = float(random.choice((4, 8, 8, 16)))
+    filter_depth = round(random.uniform(0.6, 0.95), 2)
+    filter_lfo = LFO(
+        name="filter_sweep",
+        shape=filter_shape,
+        period_bars=filter_period,
+        depth=filter_depth,
+        samples_per_bar=16,
+        applications=[
+            LFOApplication(part=part, target="voice:filter:cutoff")
+            for part in ("intro", "build", "drop", "drop2", "outro")
+        ],
+    )
 
     # Per-part intensity envelopes drive the drum_kit voice's density
     # ramps; ``kit_focus`` overrides switch the kit between modes for
@@ -156,4 +167,5 @@ def build(title: str, setup_ref: str) -> Song:
         parts=parts,
         arrangement=["intro", "build", "drop", "build", "drop2", "outro"],
         feel=feel,
+        lfos=[filter_lfo],
     )

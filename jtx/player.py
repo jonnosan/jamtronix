@@ -36,7 +36,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from jtx.algorithms import (
-    CCLFO,
     AcidBass,
     Arp,
     CCEnvelope,
@@ -58,6 +57,7 @@ from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
 from jtx.engine.events import Event
 from jtx.engine.feel import apply_feel
+from jtx.model.events import AbstractEvent
 from jtx.engine.global_feel import compile_global_feel, merge_synthetic_into_mix
 from jtx.engine.lfo import apply_lfos_to_bar
 from jtx.engine.meter import ticks_per_bar
@@ -103,9 +103,12 @@ def instantiate_algorithm(algorithm_name: str, voice_slot: VoiceSlot) -> Algorit
     if algorithm_name == "drum_kit":
         return DrumKit(kit_map=dict(voice_slot.kit_map))
     if algorithm_name == "drum_pattern":
-        return DrumPattern(piece=voice_slot.name)
+        # Tag every Hit with the voice's name so downstream passes
+        # (sidechain, swing) can match by instrument name without
+        # walking back to the slot.
+        return DrumPattern(piece=voice_slot.name, instrument_name=voice_slot.name)
     if algorithm_name == "drum_one_shot":
-        return DrumOneShot()
+        return DrumOneShot(instrument_name=voice_slot.name)
     if algorithm_name == "sub_drone":
         return SubDrone()
     if algorithm_name == "melodic_line":
@@ -126,8 +129,6 @@ def instantiate_algorithm(algorithm_name: str, voice_slot: VoiceSlot) -> Algorit
         return NoiseRiser()
     if algorithm_name == "reese_bass":
         return ReeseBass()
-    if algorithm_name == "cc_lfo":
-        return CCLFO()
     if algorithm_name == "cc_envelope":
         return CCEnvelope()
     if algorithm_name == "step_cc":
@@ -230,13 +231,30 @@ class SongPlayer:
             for v in self._voices
         }
 
+        # Phantom voices — setup slots present but with no song-level
+        # VoiceConfig. They exist purely as routing destinations for
+        # song-level LFO ``voice:`` targets (e.g. a "filter" modulator
+        # slot driven entirely by an LFO). Build a router + slot map
+        # so events_for_bar can flush LFO-emitted Params through the
+        # same voicing → parameter_router pipeline.
+        voice_names_with_algos = {v.name for v in self._voices}
+        self._phantom_slots: dict[str, VoiceSlot] = {
+            slot.name: slot
+            for slot in setup.voices
+            if slot.name not in voice_names_with_algos
+        }
+        self._phantom_routers: dict[str, ParameterRouter] = {
+            name: ParameterRouter(slot, {}, osc_client=self._osc_client)
+            for name, slot in self._phantom_slots.items()
+        }
+
         # Previous-bar event cache for cross-bar sidechain lookback
         # and (later) follower lookback. Updated at the end of every
         # ``events_for_bar``. Initially empty (the part's bar 0 has
         # no history); after a full pass through the part it
         # naturally provides modular wraparound when the CLI loops.
         self._last_bar: int | None = None
-        self._prev_voice_events: dict[str, list[Event]] = {}
+        self._prev_voice_events: dict[str, list[AbstractEvent]] = {}
 
     def _topo_sort(self) -> list[_ResolvedVoice]:
         # Sources first, followers after. For followers, the source
@@ -337,7 +355,7 @@ class SongPlayer:
         import random as _r
 
         lfo_seed = derive_bar_seed(self.song_seed, bar_idx)
-        lfo_events = apply_lfos_to_bar(
+        lfo_emissions = apply_lfos_to_bar(
             self.song.lfos,
             self.part_name,
             contexts,
@@ -345,6 +363,8 @@ class SongPlayer:
             self.ticks_per_bar,
             _r.Random(lfo_seed),
         )
+        lfo_events = lfo_emissions.events
+        lfo_voice_params = lfo_emissions.voice_params
 
         # Compile song-wide feel knobs (Pump) into per-voice mix knobs.
         # Runs after LFOs so global_feel: LFO targets are reflected in
@@ -369,33 +389,35 @@ class SongPlayer:
             prev_voice_events = {}
 
         # Run algorithms in topological order; feed follower source_events.
-        # The voicing stage immediately translates abstract events
-        # (Hit/Note/Param/PolyAftertouch) to concrete MIDI so the mix
-        # pass and feel pass can operate on a uniform representation.
-        # Legacy algorithms that emit concrete MIDI directly pass
-        # through unchanged.
-        raw_voice_events: dict[str, list[Event]] = {}
+        # All algorithms emit abstract events (Hit / Note / Param /
+        # PolyAftertouch); mix + feel operate on that abstract stream.
+        # The voicing stage translates to MIDI at the end of the
+        # pipeline, just before the parameter_router.
+        abstract_voice_events: dict[str, list[AbstractEvent]] = {}
         for v in self._voices:
             ctx = contexts[v.name]
             if v.algorithm_name == "voice_follower":
                 src = self.song.voices[v.name].pattern.get("source")
                 if isinstance(src, str):
-                    ctx.source_events = raw_voice_events.get(src, [])
+                    ctx.source_events = abstract_voice_events.get(src, [])
                     ctx.prev_source_events = prev_voice_events.get(src)
-            algo_out = v.algorithm.generate_bar(ctx)
-            raw_voice_events[v.name] = translate_abstract_events(algo_out, v.slot)
+            algo_out = list(v.algorithm.generate_bar(ctx))
+            # Merge any voice:<v>:<function> LFO emissions for this
+            # voice — they ride the same mix / feel / voicing /
+            # parameter_router pipeline as algorithm-emitted Params.
+            lfo_params = lfo_voice_params.get(v.name)
+            if lfo_params:
+                algo_out.extend(lfo_params)
+            abstract_voice_events[v.name] = algo_out
 
         # Mix pass — sidechain ducking (cross-voice, cross-bar) +
-        # fade-in/out envelope per voice. Runs before the per-voice
-        # feel pass so jitter / accent layer on top of the ducked /
-        # faded velocities.
+        # fade-in/out envelope per voice. Operates on abstract events;
+        # sidechain matches Hit.instrument directly, no slot needed.
         mix_knobs_by_voice = {v.name: contexts[v.name].mix_knobs for v in self._voices}
-        voice_slots = {v.name: v.slot for v in self._voices}
         mixed_voice_events = apply_mix_pass(
-            raw_voice_events,
+            abstract_voice_events,
             prev_voice_events,
             mix_knobs_by_voice,
-            voice_slots,
             bar_idx,
             self.ticks_per_bar,
             self.ppq,
@@ -403,8 +425,7 @@ class SongPlayer:
         )
 
         # Feel post-emit pass per voice (bar-internal jitter/accent/swing).
-        # Then route through the parameter router for CC remapping +
-        # MPE channel allocation.
+        # Still abstract events at this point. Then voicing → router.
         voice_events: dict[str, list[Event]] = {}
         for v in self._voices:
             ctx = contexts[v.name]
@@ -415,15 +436,30 @@ class SongPlayer:
                 self.ppq,
                 ctx.rng,
             )
-            voice_events[v.name] = self._routers[v.name].route(shaped)
+            midi_events = translate_abstract_events(shaped, v.slot)
+            voice_events[v.name] = self._routers[v.name].route(midi_events)
 
-        # Cache for next bar's lookback. We cache the *post-mix* events
-        # because that's what next-bar sidechain triggers reference —
-        # ducking a voice that itself got ducked is musically sane.
+        # Cache for next bar's lookback as ABSTRACT events — that's
+        # what next-bar mix-pass sidechain triggers operate on. Caching
+        # the *post-mix* abstract events (ducked-twice scenario stays
+        # musically sane).
         self._last_bar = bar_idx
         self._prev_voice_events = {n: list(es) for n, es in mixed_voice_events.items()}
 
-        all_events: list[Event] = list(lfo_events)
+        # Phantom-voice LFO emissions — setup slots with no algorithm
+        # but with voice:<v>:<fn> LFO targets pointing at them. Translate
+        # the LFO-emitted Params through their slot's parameter_router
+        # so the function name resolves to the actual MIDI / OSC target.
+        # These bypass mix + feel (no algorithm-emitted events to shape).
+        phantom_events: list[Event] = []
+        for phantom_name, params in lfo_voice_params.items():
+            if phantom_name in self._phantom_slots and params:
+                slot = self._phantom_slots[phantom_name]
+                midi_events = translate_abstract_events(params, slot)
+                routed = self._phantom_routers[phantom_name].route(midi_events)
+                phantom_events.extend(routed)
+
+        all_events: list[Event] = list(lfo_events) + phantom_events
         for v in self._voices:
             all_events.extend(voice_events[v.name])
         return all_events

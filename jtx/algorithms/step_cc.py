@@ -1,29 +1,30 @@
-"""``step_cc`` — step-sequenced CC modulator (rhythmic, not periodic).
+"""``step_cc`` — step-sequenced parameter modulator (rhythmic, not periodic).
 
-``cc_lfo`` is shape-based: sine/tri/saw/random over a fixed period.
-``step_cc`` is grid-based: one CC value per *step* of a configurable
-subdivision, chosen by a named curve. Use when the filter (or any CC)
+Song-level LFOs handle smooth sinusoid sweeps. ``step_cc`` is
+grid-based: one value per *step* of a configurable subdivision,
+chosen by a named curve. Use when the filter (or any parameter)
 should follow a rhythmic pattern instead of a smooth wave.
 
-Knobs-not-lists posture: pick a ``value_curve`` (same menu as
-``drum_pattern.vel_curve``) and sweep ``depth``; the value at each
-step is determined algorithmically from curve + bar-seeded RNG.
+Schema v3: MIDI-naive. Emits :class:`Param` events tagged with a
+semantic ``function`` name; the parameter_router resolves routing
+via slot.parameter_map / DEFAULT_PARAM_MAP.
 
 Knobs:
 
-* ``cc`` (74) — controller number.
+* ``function`` (``"cutoff"``) — semantic parameter name.
 * ``subdivision`` (``"16"``) — step grid; ``"16t"`` / ``"8t"`` etc.
-  give triplet-feel rhythmic CC sweeps.
+  give triplet-feel rhythmic sweeps.
 * ``value_curve`` (``"ramp_up"``) — shape across the bar: ``flat`` /
   ``ramp_up`` / ``ramp_down`` / ``arc`` / ``valley`` / ``pulse`` /
   ``drift`` (bar-seeded random walk) / ``surprise``.
-* ``cc_min`` (40), ``cc_max`` (110) — CC value range.
+* ``value_min`` (40), ``value_max`` (110) — raw value range in 0..127.
 * ``depth`` (1.0) — how strongly the curve modulates around the
-  centre (``(cc_min+cc_max)/2``). ``0`` = flat at centre regardless
-  of curve; ``1`` = full swing to ``[cc_min, cc_max]``.
-* ``samples_per_step`` (1) — emit N CCs per step for smoothing (1 =
-  raw step values, 2+ = linearly interpolated between consecutive
-  step values).
+  centre (``(value_min+value_max)/2``). ``0`` = flat at centre
+  regardless of curve; ``1`` = full swing to
+  ``[value_min, value_max]``.
+* ``samples_per_step`` (1) — emit N samples per step for smoothing
+  (1 = raw step values, 2+ = linearly interpolated between
+  consecutive step values).
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ from jtx.algorithms._subdivision import subdivision_grid
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
 from jtx.model.events import AbstractEvent, Param
+from jtx.model.parameter_target import CCTarget, ParameterTarget
 
 _VALUE_CURVES = (
     "flat",
@@ -49,12 +51,13 @@ _VALUE_CURVES = (
 
 
 class StepCC(Algorithm):
-    """Step-sequenced CC modulator with curve-driven values.
-
-    MIDI-naive: emits ``Param(name="cc<N>", value=v/127)`` events.
-    """
+    """Step-sequenced parameter modulator with curve-driven values."""
 
     name: ClassVar[str] = "step_cc"
+    DEFAULT_PARAM_MAP: ClassVar[dict[str, ParameterTarget]] = {
+        "cutoff": CCTarget(74),
+        "resonance": CCTarget(71),
+    }
 
     def __init__(self) -> None:
         pass
@@ -63,11 +66,11 @@ class StepCC(Algorithm):
         knobs = ctx.pattern_knobs
         rng = ctx.rng
 
-        cc = int(knobs.get("cc", 74))
+        function = str(knobs.get("function", "cutoff"))
         subdivision = str(knobs.get("subdivision", "16"))
         value_curve = str(knobs.get("value_curve", "ramp_up"))
-        cc_min = max(0, min(127, int(knobs.get("cc_min", 40))))
-        cc_max = max(0, min(127, int(knobs.get("cc_max", 110))))
+        value_min = max(0, min(127, int(knobs.get("value_min", 40))))
+        value_max = max(0, min(127, int(knobs.get("value_max", 110))))
         depth = max(0.0, min(1.0, float(knobs.get("depth", 1.0))))
         samples_per_step = max(1, int(knobs.get("samples_per_step", 1)))
 
@@ -78,14 +81,13 @@ class StepCC(Algorithm):
 
         spacing, positions = subdivision_grid(subdivision, ctx.ticks_per_bar, ctx.ppq)
 
-        centre = (cc_min + cc_max) / 2.0
-        half_range = (cc_max - cc_min) / 2.0
+        centre = (value_min + value_max) / 2.0
+        half_range = (value_max - value_min) / 2.0
 
         # Compute the per-step normalized values (-1..1 around centre).
         normalized = [_curve_value(value_curve, step, positions, rng) for step in range(positions)]
 
         events: list[AbstractEvent] = []
-        function_name = f"cc{cc}"
         for i in range(positions):
             tick = i * spacing
             v_next = normalized[(i + 1) % positions]
@@ -97,9 +99,9 @@ class StepCC(Algorithm):
                     v = v_curr * (1 - frac) + v_next * frac
                 else:
                     v = v_curr
-                cc_value = centre + half_range * depth * v
-                cc_int = max(0, min(127, int(round(cc_value))))
-                events.append(Param(name=function_name, value=cc_int / 127.0, tick=sub_tick))
+                raw_value = centre + half_range * depth * v
+                value_int = max(0, min(127, int(round(raw_value))))
+                events.append(Param(name=function, value=value_int / 127.0, tick=sub_tick))
         return events
 
 

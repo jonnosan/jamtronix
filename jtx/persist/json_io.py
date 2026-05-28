@@ -230,6 +230,7 @@ def _lfo_from_dict(d: dict[str, Any]) -> LFO:
         period_bars=d["period_bars"],
         phase=d.get("phase", 0.0),
         depth=d.get("depth", 1.0),
+        samples_per_bar=int(d.get("samples_per_bar", 1)),
         applications=[_lfo_application_from_dict(a) for a in d.get("applications", [])],
     )
 

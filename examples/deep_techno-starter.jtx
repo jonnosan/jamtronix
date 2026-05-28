@@ -61,17 +61,6 @@
         "gate": 0.95
       },
       "mix": {}
-    },
-    "filter": {
-      "algorithm": "cc_lfo",
-      "pattern": {
-        "cc": 74,
-        "shape": "tri",
-        "period_bars": 32.0,
-        "depth": 0.66,
-        "offset": 0.48
-      },
-      "mix": {}
     }
   },
   "parts": {
@@ -169,13 +158,44 @@
     "main",
     "outro"
   ],
-  "lfos": [],
+  "lfos": [
+    {
+      "name": "filter_sweep",
+      "shape": "tri",
+      "period_bars": 32.0,
+      "phase": 0.0,
+      "depth": 0.66,
+      "samples_per_bar": 16,
+      "applications": [
+        {
+          "part": "intro",
+          "target": "voice:filter:cutoff"
+        },
+        {
+          "part": "groove",
+          "target": "voice:filter:cutoff"
+        },
+        {
+          "part": "main",
+          "target": "voice:filter:cutoff"
+        },
+        {
+          "part": "breakdown",
+          "target": "voice:filter:cutoff"
+        },
+        {
+          "part": "outro",
+          "target": "voice:filter:cutoff"
+        }
+      ]
+    }
+  ],
   "feel": {
-    "pump": 0.57,
-    "groove": 0.26,
-    "drive": 0.39,
-    "tension": 0.61,
-    "wander": 0.11
+    "pump": 0.63,
+    "groove": 0.24,
+    "drive": 0.28,
+    "tension": 0.79,
+    "wander": 0.16
   },
   "schema_version": 3
 }

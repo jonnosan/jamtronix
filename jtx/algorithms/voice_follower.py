@@ -65,7 +65,6 @@ from typing import ClassVar
 from jtx.algorithms._theory import note_to_midi, scale_intervals
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
-from jtx.engine.events import Event, NoteOff, NoteOn
 from jtx.model.events import AbstractEvent, Note
 from jtx.model.song import KnobDict
 
@@ -73,10 +72,11 @@ from jtx.model.song import KnobDict
 class VoiceFollower(Algorithm):
     """Fixed-pipeline follower; reads ``ctx.source_events`` set by the glue.
 
-    Schema v3: emits abstract :class:`Note` events. The follower's
-    input (``ctx.source_events``) is still the source voice's
-    post-voicing MIDI stream — SongPlayer pairs NoteOn/NoteOff into
-    the internal note tuples used by the pipeline.
+    Schema v3: consumes the source voice's abstract event stream
+    (pre-voicing) — :class:`Note` events come through with their
+    pitch + duration intact, no NoteOn/NoteOff pairing needed.
+    Emits abstract :class:`Note` events; the voicing stage adds the
+    follower voice's channel downstream.
     """
 
     name: ClassVar[str] = "voice_follower"
@@ -130,22 +130,18 @@ class VoiceFollower(Algorithm):
 _Note = tuple[int, int, int, int]
 
 
-def _pair_notes(events: list[Event]) -> list[_Note]:
-    """Pair NoteOn with matching NoteOff into duration tuples."""
-    on_by_key: dict[tuple[int, int], NoteOn] = {}
-    paired: list[_Note] = []
-    for ev in sorted(events, key=lambda e: e.tick):
-        if isinstance(ev, NoteOn):
-            on_by_key[(ev.channel, ev.note)] = ev
-        elif isinstance(ev, NoteOff):
-            key = (ev.channel, ev.note)
-            on = on_by_key.pop(key, None)
-            if on is not None:
-                paired.append((on.tick, on.note, on.velocity, ev.tick - on.tick))
-    # Any unpaired NoteOns get a 0-duration entry; rare but safe.
-    for _, on in on_by_key.items():
-        paired.append((on.tick, on.note, on.velocity, 1))
-    paired.sort(key=lambda n: n[0])
+def _pair_notes(events) -> list[_Note]:
+    """Project abstract :class:`Note` events into (tick, pitch, vel, dur) tuples.
+
+    Hit / Param / PolyAftertouch events are ignored — the follower's
+    pipeline operates on pitched material only.
+    """
+    paired: list[_Note] = [
+        (n.tick, n.pitch, n.velocity, max(1, n.duration_ticks))
+        for n in events
+        if isinstance(n, Note)
+    ]
+    paired.sort(key=lambda nt: nt[0])
     return paired
 
 

@@ -13,6 +13,7 @@ from jtx.engine.lfo import (
     parse_target,
     sample_lfo,
 )
+from jtx.model.events import Param
 from jtx.model.lfo import LFO, LFOApplication
 from jtx.model.song import Key
 
@@ -132,8 +133,8 @@ def test_apply_lfos_pattern_target_writes_knob() -> None:
     ]
     ctx = _bar_ctx()
     voice_contexts = {"acid": ctx}
-    events = apply_lfos_to_bar(lfos, "drop", voice_contexts, 1, 1920, random.Random(0))
-    assert events == []
+    emissions = apply_lfos_to_bar(lfos, "drop", voice_contexts, 1, 1920, random.Random(0))
+    assert emissions.events == []
     # At bar 1 with period_bars=4, phase=0.25, sine peak → 1.0.
     assert ctx.pattern_knobs.get("slide_prob") == pytest.approx(1.0, abs=1e-6)
 
@@ -188,9 +189,9 @@ def test_apply_lfos_midi_target_emits_control_change() -> None:
             applications=[LFOApplication(part="drop", target="midi:ch2:cc74")],
         )
     ]
-    events = apply_lfos_to_bar(lfos, "drop", {}, 1, 1920, random.Random(0))
-    assert len(events) == 1
-    cc = events[0]
+    emissions = apply_lfos_to_bar(lfos, "drop", {}, 1, 1920, random.Random(0))
+    assert len(emissions.events) == 1
+    cc = emissions.events[0]
     assert isinstance(cc, ControlChange)
     assert cc.channel == 2 and cc.cc == 74
     # Sine peak at bar 1 (phase 0.25) → 1.0 → 127.
@@ -227,8 +228,8 @@ def test_apply_lfos_ignores_applications_in_other_parts() -> None:
     ]
     ctx = _bar_ctx()
     voice_contexts = {"acid": ctx}
-    events = apply_lfos_to_bar(lfos, "drop", voice_contexts, 1, 1920, random.Random(0))
-    assert events == []
+    emissions = apply_lfos_to_bar(lfos, "drop", voice_contexts, 1, 1920, random.Random(0))
+    assert emissions.events == []
     assert "slide_prob" not in ctx.pattern_knobs
 
 
@@ -265,7 +266,108 @@ def test_apply_lfos_multiple_lfos_same_part() -> None:
         ),
     ]
     ctx = _bar_ctx()
-    events = apply_lfos_to_bar(lfos, "drop", {"acid": ctx}, 0, 1920, random.Random(0))
+    emissions = apply_lfos_to_bar(lfos, "drop", {"acid": ctx}, 0, 1920, random.Random(0))
     assert ctx.pattern_knobs.get("slide_prob") == 1.0
-    assert len(events) == 1
-    assert isinstance(events[0], ControlChange)
+    assert len(emissions.events) == 1
+    assert isinstance(emissions.events[0], ControlChange)
+
+
+# ---------------------------------------------------- sub-bar sampling
+
+
+def test_parse_target_voice() -> None:
+    p = parse_target("voice:lead:cutoff")
+    assert p.kind == "voice" and p.voice == "lead" and p.knob == "cutoff"
+
+
+def test_parse_target_voice_rejects_empty_components() -> None:
+    with pytest.raises(ValueError, match="voice:<voice>:<function>"):
+        parse_target("voice::cutoff")
+    with pytest.raises(ValueError, match="voice:<voice>:<function>"):
+        parse_target("voice:lead:")
+
+
+def test_apply_lfos_midi_target_samples_per_bar() -> None:
+    """samples_per_bar > 1 emits multiple CC events spread across the bar."""
+    lfos = [
+        LFO(
+            name="x",
+            shape="sine",
+            period_bars=4.0,
+            depth=1.0,
+            samples_per_bar=8,
+            applications=[LFOApplication(part="drop", target="midi:ch2:cc74")],
+        )
+    ]
+    emissions = apply_lfos_to_bar(lfos, "drop", {}, 0, 1920, random.Random(0))
+    assert len(emissions.events) == 8
+    ticks = sorted(e.tick for e in emissions.events if isinstance(e, ControlChange))
+    # 8 samples evenly spaced across a 1920-tick bar = step 240.
+    assert ticks == [i * 240 for i in range(8)]
+
+
+def test_apply_lfos_voice_target_emits_param_events() -> None:
+    """voice:<v>:<fn> emits Param events into that voice's stream."""
+    lfos = [
+        LFO(
+            name="x",
+            shape="sine",
+            period_bars=4.0,
+            depth=1.0,
+            samples_per_bar=4,
+            applications=[LFOApplication(part="drop", target="voice:lead:cutoff")],
+        )
+    ]
+    emissions = apply_lfos_to_bar(lfos, "drop", {}, 1, 1920, random.Random(0))
+    assert emissions.events == []  # no standalone events
+    params = emissions.voice_params["lead"]
+    assert len(params) == 4
+    assert all(isinstance(p, Param) and p.name == "cutoff" for p in params)
+    # Values stay in [0, 1] for CC-style routing.
+    assert all(0.0 <= p.value <= 1.0 for p in params)
+    # Ticks evenly spaced: 0, 480, 960, 1440 (1920 / 4 = 480).
+    assert sorted(p.tick for p in params) == [0, 480, 960, 1440]
+
+
+def test_apply_lfos_voice_target_default_samples_per_bar() -> None:
+    """Default samples_per_bar=1 → one sample at tick 0."""
+    lfos = [
+        LFO(
+            name="x",
+            shape="sine",
+            period_bars=4.0,
+            depth=1.0,
+            applications=[LFOApplication(part="drop", target="voice:lead:cutoff")],
+        )
+    ]
+    emissions = apply_lfos_to_bar(lfos, "drop", {}, 1, 1920, random.Random(0))
+    assert len(emissions.voice_params["lead"]) == 1
+    assert emissions.voice_params["lead"][0].tick == 0
+
+
+def test_apply_lfos_pattern_target_ignores_samples_per_bar() -> None:
+    """Knob-writing targets stay at one sample regardless of samples_per_bar."""
+    lfos = [
+        LFO(
+            name="x",
+            shape="sine",
+            period_bars=4.0,
+            depth=1.0,
+            samples_per_bar=8,  # ignored for knob targets
+            applications=[LFOApplication(part="drop", target="pattern:acid:slide_prob")],
+        )
+    ]
+    ctx = _bar_ctx()
+    emissions = apply_lfos_to_bar(
+        lfos, "drop", {"acid": ctx}, 1, 1920, random.Random(0)
+    )
+    # No extra events; the knob got written exactly once.
+    assert emissions.events == []
+    assert emissions.voice_params == {}
+    assert "slide_prob" in ctx.pattern_knobs
+
+
+def test_lfo_validate_rejects_zero_samples_per_bar() -> None:
+    lfo = LFO(name="x", shape="sine", period_bars=4.0, samples_per_bar=0)
+    errors = lfo.validate()
+    assert any("samples_per_bar" in e for e in errors)

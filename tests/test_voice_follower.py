@@ -8,16 +8,15 @@ import pytest
 
 from jtx.algorithms import VoiceFollower
 from jtx.engine.context import BarContext
-from jtx.engine.events import Event, NoteOff, NoteOn
-from jtx.model.events import Note
+from jtx.model.events import AbstractEvent, Note
 from jtx.model.song import Key
 
 
 def _ctx(
     *,
     pattern_knobs: dict[str, object] | None = None,
-    source_events: list[Event] | None = None,
-    prev_source_events: list[Event] | None = None,
+    source_events: list[AbstractEvent] | None = None,
+    prev_source_events: list[AbstractEvent] | None = None,
     seed: int = 0,
 ) -> BarContext:
     return BarContext(
@@ -34,13 +33,12 @@ def _ctx(
     )
 
 
-def _source_notes(*specs: tuple[int, int, int, int]) -> list[Event]:
-    """Build a list of NoteOn/NoteOff events from (tick, pitch, vel, dur) specs."""
-    events: list[Event] = []
-    for tick, pitch, vel, dur in specs:
-        events.append(NoteOn(tick=tick, channel=1, note=pitch, velocity=vel))
-        events.append(NoteOff(tick=tick + dur, channel=1, note=pitch))
-    return events
+def _source_notes(*specs: tuple[int, int, int, int]) -> list[AbstractEvent]:
+    """Build abstract Note events from (tick, pitch, vel, dur) specs."""
+    return [
+        Note(pitch=pitch, tick=tick, velocity=vel, duration_ticks=dur)
+        for tick, pitch, vel, dur in specs
+    ]
 
 
 def _extract_notes(events) -> list[tuple[int, int, int]]:

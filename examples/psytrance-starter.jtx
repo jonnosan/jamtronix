@@ -65,17 +65,6 @@
         "quality": "power"
       },
       "mix": {}
-    },
-    "filter": {
-      "algorithm": "cc_lfo",
-      "pattern": {
-        "cc": 74,
-        "shape": "tri",
-        "period_bars": 2.0,
-        "depth": 0.74,
-        "offset": 0.66
-      },
-      "mix": {}
     }
   },
   "parts": {
@@ -183,11 +172,42 @@
     "lead",
     "outro"
   ],
-  "lfos": [],
+  "lfos": [
+    {
+      "name": "filter_sweep",
+      "shape": "tri",
+      "period_bars": 2.0,
+      "phase": 0.0,
+      "depth": 0.74,
+      "samples_per_bar": 16,
+      "applications": [
+        {
+          "part": "intro",
+          "target": "voice:filter:cutoff"
+        },
+        {
+          "part": "rolling",
+          "target": "voice:filter:cutoff"
+        },
+        {
+          "part": "lead",
+          "target": "voice:filter:cutoff"
+        },
+        {
+          "part": "breakdown",
+          "target": "voice:filter:cutoff"
+        },
+        {
+          "part": "outro",
+          "target": "voice:filter:cutoff"
+        }
+      ]
+    }
+  ],
   "feel": {
-    "pump": 0.17,
-    "groove": 0.05,
-    "drive": 0.78,
+    "pump": 0.27,
+    "groove": 0.02,
+    "drive": 0.72,
     "tension": 0.78,
     "wander": 0.17
   },
