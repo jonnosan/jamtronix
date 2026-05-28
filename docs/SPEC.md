@@ -377,8 +377,11 @@ Schema v3 introduces three distinct knob surfaces:
   - **Groove** (0..1) — feel-pass: swing on hat instruments
     (`chh`/`hh`/`ohh`/`hat`) and on lead/stab/chord NoteOns; humanize
     ≈ `groove*8` ticks; accent +`groove*14` velocity on beats 2 & 4.
-  - **Drive** (0..1) — feel-pass: +`drive*15` velocity on every
-    NoteOn. drum_kit additionally reads `ctx.song_feel["drive"]` for
+  - **Drive** (0..1) — feel-pass: +`drive*15` velocity on every Hit
+    + Note, and a "cutoff push" that adds `drive*0.2` to every
+    `Param(name="cutoff").value` (clamped at 1.0). Pairs the louder
+    + brighter shifts so the mix audibly gets harder as you turn it
+    up. drum_kit additionally reads `ctx.song_feel["drive"]` for
     ghost-note + roll-fill probability boosts.
   - **Tension** (0..1) — applied directly in `SongPlayer`:
     `intensity_eff = clamp(0.5 + (intensity - 0.5) * (0.5 + tension*1.5))`.

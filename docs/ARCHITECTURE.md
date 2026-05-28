@@ -168,7 +168,7 @@ Translates four song-wide feel knobs into per-event shaping:
 | Knob | Effect | Gating |
 |---|---|---|
 | **Groove** | Swing (delay odd 16ths), humanize (±ticks jitter), accent (vel boost on beats 2 & 4) | Swing only fires on Hit events whose `instrument` is a hat name (chh/hh/ohh/hat/…) or on Note events from `lead`/`stab`/`chord` role voices |
-| **Drive** | Velocity boost on every Hit + Note | All voices |
+| **Drive** | Velocity boost on every Hit + Note **and** +`drive*0.2` cutoff push on every `Param(name="cutoff")` | All voices |
 | **Wander** | Per-bar mute probability + per-Note octave-jump probability (Hits never octave-jump) | Octave jump only on melodic-role voices (`bass`/`lead`/`pad`/`stab`/`chord`) |
 
 **Pump** (sidechain compilation) lives in

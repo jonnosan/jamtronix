@@ -14,10 +14,14 @@ stage converts the result to MIDI downstream.
   - Accent boosts Hit/Note velocity on the 16th-note steps that fall
     on beats 2 & 4 (steps 4 + 12 in 4/4).
 
-* **Drive** — global +N velocity boost on every Hit + Note. The
-  drum_kit algorithm reads ``song_feel["drive"]`` separately to add
-  ghost notes / roll-fill probability; that's pattern-shaping, this
-  is velocity-shaping.
+* **Drive** — global +N velocity boost on every Hit + Note, plus a
+  "cutoff push" that shifts every ``Param(name="cutoff")`` upward.
+  At ``drive=1.0`` cutoff values get +0.2 in their normalised [0, 1]
+  range (clamped at 1.0). Pairs with the velocity boost for the
+  classic "push the mix harder" feel: louder + brighter at the same
+  time. The drum_kit algorithm separately reads
+  ``song_feel["drive"]`` to add ghost notes / roll-fill probability —
+  that's pattern-shaping, this is post-emit shaping.
 
 * **Wander** — per-bar mute probability + per-Note octave-jump
   probability. Octave jump only fires on melodic voices
@@ -47,8 +51,16 @@ from jtx.model.setup import VoiceSlot
 GROOVE_HUMANIZE_TICKS = 8  # ±ticks at groove=1.0
 GROOVE_ACCENT_VELOCITY = 14  # vel boost on beats 2/4 at groove=1.0
 DRIVE_VELOCITY_BOOST = 15  # global vel boost at drive=1.0
+DRIVE_CUTOFF_PUSH = 0.2  # added to every Param(name="cutoff").value at drive=1.0
 WANDER_MUTE_PROB = 0.1  # chance to drop the whole bar at wander=1.0
 WANDER_OCTAVE_PROB = 0.15  # chance per Note at wander=1.0
+
+# Param function names that Drive's cutoff-push targets. ``"cutoff"``
+# is the v1 vocab; algorithms use it for filter cutoff regardless of
+# the concrete CC / OSC / MPE target. Extend cautiously — anything
+# in here gets bias-shifted on every event, which is musical for a
+# filter sweep but probably wrong for, e.g., glide or detune.
+_DRIVE_PUSH_FUNCTIONS = frozenset({"cutoff"})
 
 # 16th-note positions of beats 2 + 4 in 4/4 (the classic backbeat accents).
 _BACKBEAT_STEPS = frozenset({4, 12})
@@ -130,7 +142,18 @@ def apply_feel(
                     octave_prob=octave_prob if octave_eligible else 0.0,
                 )
             )
-        elif isinstance(ev, Param | PolyAftertouch):
+        elif isinstance(ev, Param):
+            new_tick = ev.tick
+            if humanize > 0:
+                new_tick = max(0, new_tick + rng.randint(-humanize, humanize))
+            new_value = ev.value
+            if drive > 0 and ev.name in _DRIVE_PUSH_FUNCTIONS:
+                # Bias the cutoff sweep upward by drive * 0.2; clamp at
+                # 1.0 so an already-fully-open cutoff stays open rather
+                # than saturating past the normalised range.
+                new_value = min(1.0, ev.value + drive * DRIVE_CUTOFF_PUSH)
+            out.append(replace(ev, tick=new_tick, value=new_value))
+        elif isinstance(ev, PolyAftertouch):
             # Tick humanize only — no velocity or pitch concept.
             new_tick = ev.tick
             if humanize > 0:
