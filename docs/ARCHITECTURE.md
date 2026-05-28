@@ -54,8 +54,8 @@ A few invariants follow from it:
   Drum-style hits emit `Hit(instrument="kick", …)`; pitched notes
   emit `Note(pitch=…, …)`; CCs and pitch bends emit
   `Param(name="cutoff", value=…, …)` with a semantic function name.
-  See [`feedback_algorithms_midi_naive`](../../.claude/memory/) for
-  the rationale.
+  Rationale is recorded in Claude's auto-memory under the
+  `feedback-algorithms-midi-naive` rule.
 
 * **Mix and feel work on the same shape algorithms emit.** Both
   operate on abstract events — they don't need to round-trip through
@@ -93,7 +93,8 @@ sidechain** (does this hit trigger ducking on a voice whose
 [Parameter Mapping](#parameter-mapping) abstraction (issue #99)
 underpins this — algorithms emit by semantic name, slots map names to
 concrete targets. **Never bake the CC number into the function name**
-(see [`feedback_modulator_function_names`](../../.claude/memory/)).
+(recorded in Claude's auto-memory as the
+`feedback-modulator-function-names` rule).
 
 ## Voicing stage
 
@@ -319,11 +320,11 @@ shift-by-1-bar.
 
 ## Architectural rules (what to defend)
 
-1. **Algorithms must be MIDI-naive** — see
-   [`feedback_algorithms_midi_naive`](../../.claude/memory/).
+1. **Algorithms must be MIDI-naive** — encoded as the
+   `feedback-algorithms-midi-naive` rule in Claude's auto-memory.
 2. **Modulators emit Param by semantic function name** — never bake
-   CC numbers into the name; see
-   [`feedback_modulator_function_names`](../../.claude/memory/).
+   CC numbers into the name. Encoded as
+   `feedback-modulator-function-names`.
 3. **Cross-voice references use instrument / function names** —
    sidechain by `Hit.instrument`, LFOs by `voice:<v>:<function>`,
    never by `(channel, note)`.
