@@ -47,6 +47,7 @@ from jtx.model import (
     MPEPitchBendTarget,
     MPEPressureTarget,
     MPETimbreTarget,
+    OscTarget,
     ParameterTarget,
     Setup,
     ValidationError,
@@ -68,6 +69,14 @@ Args: voice, function name, kind (one of ``"mpe_pitch_bend"``,
 on the voice's first MPE channel so an MPE-aware instrument latches.
 """
 
+OscAuditionFn = Callable[[Setup, VoiceSlot, str, str], None]
+"""Callable that fires an OSC-target audition.
+
+Args: setup (for host/port), voice, function name, OSC address. Sends
+a 0.0 → 0.5 → 1.0 → 0.5 float sweep so the M4L receiver device's
+\"Map\" gesture can latch onto the target.
+"""
+
 NoteAuditionFn = Callable[[VoiceSlot, list[int]], None]
 """Callable that fires a brief MIDI note (or chord) audition on the voice."""
 
@@ -77,6 +86,7 @@ _KIND_LABELS: tuple[tuple[str, str], ...] = (
     ("mpe_pitch_bend", "MPE pitch bend"),
     ("mpe_pressure", "MPE pressure"),
     ("mpe_timbre", "MPE timbre (CC 74)"),
+    ("osc", "OSC"),
 )
 
 
@@ -89,10 +99,12 @@ def _target_kind(target: ParameterTarget) -> str:
         return "mpe_pressure"
     if isinstance(target, MPETimbreTarget):
         return "mpe_timbre"
+    if isinstance(target, OscTarget):
+        return "osc"
     return "cc"  # pragma: no cover
 
 
-def _target_from_kind(kind: str, cc: int) -> ParameterTarget:
+def _target_from_kind(kind: str, cc: int = 0, address: str = "") -> ParameterTarget:
     if kind == "cc":
         return CCTarget(int(cc))
     if kind == "mpe_pitch_bend":
@@ -101,7 +113,14 @@ def _target_from_kind(kind: str, cc: int) -> ParameterTarget:
         return MPEPressureTarget()
     if kind == "mpe_timbre":
         return MPETimbreTarget()
+    if kind == "osc":
+        return OscTarget(address=address)
     raise ValueError(f"unknown parameter target kind: {kind!r}")
+
+
+def _default_osc_address(voice_name: str, function: str) -> str:
+    """Compose the conventional /jtx/<voice>/<function> address."""
+    return f"/jtx/{voice_name}/{function}"
 
 
 _VOICE_TYPES: tuple[str, ...] = ("drum", "mono", "poly", "modulator", "follower")
@@ -135,6 +154,7 @@ class SetupEditor(QDialog):
         audition_fn: AuditionFn | None = None,
         note_audition_fn: NoteAuditionFn | None = None,
         mpe_audition_fn: MPEAuditionFn | None = None,
+        osc_audition_fn: OscAuditionFn | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -149,6 +169,7 @@ class SetupEditor(QDialog):
         self._audition_fn = audition_fn or _default_audition
         self._note_audition_fn = note_audition_fn or _default_note_audition
         self._mpe_audition_fn = mpe_audition_fn or _default_mpe_audition
+        self._osc_audition_fn = osc_audition_fn or _default_osc_audition
         self.setWindowTitle(f"Jamtronix — Edit Setup ({setup.name})")
         self.resize(900, 660)
 
@@ -216,11 +237,30 @@ class SetupEditor(QDialog):
         template_wrap = QWidget()
         template_wrap.setLayout(template_row)
 
+        # OSC destination — used by voices with an OscTarget in their
+        # parameter_map. One destination per setup; per-voice address
+        # routing lives in the OSC address path (/jtx/<voice>/<fn>).
+        self._osc_host_edit = QLineEdit(self._setup.osc_host)
+        self._osc_host_edit.setPlaceholderText("127.0.0.1")
+        self._osc_host_edit.editingFinished.connect(self._on_osc_host_changed)
+        self._osc_port_spin = QSpinBox()
+        self._osc_port_spin.setRange(1, 65535)
+        self._osc_port_spin.setValue(self._setup.osc_port)
+        self._osc_port_spin.valueChanged.connect(self._on_osc_port_changed)
+        osc_row = QHBoxLayout()
+        osc_row.setContentsMargins(0, 0, 0, 0)
+        osc_row.addWidget(self._osc_host_edit, 1)
+        osc_row.addWidget(QLabel("port"))
+        osc_row.addWidget(self._osc_port_spin)
+        osc_wrap = QWidget()
+        osc_wrap.setLayout(osc_row)
+
         form.addRow("Setup name", self._name_edit)
         form.addRow("Default MIDI port", self._port_edit)
         form.addRow("Clock mode", self._clock_combo)
         form.addRow("MIDI clock-in port", self._slave_port_edit)
         form.addRow("DAW template path", template_wrap)
+        form.addRow("OSC host : port", osc_wrap)
         form.addRow(
             QLabel(""),
             QLabel(self._setup_path_summary()),
@@ -248,6 +288,14 @@ class SetupEditor(QDialog):
     def _on_slave_port_changed(self) -> None:
         text = self._slave_port_edit.text().strip()
         self._setup.midi_clock_in_port = text or None
+
+    def _on_osc_host_changed(self) -> None:
+        text = self._osc_host_edit.text().strip()
+        if text:
+            self._setup.osc_host = text
+
+    def _on_osc_port_changed(self, value: int) -> None:
+        self._setup.osc_port = int(value)
 
     def _on_template_changed(self) -> None:
         text = self._template_edit.text().strip()
@@ -359,9 +407,11 @@ class SetupEditor(QDialog):
         self._clear_voice_detail()
         editor = _VoiceSlotEditor(
             slot=slot,
+            setup=self._setup,
             audition_fn=self._audition_fn,
             note_audition_fn=self._note_audition_fn,
             mpe_audition_fn=self._mpe_audition_fn,
+            osc_audition_fn=self._osc_audition_fn,
             on_changed=self._refresh_voice_list,
         )
         # Insert above the trailing stretch (which is index 0 because we
@@ -480,17 +530,21 @@ class _VoiceSlotEditor(QFrame):
         self,
         *,
         slot: VoiceSlot,
+        setup: Setup,
         audition_fn: AuditionFn,
         note_audition_fn: NoteAuditionFn,
         mpe_audition_fn: MPEAuditionFn,
+        osc_audition_fn: OscAuditionFn,
         on_changed: Callable[[], None],
     ) -> None:
         super().__init__()
         self.setObjectName("Panel")
         self._slot = slot
+        self._setup = setup
         self._audition_fn = audition_fn
         self._note_audition_fn = note_audition_fn
         self._mpe_audition_fn = mpe_audition_fn
+        self._osc_audition_fn = osc_audition_fn
         self._on_changed = on_changed
 
         title = QLabel(f"VOICE  ·  {slot.name.upper()}")
@@ -569,8 +623,10 @@ class _VoiceSlotEditor(QFrame):
         # Parameter-map section — function rows from FUNCTIONS_BY_VOICE_TYPE.
         self._param_section = _ParameterMapSection(
             slot=slot,
+            setup=setup,
             audition_fn=audition_fn,
             mpe_audition_fn=mpe_audition_fn,
+            osc_audition_fn=osc_audition_fn,
         )
 
         layout = QVBoxLayout(self)
@@ -784,17 +840,22 @@ class _ParameterMapSection(QFrame):
         self,
         *,
         slot: VoiceSlot,
+        setup: Setup,
         audition_fn: AuditionFn,
         mpe_audition_fn: MPEAuditionFn,
+        osc_audition_fn: OscAuditionFn,
     ) -> None:
         super().__init__()
         self.setObjectName("Panel")
         self._slot = slot
+        self._setup = setup
         self._audition_fn = audition_fn
         self._mpe_audition_fn = mpe_audition_fn
+        self._osc_audition_fn = osc_audition_fn
 
         self._kind_combos: dict[str, QComboBox] = {}
         self._cc_spinners: dict[str, QSpinBox] = {}
+        self._address_edits: dict[str, QLineEdit] = {}
         self._overrides: dict[str, QCheckBox] = {}
 
         self._title = QLabel("PARAMETER MAP")
@@ -827,6 +888,7 @@ class _ParameterMapSection(QFrame):
                     _drain_layout(child_layout)
         self._kind_combos.clear()
         self._cc_spinners.clear()
+        self._address_edits.clear()
         self._overrides.clear()
 
         functions = functions_for_type(self._slot.type)
@@ -882,31 +944,51 @@ class _ParameterMapSection(QFrame):
         cc_spinner.setVisible(current_kind == "cc")
         self._cc_spinners[function] = cc_spinner
 
+        address_default = (
+            target.address
+            if isinstance(target, OscTarget)
+            else _default_osc_address(self._slot.name, function)
+        )
+        address_edit = QLineEdit(address_default)
+        address_edit.setPlaceholderText("/jtx/<voice>/<function>")
+        address_edit.setMinimumWidth(220)
+        address_edit.setEnabled(is_override and current_kind == "osc")
+        address_edit.setVisible(current_kind == "osc")
+        self._address_edits[function] = address_edit
+
         audition_btn = QPushButton("AUDITION")
         audition_btn.setToolTip(
             "Send a probe sequence appropriate for the target kind so the "
             "receiving instrument latches (CC sweep for CC; NoteOn + ramp + "
-            "NoteOff for MPE kinds)."
+            "NoteOff for MPE kinds; float sweep for OSC)."
         )
 
         def on_override(checked: bool, fn: str = function) -> None:
             self._kind_combos[fn].setEnabled(checked)
             kind = self._current_kind(fn)
             self._cc_spinners[fn].setEnabled(checked and kind == "cc")
+            self._address_edits[fn].setEnabled(checked and kind == "osc")
             self._sync_param(fn)
 
         def on_kind_changed(_idx: int, fn: str = function) -> None:
             kind = self._current_kind(fn)
+            override = self._overrides[fn].isChecked()
             self._cc_spinners[fn].setVisible(kind == "cc")
-            self._cc_spinners[fn].setEnabled(self._overrides[fn].isChecked() and kind == "cc")
+            self._cc_spinners[fn].setEnabled(override and kind == "cc")
+            self._address_edits[fn].setVisible(kind == "osc")
+            self._address_edits[fn].setEnabled(override and kind == "osc")
             self._sync_param(fn)
 
         def on_cc_changed(_v: int, fn: str = function) -> None:
             self._sync_param(fn)
 
+        def on_address_changed(fn: str = function) -> None:
+            self._sync_param(fn)
+
         override_chk.toggled.connect(on_override)
         kind_combo.currentIndexChanged.connect(on_kind_changed)
         cc_spinner.valueChanged.connect(on_cc_changed)
+        address_edit.editingFinished.connect(on_address_changed)
         audition_btn.clicked.connect(
             lambda _checked=False, fn=function: self._on_audition_param(fn),
         )
@@ -917,6 +999,7 @@ class _ParameterMapSection(QFrame):
         row.addWidget(func_label)
         row.addWidget(kind_combo)
         row.addWidget(cc_spinner)
+        row.addWidget(address_edit)
         row.addWidget(audition_btn)
         row.addStretch(1)
         return row
@@ -934,6 +1017,8 @@ class _ParameterMapSection(QFrame):
         info = QLabel(label)
         if isinstance(target, CCTarget):
             info = QLabel(f"{label}  ·  CC {target.cc}")
+        elif isinstance(target, OscTarget):
+            info = QLabel(f"{label}  ·  {target.address}")
         row.addWidget(marker)
         row.addWidget(func_label)
         row.addWidget(info)
@@ -951,7 +1036,11 @@ class _ParameterMapSection(QFrame):
             return
         kind = self._current_kind(function)
         cc = int(self._cc_spinners[function].value())
-        self._slot.parameter_map[function] = _target_from_kind(kind, cc)
+        address = self._address_edits[function].text().strip()
+        if kind == "osc" and not address:
+            address = _default_osc_address(self._slot.name, function)
+            self._address_edits[function].setText(address)
+        self._slot.parameter_map[function] = _target_from_kind(kind, cc=cc, address=address)
 
     def _on_audition_param(self, function: str) -> None:
         kind = self._current_kind(function)
@@ -959,6 +1048,11 @@ class _ParameterMapSection(QFrame):
             if kind == "cc":
                 cc = int(self._cc_spinners[function].value())
                 self._audition_fn(self._slot, function, cc)
+            elif kind == "osc":
+                address = self._address_edits[function].text().strip() or (
+                    _default_osc_address(self._slot.name, function)
+                )
+                self._osc_audition_fn(self._setup, self._slot, function, address)
             else:
                 self._mpe_audition_fn(self._slot, function, kind)
         except Exception as exc:  # noqa: BLE001 — surface verbatim
@@ -1090,3 +1184,24 @@ def _default_mpe_audition(voice: VoiceSlot, _function: str, kind: str) -> None:
         out.send(mido.Message("note_off", channel=channel, note=audition_note, velocity=0))
     finally:
         out.close()
+
+
+def _default_osc_audition(setup: Setup, _voice: VoiceSlot, _function: str, address: str) -> None:
+    """Send 0.0 → 0.5 → 1.0 → 0.5 float sweep to the configured OSC dest.
+
+    The M4L receiver device listens on ``setup.osc_host:osc_port`` for
+    ``/jtx/<voice>/<function>`` float messages; the sweep makes the
+    target slider visibly move so the user can latch a Live \"Map\"
+    gesture onto it.
+    """
+    import time
+
+    from jtx.engine.osc_client import OscClient
+
+    client = OscClient(host=setup.osc_host, port=setup.osc_port)
+    try:
+        for value in (0.0, 0.5, 1.0, 0.5):
+            client.send(address, value)
+            time.sleep(0.06)
+    finally:
+        client.close()

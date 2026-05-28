@@ -88,6 +88,8 @@ def setup_from_dict(d: dict[str, Any]) -> Setup:
         ],
         clock_mode=cast("ClockMode", d.get("clock_mode", "internal_master")),
         midi_clock_in_port=d.get("midi_clock_in_port"),
+        osc_host=str(d.get("osc_host", "127.0.0.1")),
+        osc_port=int(d.get("osc_port", 11000)),
         schema_version=SCHEMA_VERSION,  # post-migration the in-memory copy is v2
     )
     errors = setup.validate()
@@ -132,6 +134,8 @@ def setup_to_dict(setup: Setup) -> dict[str, Any]:
         "voices": [_voice_slot_to_dict(v) for v in setup.voices],
         "clock_mode": setup.clock_mode,
         "midi_clock_in_port": setup.midi_clock_in_port,
+        "osc_host": setup.osc_host,
+        "osc_port": setup.osc_port,
         "schema_version": setup.schema_version,
     }
 

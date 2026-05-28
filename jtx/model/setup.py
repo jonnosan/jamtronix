@@ -95,6 +95,16 @@ class Setup:
     """Default clock source the GUI/CLI selects unless overridden."""
     midi_clock_in_port: str | None = None
     """MIDI-in port name to listen on when ``clock_mode == midi_clock_slave``."""
+    osc_host: str = "127.0.0.1"
+    """Host the sink-side parameter router sends OSC messages to.
+
+    Used only by voices with an :class:`OscTarget` in their
+    ``parameter_map``. Defaults to localhost — the JTX M4L receiver
+    device runs inside Ableton on the same machine.
+    """
+    osc_port: int = 11000
+    """UDP port the OSC client targets. The bundled M4L receiver device
+    listens on the same port."""
     schema_version: int = SCHEMA_VERSION
 
     def validate(self) -> list[str]:
@@ -108,6 +118,8 @@ class Setup:
             errors.append(
                 f"setup {self.id!r}: clock_mode 'midi_clock_slave' requires midi_clock_in_port"
             )
+        if not (1 <= self.osc_port <= 65535):
+            errors.append(f"setup {self.id!r}: osc_port {self.osc_port} not in 1..65535")
         names: set[str] = set()
         for slot in self.voices:
             if slot.name in names:

@@ -152,11 +152,33 @@ CCTarget(cc: int)        # MIDI CC on the voice's channel (default; CC# remap)
 MPEPitchBendTarget()     # per-note pitch bend on the MPE-allocated channel
 MPEPressureTarget()      # channel pressure on the MPE-allocated channel
 MPETimbreTarget()        # CC 74 on the MPE-allocated channel (MPE timbre slot)
+OscTarget(address: str)  # send as OSC float to setup.osc_host:osc_port
 ```
 
-`OscTarget(address: str)` is reserved for Phase B (#102) — the sum type's
-on-disk shape is dict-discriminated (`{"kind": "cc", "cc": 74}` etc.) so
-adding a new variant doesn't bump the schema.
+The on-disk shape is dict-discriminated (`{"kind": "cc", "cc": 74}` etc.) so
+new variants can be added without bumping the schema.
+
+**OSC parameter routing** (when a function's target is `OscTarget`):
+
+The router calls the configured OSC client out-of-band and produces
+no MIDI event for the source. Address scheme:
+
+```
+/jtx/<voice_name>/<function>  <float>
+```
+
+…where `<voice_name>` is the JTX `VoiceSlot.name` and `<function>` is
+the v1 vocabulary name (`cutoff` / `resonance` / `glide` / `bend`).
+The float arg is normalised: CC-style sources (`cutoff`/`resonance`/
+`glide`) land in `[0, 1]`; bend-style sources land in `[-1, 1]`.
+
+One OSC destination per setup (`Setup.osc_host` / `Setup.osc_port`,
+default `127.0.0.1:11000`). The bundled `JtxParameterRouter.amxd` Max
+for Live device listens on that port and dispatches by matching the
+device's per-instance "voice name" parameter against the message's
+voice segment, then driving one of eight Live-mappable parameter
+sliders (Cutoff / Resonance / Glide / Bend / Spare 1..4). See
+`docs/ABLETON_SETUP.md` for the device + per-track setup.
 
 **MPE channel allocation** (when `mpe_mode == true`):
 

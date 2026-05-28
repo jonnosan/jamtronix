@@ -60,13 +60,28 @@ from jtx.engine.feel import apply_feel
 from jtx.engine.lfo import apply_lfos_to_bar
 from jtx.engine.meter import ticks_per_bar
 from jtx.engine.mix import apply_mix_pass
+from jtx.engine.osc_client import OscClientProtocol
 from jtx.engine.parameter_router import ParameterRouter
 from jtx.engine.root_provider import ProgressionRootProvider, RootProvider
+from jtx.model.parameter_target import OscTarget
 from jtx.model.setup import Setup, VoiceSlot
 from jtx.model.song import KnobDict, Song, VoiceConfig, VoiceOverride
 from jtx.seed import derive_bar_seed, derive_part_voice_seed, seed_from_title
 
 _GM_DRUM_DEFAULT = 36  # GM kick — last-resort fallback when no kit_map entry.
+
+
+def _setup_uses_osc(setup: Setup) -> bool:
+    """Return True iff any voice in *setup* has an :class:`OscTarget`.
+
+    Drives lazy construction of the real OSC client — no UDP socket is
+    opened for setups that don't need one.
+    """
+    for slot in setup.voices:
+        for target in slot.parameter_map.values():
+            if isinstance(target, OscTarget):
+                return True
+    return False
 
 
 def instantiate_algorithm(algorithm_name: str, voice_slot: VoiceSlot) -> Algorithm:
@@ -144,6 +159,7 @@ class SongPlayer:
         *,
         ppq: int = 480,
         root_provider: RootProvider | None = None,
+        osc_client: OscClientProtocol | None = None,
     ) -> None:
         if part_name not in song.parts:
             raise ValueError(f"part {part_name!r} not in song {song.title!r}")
@@ -186,11 +202,29 @@ class SongPlayer:
         # dependency order. Cycle-free by validation.
         self._run_order = self._topo_sort()
 
+        # OSC client — lazily constructed if any voice's parameter_map
+        # references an OscTarget. Tests inject a MemoryOscClient via
+        # the ``osc_client=`` constructor arg.
+        self._osc_client: OscClientProtocol | None
+        if osc_client is not None:
+            self._osc_client = osc_client
+        elif _setup_uses_osc(setup):
+            from jtx.engine.osc_client import OscClient
+
+            self._osc_client = OscClient(host=setup.osc_host, port=setup.osc_port)
+        else:
+            self._osc_client = None
+
         # Per-voice parameter routers. Stateful across bars so MPE
         # channel allocations + most-recently-allocated tracking
         # survive bar boundaries (notes can sustain across bars).
         self._routers: dict[str, ParameterRouter] = {
-            v.name: ParameterRouter(v.slot, v.algorithm.DEFAULT_PARAM_MAP) for v in self._voices
+            v.name: ParameterRouter(
+                v.slot,
+                v.algorithm.DEFAULT_PARAM_MAP,
+                osc_client=self._osc_client,
+            )
+            for v in self._voices
         }
 
         # Previous-bar event cache for cross-bar sidechain lookback
@@ -231,6 +265,16 @@ class SongPlayer:
             return self.events_for_bar(bar_idx)
 
         return gen
+
+    def close(self) -> None:
+        """Release the OSC UDP socket (if any).
+
+        Idempotent; safe to call when no OSC client was constructed.
+        Tests inject a ``MemoryOscClient`` which also accepts ``close``.
+        """
+        if self._osc_client is not None:
+            self._osc_client.close()
+            self._osc_client = None
 
     def events_for_bar(self, bar_idx: int) -> list[Event]:
         chord_root = self.root_provider.root_semitones_for_bar(bar_idx)

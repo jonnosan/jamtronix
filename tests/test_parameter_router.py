@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from jtx.engine.events import (
     ChannelPressure,
     ControlChange,
@@ -10,12 +12,14 @@ from jtx.engine.events import (
     NoteOn,
     PitchBend,
 )
+from jtx.engine.osc_client import MemoryOscClient
 from jtx.engine.parameter_router import ParameterRouter
 from jtx.model.parameter_target import (
     CCTarget,
     MPEPitchBendTarget,
     MPEPressureTarget,
     MPETimbreTarget,
+    OscTarget,
     ParameterTarget,
 )
 from jtx.model.setup import VoiceSlot
@@ -309,3 +313,93 @@ def test_router_non_mpe_voice_keeps_main_channel_for_mpe_target() -> None:
     assert isinstance(out[0], PitchBend)
     assert out[0].channel == 3
     assert out[0].value == 500
+
+
+# ---------------------------------------------------------- OSC routing
+
+
+def test_router_routes_osc_target_via_client() -> None:
+    """A CC tagged with a function mapped to OscTarget produces no MIDI; OSC client sees it."""
+    slot = _mono_voice(
+        channel=3,
+        parameter_map={"cutoff": OscTarget("/jtx/lead/cutoff")},
+    )
+    osc = MemoryOscClient()
+    router = ParameterRouter(slot, osc_client=osc)
+    out = router.route(
+        [
+            ControlChange(tick=0, channel=3, cc=74, value=127, function="cutoff"),
+        ]
+    )
+    # No MIDI event survives the router for an OSC-routed source.
+    assert out == []
+    # And the OSC client got the scaled value.
+    assert osc.sent == [("/jtx/lead/cutoff", 1.0)]
+
+
+def test_router_osc_scales_cc_value_to_zero_to_one() -> None:
+    """A CC value of 64 maps to ~0.504 (64/127) on the OSC wire."""
+    slot = _mono_voice(parameter_map={"cutoff": OscTarget("/jtx/x/cutoff")})
+    osc = MemoryOscClient()
+    router = ParameterRouter(slot, osc_client=osc)
+    router.route([ControlChange(tick=0, channel=1, cc=74, value=64, function="cutoff")])
+    address, value = osc.sent[0]
+    assert address == "/jtx/x/cutoff"
+    assert abs(value - 64 / 127) < 1e-6
+
+
+def test_router_osc_scales_pitchbend_to_minus_one_to_one() -> None:
+    """PitchBend (e.g. ``"bend"``) routed to OSC lands in [-1, 1]."""
+    slot = _mono_voice(parameter_map={"bend": OscTarget("/jtx/x/bend")})
+    osc = MemoryOscClient()
+    router = ParameterRouter(slot, osc_client=osc)
+    router.route(
+        [
+            PitchBend(tick=0, channel=1, value=-8192, function="bend"),
+            PitchBend(tick=10, channel=1, value=0, function="bend"),
+            PitchBend(tick=20, channel=1, value=8191, function="bend"),
+        ]
+    )
+    values = [v for _addr, v in osc.sent]
+    assert values[0] == pytest.approx(-1.0)
+    assert values[1] == pytest.approx(0.0)
+    assert values[2] == pytest.approx(8191 / 8192)
+
+
+def test_router_osc_without_client_raises_with_helpful_message() -> None:
+    """An OscTarget with no configured OSC client raises a clear runtime error."""
+    slot = _mono_voice(parameter_map={"cutoff": OscTarget("/jtx/x/cutoff")})
+    router = ParameterRouter(slot)  # no osc_client
+    with pytest.raises(RuntimeError, match="OscTarget.*no OSC client"):
+        router.route([ControlChange(tick=0, channel=1, cc=74, value=64, function="cutoff")])
+
+
+def test_router_mixed_osc_and_mpe_per_voice() -> None:
+    """A single voice can have OSC for cutoff and MPE pitchbend for bend at once."""
+    slot = _mpe_voice(
+        channel=2,
+        count=8,
+        parameter_map={
+            "cutoff": OscTarget("/jtx/lead/cutoff"),
+            "bend": MPEPitchBendTarget(),
+        },
+    )
+    osc = MemoryOscClient()
+    router = ParameterRouter(slot, osc_client=osc)
+    out = router.route(
+        [
+            NoteOn(tick=0, channel=2, note=60, velocity=100),
+            ControlChange(tick=5, channel=2, cc=74, value=64, function="cutoff"),
+            PitchBend(tick=10, channel=2, value=1000, function="bend"),
+            NoteOff(tick=100, channel=2, note=60),
+        ]
+    )
+    # OSC client got the cutoff message…
+    assert osc.sent == [("/jtx/lead/cutoff", pytest.approx(64 / 127))]
+    # …and the MIDI stream still contains the NoteOn / NoteOff / PitchBend,
+    # all on the allocated MPE channel (2).
+    pb = next(e for e in out if isinstance(e, PitchBend))
+    assert pb.channel == 2
+    assert pb.value == 1000
+    # No CC survives — the cutoff was routed entirely off-MIDI.
+    assert not any(isinstance(e, ControlChange) for e in out)
