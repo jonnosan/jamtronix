@@ -41,6 +41,7 @@ from jtx.algorithms import (
     Arp,
     CCEnvelope,
     ChordStab,
+    DrumKit,
     DrumOneShot,
     DrumPattern,
     MelodicLine,
@@ -63,12 +64,11 @@ from jtx.engine.mix import apply_mix_pass
 from jtx.engine.osc_client import OscClientProtocol
 from jtx.engine.parameter_router import ParameterRouter
 from jtx.engine.root_provider import ProgressionRootProvider, RootProvider
+from jtx.engine.voicing import translate_abstract_events
 from jtx.model.parameter_target import OscTarget
 from jtx.model.setup import Setup, VoiceSlot
 from jtx.model.song import KnobDict, Song, VoiceConfig, VoiceOverride
 from jtx.seed import derive_bar_seed, derive_part_voice_seed, seed_from_title
-
-_GM_DRUM_DEFAULT = 36  # GM kick — last-resort fallback when no kit_map entry.
 
 
 def _setup_uses_osc(setup: Setup) -> bool:
@@ -87,21 +87,30 @@ def _setup_uses_osc(setup: Setup) -> bool:
 def instantiate_algorithm(algorithm_name: str, voice_slot: VoiceSlot) -> Algorithm:
     """Build the right :class:`Algorithm` subclass for *algorithm_name*.
 
-    For drum algorithms the voice's name doubles as the kit-piece key
-    into ``voice_slot.kit_map`` (so a voice called ``kick`` with
-    ``kit_map={"kick": 36}`` plays note 36).
+    Drum + drum_kit voices have distinct identity:
+
+    * ``drum`` voice + ``drum_pattern`` / ``drum_one_shot`` algorithm:
+      single MIDI note. The note lives on ``slot.note``; the algorithm
+      itself still emits concrete MIDI (legacy protocol — refactored
+      to emit ``Hit`` events later).
+    * ``drum_kit`` voice + ``drum_kit`` algorithm: emits abstract
+      :class:`Hit` events keyed by instrument name. The voicing stage
+      downstream resolves each instrument to ``(channel, note)`` via
+      ``slot.kit_map``.
     """
     ch = voice_slot.midi_channel
+    if algorithm_name == "drum_kit":
+        return DrumKit(kit_map=dict(voice_slot.kit_map))
     if algorithm_name == "drum_pattern":
         return DrumPattern(
             piece=voice_slot.name,
             midi_channel=ch,
-            midi_note=voice_slot.kit_map.get(voice_slot.name, _GM_DRUM_DEFAULT),
+            midi_note=voice_slot.note,
         )
     if algorithm_name == "drum_one_shot":
         return DrumOneShot(
             midi_channel=ch,
-            midi_note=voice_slot.kit_map.get(voice_slot.name, _GM_DRUM_DEFAULT),
+            midi_note=voice_slot.note,
         )
     if algorithm_name == "acid_bass":
         return AcidBass(midi_channel=ch)
@@ -353,6 +362,11 @@ class SongPlayer:
             prev_voice_events = {}
 
         # Run algorithms in topological order; feed follower source_events.
+        # The voicing stage immediately translates abstract events
+        # (Hit/Note/Param/PolyAftertouch) to concrete MIDI so the mix
+        # pass and feel pass can operate on a uniform representation.
+        # Legacy algorithms that emit concrete MIDI directly pass
+        # through unchanged.
         raw_voice_events: dict[str, list[Event]] = {}
         for v in self._voices:
             ctx = contexts[v.name]
@@ -361,7 +375,8 @@ class SongPlayer:
                 if isinstance(src, str):
                     ctx.source_events = raw_voice_events.get(src, [])
                     ctx.prev_source_events = prev_voice_events.get(src)
-            raw_voice_events[v.name] = v.algorithm.generate_bar(ctx)
+            algo_out = v.algorithm.generate_bar(ctx)
+            raw_voice_events[v.name] = translate_abstract_events(algo_out, v.slot)
 
         # Mix pass — sidechain ducking (cross-voice, cross-bar) +
         # fade-in/out envelope per voice. Runs before the per-voice

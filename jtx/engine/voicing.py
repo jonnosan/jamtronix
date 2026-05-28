@@ -1,35 +1,41 @@
-"""Voicing stage — translate abstract events to MIDI.
+"""Voicing stage — translate abstract events to MIDI events.
 
 Algorithms emit abstract events (``Hit``, ``Note``, ``Param``,
 ``PolyAftertouch``) that name musical concepts without picking MIDI
 channels or CC numbers. This stage consumes those abstract events
 together with the voice's :class:`VoiceSlot` and produces the concrete
 MIDI events (``NoteOn`` / ``NoteOff`` / ``ControlChange`` /
-``PitchBend`` / ``ChannelPressure``) that the sink consumes.
+``PitchBend`` / ``ChannelPressure``) downstream.
+
+This is **pure translation** — no MPE channel allocation, no parameter
+routing. The translated MIDI events still need to pass through the
+mix pass (sidechain / fade / evolution), feel pass (groove / drive /
+wander), and the :class:`ParameterRouter` (CC remap, MPE allocation,
+OSC dispatch) before reaching the sink. Keeping translation pure lets
+the mix + feel passes operate on the same MIDI representation
+regardless of whether the algorithm emitted abstract or concrete
+events.
 
 Resolutions per event kind:
 
 * :class:`Hit` → ``NoteOn`` + ``NoteOff`` pair.
   - On a ``drum_kit`` slot, ``instrument`` keys into ``slot.kit_map``;
-    the resulting ``KitPiece`` provides ``(channel, note)``.
-  - On a single-piece ``drum`` slot, either no ``instrument`` (use
-    ``slot.note`` on ``slot.midi_channel``) or the instrument name
-    equals the voice's own name (same result).
-  - Unknown instrument names are silently dropped (logged).
+    the resulting ``KitPiece`` provides ``(channel, note)``. Unknown
+    instrument names are silently dropped (logged at DEBUG).
+  - On any other voice type, either no ``instrument`` or the
+    instrument name matches the voice's name — both map to
+    ``(slot.midi_channel, slot.note)``.
 * :class:`Note` → ``NoteOn`` + ``NoteOff`` pair at
-  ``slot.midi_channel``. MPE allocation is delegated to
-  :class:`ParameterRouter`.
-* :class:`Param` → ``ControlChange`` / ``PitchBend`` /
-  ``ChannelPressure`` with the ``function`` tag set. The
-  :class:`ParameterRouter` resolves the function to the final target
-  (CC#, OSC address, MPE pitch-bend channel, …) using
-  ``slot.parameter_map`` and the algorithm's ``DEFAULT_PARAM_MAP``.
-* :class:`PolyAftertouch` → ``ChannelPressure`` (tagged
-  ``function="aftertouch"``) — the router rebinds to the right MPE
-  channel for the matching note.
+  ``slot.midi_channel``. MPE allocation happens later in the parameter
+  router using the source channel.
+* :class:`Param` → ``ControlChange`` or ``PitchBend`` with the
+  ``function`` tag set. The parameter router resolves the function to
+  the final target downstream.
+* :class:`PolyAftertouch` → ``ChannelPressure`` tagged
+  ``function="aftertouch"`` for the router to rebind under MPE.
 
 Output ticks are bar-relative; the scheduler offsets to absolute
-ticks downstream.
+ticks further down the pipeline.
 """
 
 from __future__ import annotations
@@ -45,7 +51,6 @@ from jtx.engine.events import (
     NoteOn,
     PitchBend,
 )
-from jtx.engine.parameter_router import ParameterRouter
 from jtx.model.events import AbstractEvent, Hit, Note, Param, PolyAftertouch
 from jtx.model.setup import VoiceSlot
 
@@ -68,33 +73,39 @@ _PITCH_BEND_HALFRANGE = 8192
 _BEND_FUNCTIONS: frozenset[str] = frozenset({"bend"})
 
 
-def voice_events(
+def translate_abstract_events(
     abstract_events: Iterable[AbstractEvent],
     slot: VoiceSlot,
-    *,
-    router: ParameterRouter,
 ) -> list[Event]:
-    """Translate ``abstract_events`` → MIDI events via ``slot``.
+    """Translate abstract events → MIDI events via ``slot``.
 
-    The events are emitted in input order; the parameter router sorts
-    by tick and handles MPE allocation. Returns the routed MIDI events
-    ready for the scheduler.
+    Pure function: returns un-routed MIDI events in input order. The
+    caller (typically :class:`jtx.player.SongPlayer`) feeds the result
+    through the mix pass, feel pass, and parameter router downstream.
+
+    Mixed inputs (abstract + already-MIDI events) are allowed —
+    instances of the concrete MIDI event classes pass through
+    unchanged, so a transition-period algorithm that emits some
+    abstract events alongside legacy concrete events still works.
     """
-    raw: list[Event] = []
+    out: list[Event] = []
     for ev in abstract_events:
         if isinstance(ev, Hit):
-            raw.extend(_hit_to_midi(ev, slot))
+            out.extend(_hit_to_midi(ev, slot))
         elif isinstance(ev, Note):
-            raw.extend(_note_to_midi(ev, slot))
+            out.extend(_note_to_midi(ev, slot))
         elif isinstance(ev, Param):
             event = _param_to_midi(ev, slot)
             if event is not None:
-                raw.append(event)
+                out.append(event)
         elif isinstance(ev, PolyAftertouch):
-            raw.append(_polyaftertouch_to_midi(ev, slot))
-        else:  # pragma: no cover — narrowed by AbstractEvent union
-            raise TypeError(f"voicing: unsupported abstract event {type(ev).__name__}")
-    return router.route(raw)
+            out.append(_polyaftertouch_to_midi(ev, slot))
+        elif isinstance(ev, NoteOn | NoteOff | ControlChange | PitchBend | ChannelPressure):
+            # Pass-through for algorithms still emitting concrete MIDI.
+            out.append(ev)
+        else:  # pragma: no cover — narrowed by union
+            raise TypeError(f"voicing: unsupported event {type(ev).__name__}")
+    return out
 
 
 def _hit_to_midi(hit: Hit, slot: VoiceSlot) -> list[Event]:
