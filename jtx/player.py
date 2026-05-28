@@ -47,6 +47,7 @@ from jtx.algorithms import (
     MotifPhrase,
     NoiseRiser,
     ReeseBass,
+    Rest,
     RootPulse,
     StepCC,
     SubDrone,
@@ -135,6 +136,8 @@ def instantiate_algorithm(algorithm_name: str, voice_slot: VoiceSlot) -> Algorit
         return StepCC()
     if algorithm_name == "voice_follower":
         return VoiceFollower()
+    if algorithm_name == "rest":
+        return Rest()
     raise ValueError(f"unknown algorithm: {algorithm_name!r}")
 
 
@@ -239,9 +242,7 @@ class SongPlayer:
         # same voicing → parameter_router pipeline.
         voice_names_with_algos = {v.name for v in self._voices}
         self._phantom_slots: dict[str, VoiceSlot] = {
-            slot.name: slot
-            for slot in setup.voices
-            if slot.name not in voice_names_with_algos
+            slot.name: slot for slot in setup.voices if slot.name not in voice_names_with_algos
         }
         self._phantom_routers: dict[str, ParameterRouter] = {
             name: ParameterRouter(slot, {}, osc_client=self._osc_client)
@@ -307,9 +308,10 @@ class SongPlayer:
             part_progress = (bar_idx % part_bars) / (part_bars - 1)
         else:
             part_progress = 1.0
-        intensity_raw = self.part.intensity_start + (
-            self.part.intensity_end - self.part.intensity_start
-        ) * part_progress
+        intensity_raw = (
+            self.part.intensity_start
+            + (self.part.intensity_end - self.part.intensity_start) * part_progress
+        )
         tension = float(self.song.feel.get("tension", 0.0))
         part_intensity = max(
             0.0,

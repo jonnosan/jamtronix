@@ -310,6 +310,27 @@ def test_song_player_routes_osc_target_via_injected_client() -> None:
     player.close()
 
 
+def test_song_player_renders_song_with_rest_voice() -> None:
+    """A voice declaring algorithm='rest' contributes no events but
+    doesn't break the rest of the song. Other voices still play."""
+    setup = _basic_setup()
+    song = _basic_song()
+    # Swap the follower voice to a rest — it should silently drop out
+    # without affecting kick / acid playback.
+    song.voices["echo"] = VoiceConfig(algorithm="rest")
+    player = SongPlayer(song, setup, "drop")
+    try:
+        events = player.events_for_bar(0)
+    finally:
+        player.close()
+    # Kick should still fire 4-on-floor.
+    kick_ons = [e for e in events if isinstance(e, NoteOn) and e.channel == 10]
+    assert len(kick_ons) == 4
+    # Echo (was channel 4) should produce no NoteOns now that it's rest.
+    echo_ons = [e for e in events if isinstance(e, NoteOn) and e.channel == 4]
+    assert echo_ons == []
+
+
 def test_song_player_routes_lfo_voice_target_to_phantom_slot() -> None:
     """A song-level LFO with voice:<slot>:<fn> can drive a setup slot
     that has no song-level VoiceConfig — the phantom slot acts as a
@@ -353,9 +374,7 @@ def test_song_player_routes_lfo_voice_target_to_phantom_slot() -> None:
                 shape="saw",
                 period_bars=4.0,
                 samples_per_bar=8,
-                applications=[
-                    LFOApplication(part="main", target="voice:filter:cutoff")
-                ],
+                applications=[LFOApplication(part="main", target="voice:filter:cutoff")],
             )
         ],
     )

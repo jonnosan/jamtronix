@@ -14,9 +14,11 @@ encode MIDI plumbing.
 
 Headline knobs:
 
-* ``style`` — preset family: ``"acid"`` / ``"techno"`` / ``"psy"``.
-  Currently selects which optional layers fire (e.g. techno gets a
-  triplet hat polyrhythm at high intensity).
+* ``punch`` (0..1, default 0.5) — ghost-noteish ↔ punchy. High punch
+  raises kick + snare velocities and suppresses ghost-note layers.
+* ``mech`` (0..1, default 0.5) — organic ↔ mechanical. High mech raises
+  snare-grid ceilings (machine-gun fills), tightens the triplet-hat
+  polyrhythm trigger, and steepens the build snare ramp.
 * ``kit_focus`` — which pieces play. ``"full"`` is the default.
   Override per-part to make e.g. a "kick_only" drop or a "build" with
   ramping snare density culminating in a fill on the part's last bar.
@@ -61,7 +63,6 @@ from jtx.model.song import KnobDict
 # Drum samples ignore note-off; this is MIDI-protocol housekeeping.
 _NOTE_OFF_OFFSET_TICKS = 30
 
-_STYLES = ("acid", "techno", "psy")
 _KIT_FOCUS = (
     "full",
     "minimal",
@@ -75,13 +76,17 @@ _KIT_FOCUS = (
 
 @dataclass(frozen=True)
 class _StyleProfile:
-    """Per-style tuning knobs applied on top of the headline pattern."""
+    """Derived tuning shape applied on top of the headline pattern.
 
-    name: str
+    Built per-bar by :func:`_derive_profile` from the ``punch`` + ``mech``
+    knobs. Lives as a dataclass (not a free dict) so the field set is
+    explicit and the downstream generators don't accidentally read a
+    missing key.
+    """
+
     # Whether to add a triplet-hat polyrhythm layer when intensity is high.
     triplet_hat_above: float
-    # Default base velocity for the kick when style-specific intensity is
-    # in the comfort zone (~0.5..0.8).
+    # Default base velocity for the kick.
     kick_vel: int
     snare_vel: int
     hat_vel: int
@@ -89,53 +94,48 @@ class _StyleProfile:
     # base ghost probability derived from drive).
     ghost_bias: float
     # Ceiling for the build-mode snare ramp (in pulses across a 32-slot
-    # grid). Techno + psy go full machine-gun at 32nds; acid stays at
-    # 16ths so the build feels tense rather than frantic.
+    # grid). High mech → machine-gun ramp; low mech → tense, restrained.
     build_snare_max: int
     # Curve exponent for the build snare ramp; >1 back-loads the rise.
-    # Higher = more sudden density spike near the drop.
     build_snare_curve: float
     # Ceiling for the **auto** snare-pulse ramp at eff=1.0 in non-build
-    # modes (i.e. the main "drop" groove). Acid stays around backbeat
-    # + light syncopation; techno + psy drive harder.
+    # modes (i.e. the main "drop" groove).
     default_snare_max: int
+    # Increment for the build-mode closed-hat ramp across part_progress.
+    # Hat pulses = round(8 + build_hat_ramp_delta * progress). Replaces
+    # the old hard-coded acid-vs-techno branch.
+    build_hat_ramp_delta: int
 
 
-_STYLE_PROFILES: dict[str, _StyleProfile] = {
-    "acid": _StyleProfile(
-        name="acid",
-        triplet_hat_above=1.1,
-        kick_vel=118,
-        snare_vel=104,
-        hat_vel=82,
-        ghost_bias=0.8,
-        build_snare_max=16,  # 16th-note ceiling — acid build stays tense, not frantic
-        build_snare_curve=1.3,
-        default_snare_max=8,  # 8th-note ceiling in the drop — backbeat + a little syncopation
-    ),
-    "techno": _StyleProfile(
-        name="techno",
-        triplet_hat_above=0.7,
-        kick_vel=120,
-        snare_vel=100,
-        hat_vel=80,
-        ghost_bias=1.0,
-        build_snare_max=32,  # full machine-gun ramp into the drop
-        build_snare_curve=1.6,
-        default_snare_max=24,  # current driving-techno snare density
-    ),
-    "psy": _StyleProfile(
-        name="psy",
-        triplet_hat_above=1.1,
-        kick_vel=124,
-        snare_vel=98,
-        hat_vel=78,
-        ghost_bias=1.2,
-        build_snare_max=32,
-        build_snare_curve=1.6,
-        default_snare_max=24,
-    ),
-}
+def _derive_profile(punch: float, mech: float) -> _StyleProfile:
+    """Map (punch, mech) ∈ [0, 1]² to a continuous :class:`_StyleProfile`.
+
+    Both inputs are clamped. The derivation is intentionally simple and
+    monotonic so the mood→profile pipeline in the Composer remains
+    interpretable. Tuning corners (informational, not exact):
+
+    * ``(punch≈0.55, mech≈0.4)`` lands near today's "acid" character —
+      lower snare ceilings, restrained build ramp, no triplet-hat layer.
+    * ``(punch≈0.4, mech≈0.7)`` near today's "techno" — driving snare,
+      machine-gun build, triplet-hat polyrhythm at high intensity.
+    * ``(punch≈0.85, mech≈0.85)`` near today's "psy" — full ceilings,
+      hard kick, strong ghost-note bias.
+    """
+    p = max(0.0, min(1.0, punch))
+    m = max(0.0, min(1.0, mech))
+    return _StyleProfile(
+        triplet_hat_above=1.1 - m * 0.4,
+        kick_vel=int(round(118 + (p - 0.5) * 12)),
+        snare_vel=int(round(100 + (p - 0.5) * 8)),
+        hat_vel=int(round(80 + (m - 0.5) * 4)),
+        ghost_bias=1.2 - p * 0.4 + (1.0 - m) * 0.2,
+        build_snare_max=int(round(16 + m * 16)),
+        build_snare_curve=1.3 + m * 0.3,
+        # Non-linear so the acid corner (mech≈0.4) lands near 8-10 in the
+        # drop while techno (mech≈0.7) reaches ~18 and psy (mech≈0.85) ~23.
+        default_snare_max=int(round(4 + (m**1.5) * 24)),
+        build_hat_ramp_delta=int(round(4 + m * 6)),
+    )
 
 
 # Canonical instrument-name aliases — the algorithm checks these first
@@ -163,12 +163,9 @@ class DrumKit(Algorithm):
 
     def generate_bar(self, ctx: BarContext) -> list[Hit]:  # type: ignore[override]
         knobs = ctx.pattern_knobs
-        style_name = str(knobs.get("style", "techno"))
-        if style_name not in _STYLE_PROFILES:
-            raise ValueError(
-                f"drum_kit: unknown style {style_name!r} (expected one of {list(_STYLE_PROFILES)})"
-            )
-        style = _STYLE_PROFILES[style_name]
+        punch = float(knobs.get("punch", 0.5))
+        mech = float(knobs.get("mech", 0.5))
+        style = _derive_profile(punch, mech)
 
         kit_focus = str(knobs.get("kit_focus", "full"))
         if kit_focus not in _KIT_FOCUS:
@@ -206,13 +203,25 @@ class DrumKit(Algorithm):
             hits.extend(
                 self._gen_snare(ctx, style, knobs, kit_focus, eff, progress, total_steps, s, drive)
             )
-        hits.extend(self._gen_hats(ctx, style, knobs, kit_focus, eff, progress, total_steps, s, wander))
+        hits.extend(
+            self._gen_hats(ctx, style, knobs, kit_focus, eff, progress, total_steps, s, wander)
+        )
         if kit_focus != "percussion":
             hits.extend(self._gen_clap(ctx, style, knobs, kit_focus, eff, total_steps, s))
         hits.extend(
             self._gen_perc(
-                ctx, style, knobs, kit_focus, eff, progress, total_steps, s,
-                perc_complexity, drive, wander, variation,
+                ctx,
+                style,
+                knobs,
+                kit_focus,
+                eff,
+                progress,
+                total_steps,
+                s,
+                perc_complexity,
+                drive,
+                wander,
+                variation,
             )
         )
         return hits
@@ -267,7 +276,7 @@ class DrumKit(Algorithm):
             # buildup move. Per-style ceiling: techno + psy hit 32nds
             # at the drop (machine gun); acid caps at 16ths so the
             # build feels tense rather than frantic.
-            ramp = progress ** style.build_snare_curve
+            ramp = progress**style.build_snare_curve
             ceiling = style.build_snare_max
             pulses = int(round(2 + (ceiling - 2) * ramp))
         elif snare_subdiv == "auto":
@@ -354,13 +363,10 @@ class DrumKit(Algorithm):
                 return hits
         if chh is not None:
             if kit_focus == "build":
-                # Hats ramp across the build. Acid stays in the 8–12
-                # range (busy enough to push, not enough to overwhelm
-                # the snare ramp); techno + psy double to 16th-density.
-                if style.name == "acid":
-                    pulses = int(round(8 + 4 * progress))
-                else:
-                    pulses = int(round(8 + 8 * progress))
+                # Hats ramp across the build, increment driven by mech.
+                # Low-mech (e.g. acid) stays in the 8–12 range; high-mech
+                # (techno/psy) doubles to 16th-density at full progress.
+                pulses = int(round(8 + style.build_hat_ramp_delta * progress))
             elif hat_pulses_raw >= 0:
                 pulses = hat_pulses_raw
             else:
@@ -419,8 +425,11 @@ class DrumKit(Algorithm):
         if clap_on == "intensity_gate" and eff < 0.7:
             return []
         # 2-and-4 in either gate mode.
-        return [self._hit(target, step * s, max(1, int(style.snare_vel * 0.85)))
-                for step in (4, 12) if step < total_steps]
+        return [
+            self._hit(target, step * s, max(1, int(style.snare_vel * 0.85)))
+            for step in (4, 12)
+            if step < total_steps
+        ]
 
     def _gen_perc(
         self,
@@ -453,11 +462,7 @@ class DrumKit(Algorithm):
             offset = (offset + offset_rng.randint(0, int(variation * 4))) % max(1, total_steps)
         pattern = euclid(pulses, total_steps, offset)
         base_vel = max(1, int(style.hat_vel * (0.7 + 0.4 * perc_complexity)))
-        hits = [
-            self._hit(target, step * s, base_vel)
-            for step, hit in enumerate(pattern)
-            if hit
-        ]
+        hits = [self._hit(target, step * s, base_vel) for step, hit in enumerate(pattern) if hit]
 
         # Build-section roll fill on the part's last bar's last beat.
         if kit_focus == "build" and progress > 0.875:
@@ -471,7 +476,9 @@ class DrumKit(Algorithm):
                 tick = slot * tick_per_slot
                 if tick < roll_start_tick:
                     continue
-                window_progress = (tick - roll_start_tick) / max(1, ctx.ticks_per_bar - roll_start_tick)
+                window_progress = (tick - roll_start_tick) / max(
+                    1, ctx.ticks_per_bar - roll_start_tick
+                )
                 vel = max(1, min(127, int(base_vel * (0.7 + 0.6 * window_progress))))
                 hits.append(self._hit(target, tick, vel))
 

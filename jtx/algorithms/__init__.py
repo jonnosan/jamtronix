@@ -11,6 +11,7 @@ from jtx.algorithms.motif_phrase import MotifPhrase
 from jtx.algorithms.noise_riser import NoiseRiser
 from jtx.algorithms.reese_bass import ReeseBass
 from jtx.algorithms.reference import RootPulse
+from jtx.algorithms.rest import Rest
 from jtx.algorithms.step_cc import StepCC
 from jtx.algorithms.sub_drone import SubDrone
 from jtx.algorithms.sustained_chord import ChordStab, SustainedChord
@@ -28,6 +29,7 @@ __all__ = [
     "MotifPhrase",
     "NoiseRiser",
     "ReeseBass",
+    "Rest",
     "RootPulse",
     "StepCC",
     "SubDrone",

@@ -181,11 +181,27 @@ _DRUM_PATTERN = (
 
 _DRUM_KIT = (
     KnobSpec(
-        "style",
-        "choice",
-        default="techno",
-        choices=("acid", "techno", "psy"),
-        description="Preset family — biases kick/snare/hat velocities + ghost-note flavour.",
+        "punch",
+        "float",
+        default=0.5,
+        minimum=0.0,
+        maximum=1.0,
+        description=(
+            "Ghost-noteish ↔ punchy. Raises kick/snare velocities and "
+            "suppresses ghost-note layers at high values."
+        ),
+    ),
+    KnobSpec(
+        "mech",
+        "float",
+        default=0.5,
+        minimum=0.0,
+        maximum=1.0,
+        description=(
+            "Organic ↔ mechanical. Raises snare-grid ceilings (machine-gun "
+            "fills), tightens the triplet-hat polyrhythm trigger, and "
+            "steepens the build snare ramp at high values."
+        ),
     ),
     KnobSpec(
         "kit_focus",
@@ -255,9 +271,7 @@ _DRUM_KIT = (
         "choice",
         default="intensity_gate",
         choices=("never", "2_and_4", "intensity_gate"),
-        description=(
-            "When the clap fires. 'intensity_gate' = backbeat above 0.7 intensity."
-        ),
+        description=("When the clap fires. 'intensity_gate' = backbeat above 0.7 intensity."),
     ),
     KnobSpec(
         "perc_complexity",
@@ -1468,6 +1482,11 @@ ALGORITHMS: dict[str, AlgorithmMeta] = {
     "step_cc": AlgorithmMeta("step_cc", ("modulator",), _STEP_CC),
     "root_pulse": AlgorithmMeta("root_pulse", ("drum", "mono", "poly"), _ROOT_PULSE),
     "voice_follower": AlgorithmMeta("voice_follower", ("follower",), _VOICE_FOLLOWER),
+    "rest": AlgorithmMeta(
+        "rest",
+        ("drum", "drum_kit", "mono", "poly", "modulator", "follower"),
+        (),
+    ),
 }
 
 
