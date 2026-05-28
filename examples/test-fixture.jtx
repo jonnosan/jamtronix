@@ -1,0 +1,105 @@
+{
+  "title": "Test Fixture",
+  "setup_ref": "test-fixture",
+  "key": {
+    "tonic": "A",
+    "scale": "minor"
+  },
+  "seed_override": null,
+  "meter": "4/4",
+  "tempo": 120,
+  "chord_progression": {
+    "degrees": [
+      "i",
+      "VI",
+      "III",
+      "VII"
+    ],
+    "bars_per_chord": 2
+  },
+  "voices": {
+    "kit": {
+      "algorithm": "drum_kit",
+      "pattern": {
+        "kit_focus": "full",
+        "punch": 0.5,
+        "mech": 0.5
+      },
+      "mix": {}
+    },
+    "bass": {
+      "algorithm": "acid_bass",
+      "pattern": {
+        "drop_prob": 0.3,
+        "base_vel": 100
+      },
+      "mix": {}
+    }
+  },
+  "parts": {
+    "intro": {
+      "bars": 4,
+      "intensity_start": 0.3,
+      "intensity_end": 0.5,
+      "voice_overrides": {},
+      "loop": false,
+      "tempo": null,
+      "meter": null
+    },
+    "main": {
+      "bars": 4,
+      "intensity_start": 0.5,
+      "intensity_end": 0.7,
+      "voice_overrides": {},
+      "loop": false,
+      "tempo": null,
+      "meter": null
+    },
+    "outro": {
+      "bars": 4,
+      "intensity_start": 0.7,
+      "intensity_end": 0.4,
+      "voice_overrides": {},
+      "loop": false,
+      "tempo": null,
+      "meter": null
+    }
+  },
+  "arrangement": [
+    "intro",
+    "main",
+    "outro"
+  ],
+  "lfos": [
+    {
+      "name": "filter_sweep",
+      "shape": "sine",
+      "period_bars": 4.0,
+      "phase": 0.0,
+      "depth": 0.6,
+      "samples_per_bar": 8,
+      "applications": [
+        {
+          "part": "intro",
+          "target": "voice:filter:cutoff"
+        },
+        {
+          "part": "main",
+          "target": "voice:filter:cutoff"
+        },
+        {
+          "part": "outro",
+          "target": "voice:filter:cutoff"
+        }
+      ]
+    }
+  ],
+  "feel": {
+    "pump": 0.4,
+    "groove": 0.2,
+    "drive": 0.5,
+    "tension": 0.5,
+    "wander": 0.1
+  },
+  "schema_version": 3
+}

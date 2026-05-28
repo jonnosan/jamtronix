@@ -1,6 +1,6 @@
 """Smoke tests for the PySide6 GUI.
 
-Constructing the main window against the bundled acid-demo song
+Constructing the main window against the bundled test-fixture song
 exercises the song-view, voice panels, knob factory, and File menu
 wiring. We use Qt's offscreen platform so the tests work headless on
 CI runners with no display.
@@ -23,7 +23,7 @@ from jtx_gui.main_window import MainWindow  # noqa: E402
 from jtx_gui.state import AppState  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-ACID_DEMO = REPO_ROOT / "examples" / "acid-demo.jtx"
+TEST_FIXTURE = REPO_ROOT / "examples" / "test-fixture.jtx"
 
 
 @pytest.fixture(scope="session")
@@ -49,22 +49,22 @@ def test_main_window_constructs_empty(qapp: QApplication) -> None:
     window.deleteLater()
 
 
-def test_main_window_loads_acid_demo(qapp: QApplication) -> None:
-    """Opening the bundled acid demo should populate the Song view."""
+def test_main_window_loads_test_fixture(qapp: QApplication) -> None:
+    """Opening the bundled test fixture should populate the Song view."""
     state = AppState()
     window = MainWindow(state)
-    assert window.open_song(ACID_DEMO)
+    assert window.open_song(TEST_FIXTURE)
     assert state.song is not None
-    assert state.song.title == "Phuture Lines"
+    assert state.song.title == "Test Fixture"
     assert not state.dirty
-    assert "Phuture Lines" in window.windowTitle() or "acid-demo" in window.windowTitle()
+    assert "Test Fixture" in window.windowTitle() or "test-fixture" in window.windowTitle()
     window.deleteLater()
 
 
 def test_song_dirty_round_trip(tmp_path: Path, qapp: QApplication) -> None:
     """Editing then saving should clear dirty state."""
     state = AppState()
-    state.open(ACID_DEMO)
+    state.open(TEST_FIXTURE)
     state.song.tempo = 130  # type: ignore[union-attr]
     state.mark_dirty()
     assert state.dirty
@@ -85,7 +85,7 @@ def test_parts_view_lazy_override_creation(tmp_path: Path, qapp: QApplication) -
     from jtx_gui.views.parts_view import PartsView
 
     state = AppState()
-    state.open(ACID_DEMO)
+    state.open(TEST_FIXTURE)
     # Add a part so the view has something to operate on.
     state.song.parts["test_part"] = Part(bars=4)  # type: ignore[union-attr]
     state.mark_dirty()
@@ -100,18 +100,18 @@ def test_parts_view_lazy_override_creation(tmp_path: Path, qapp: QApplication) -
 
 
 def test_open_song_loads_sibling_setup(qapp: QApplication) -> None:
-    """Opening acid-demo should also load acid-demo.jtx-setup."""
+    """Opening the fixture should also load its sibling .jtx-setup."""
     state = AppState()
-    state.open(ACID_DEMO)
+    state.open(TEST_FIXTURE)
     assert state.setup is not None
-    assert state.setup.id == "acid-demo"
+    assert state.setup.id == "test-fixture"
     assert state.setup_error is None
 
 
 def test_setup_error_surfaces_when_sibling_missing(tmp_path: Path, qapp: QApplication) -> None:
     """Song without its sibling setup should report the error, not crash."""
     # Copy just the song into tmp — no setup file alongside it.
-    text = ACID_DEMO.read_text(encoding="utf-8")
+    text = TEST_FIXTURE.read_text(encoding="utf-8")
     orphan = tmp_path / "orphan.jtx"
     orphan.write_text(text, encoding="utf-8")
 
@@ -126,16 +126,16 @@ def test_appstate_adopt_inmemory_song(qapp: QApplication) -> None:
     from jtx.persist import load_setup
 
     state = AppState()
-    state.open(ACID_DEMO)
+    state.open(TEST_FIXTURE)
     setup = state.setup
     assert setup is not None
-    blank_song = state.song
-    assert blank_song is not None
+    starter_song = state.song
+    assert starter_song is not None
 
     # Adopt a freshly-built song under a different title.
-    blank_song.title = "Fresh"
-    state.adopt(song=blank_song, setup=setup)
-    assert state.song is blank_song
+    starter_song.title = "Fresh"
+    state.adopt(song=starter_song, setup=setup)
+    assert state.song is starter_song
     assert state.setup is setup
     assert state.path is None
     assert state.dirty is True
@@ -149,7 +149,7 @@ def test_part_tempo_meter_round_trip(tmp_path: Path) -> None:
     from jtx.persist import load_song, save_song
 
     state = AppState()
-    state.open(ACID_DEMO)
+    state.open(TEST_FIXTURE)
     assert state.song is not None
     first_part = next(iter(state.song.parts.values()))
     first_part.tempo = 145
@@ -167,8 +167,8 @@ def test_song_player_uses_part_meter_override() -> None:
     from jtx.persist import load_setup, load_song
     from jtx.player import SongPlayer
 
-    song = load_song(ACID_DEMO)
-    setup = load_setup(REPO_ROOT / "examples" / "acid-demo.jtx-setup")
+    song = load_song(TEST_FIXTURE)
+    setup = load_setup(REPO_ROOT / "examples" / "test-fixture.jtx-setup")
     first_part_name = next(iter(song.parts.keys()))
     song.parts[first_part_name].meter = "3/4"
     player = SongPlayer(song, setup, first_part_name)
@@ -181,7 +181,7 @@ def test_part_loop_round_trip(tmp_path: Path) -> None:
     from jtx.persist import load_song, save_song
 
     state = AppState()
-    state.open(ACID_DEMO)
+    state.open(TEST_FIXTURE)
     assert state.song is not None
     next(iter(state.song.parts.values())).loop = True
     target = tmp_path / "loop_test.jtx"
@@ -205,7 +205,7 @@ def test_transport_advances_then_loops(qapp: QApplication) -> None:
         def stop(self) -> None: ...
 
     state = AppState()
-    state.open(ACID_DEMO)
+    state.open(TEST_FIXTURE)
     assert state.song is not None
     assert state.setup is not None
     # Shrink each part to 1 bar so we advance quickly.
@@ -262,7 +262,7 @@ def test_transport_starts_and_stops_with_fake_sink(qapp: QApplication) -> None:
 
     fake = FakeSink()
     state = AppState()
-    state.open(ACID_DEMO)
+    state.open(TEST_FIXTURE)
     assert state.song is not None
     assert state.setup is not None
 
@@ -294,37 +294,39 @@ def test_transport_starts_and_stops_with_fake_sink(qapp: QApplication) -> None:
     assert len(received) >= 1
 
 
-def test_bundled_example_starter_songs_open() -> None:
-    """Every shipped starter .jtx loads + has its sibling setup."""
+def test_bundled_test_fixture_opens() -> None:
+    """The shipped test fixture .jtx loads + has its sibling setup."""
     from jtx_gui.state import AppState
 
-    for stem in ("acid-starter", "deep_techno-starter", "psytrance-starter"):
-        path = REPO_ROOT / "examples" / f"{stem}.jtx"
-        assert path.exists(), f"missing example: {path}"
-        state = AppState()
-        state.open(path)
-        assert state.song is not None
-        assert state.setup is not None, f"sibling setup missing for {stem}"
-        assert state.setup_error is None
+    path = REPO_ROOT / "examples" / "test-fixture.jtx"
+    assert path.exists(), f"missing fixture: {path}"
+    state = AppState()
+    state.open(path)
+    assert state.song is not None
+    assert state.setup is not None, "sibling setup missing for test-fixture"
+    assert state.setup_error is None
 
 
-def test_style_templates_build_valid_songs() -> None:
-    """Each style template produces a song that round-trips through persist."""
+def test_blank_template_builds_valid_song() -> None:
+    """The blank template still produces a song that round-trips through persist.
+
+    The other style templates (acid / deep_techno / psytrance / wildcard)
+    are deleted in PR 2 in favour of the new mood/format composer.
+    """
+    import tempfile
+
     from jtx.persist import save_song
     from templates import STYLES, build
 
-    for style in STYLES:
-        song = build(style, f"{style} test", "iac")
-        # validate via the persist layer (raises if invalid).
-        import tempfile
-
-        with tempfile.NamedTemporaryFile(suffix=".jtx", delete=False) as tmp:
-            tmp_path = Path(tmp.name)
-        try:
-            save_song(song, tmp_path)
-            assert tmp_path.exists()
-        finally:
-            tmp_path.unlink(missing_ok=True)
+    assert "blank" in STYLES
+    song = build("blank", "blank test", "iac")
+    with tempfile.NamedTemporaryFile(suffix=".jtx", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+    try:
+        save_song(song, tmp_path)
+        assert tmp_path.exists()
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
 def test_bundled_setups_discovered_and_loadable() -> None:
@@ -344,7 +346,7 @@ def test_render_song_to_midi_writes_file(tmp_path: Path, qapp: QApplication) -> 
     from jtx_gui.render import render_song_to_midi
 
     state = AppState()
-    state.open(ACID_DEMO)
+    state.open(TEST_FIXTURE)
     assert state.song is not None
     assert state.setup is not None
     out = tmp_path / "rendered.mid"
@@ -359,7 +361,7 @@ def test_toolbar_clock_mode_disables_during_play(qapp: QApplication) -> None:
     from jtx_gui.views.toolbar import TopToolbar
 
     state = AppState()
-    state.open(ACID_DEMO)
+    state.open(TEST_FIXTURE)
     transport = TransportService()
     bar = TopToolbar(state=state, transport=transport, port_factory=lambda: ["A", "B"])
     assert bar._clock_combo.isEnabled()  # type: ignore[attr-defined]
