@@ -88,17 +88,45 @@ class _StyleProfile:
     # Probability adjustment for the ghost-note pass (multiplied onto the
     # base ghost probability derived from drive).
     ghost_bias: float
+    # Ceiling for the build-mode snare ramp (in pulses across a 32-slot
+    # grid). Techno + psy go full machine-gun at 32nds; acid stays at
+    # 16ths so the build feels tense rather than frantic.
+    build_snare_max: int
+    # Curve exponent for the build snare ramp; >1 back-loads the rise.
+    # Higher = more sudden density spike near the drop.
+    build_snare_curve: float
 
 
 _STYLE_PROFILES: dict[str, _StyleProfile] = {
     "acid": _StyleProfile(
-        name="acid", triplet_hat_above=1.1, kick_vel=118, snare_vel=104, hat_vel=82, ghost_bias=0.8
+        name="acid",
+        triplet_hat_above=1.1,
+        kick_vel=118,
+        snare_vel=104,
+        hat_vel=82,
+        ghost_bias=0.8,
+        build_snare_max=16,  # 16th-note ceiling — acid build stays tense, not frantic
+        build_snare_curve=1.3,
     ),
     "techno": _StyleProfile(
-        name="techno", triplet_hat_above=0.7, kick_vel=120, snare_vel=100, hat_vel=80, ghost_bias=1.0
+        name="techno",
+        triplet_hat_above=0.7,
+        kick_vel=120,
+        snare_vel=100,
+        hat_vel=80,
+        ghost_bias=1.0,
+        build_snare_max=32,  # full machine-gun ramp into the drop
+        build_snare_curve=1.6,
     ),
     "psy": _StyleProfile(
-        name="psy", triplet_hat_above=1.1, kick_vel=124, snare_vel=98, hat_vel=78, ghost_bias=1.2
+        name="psy",
+        triplet_hat_above=1.1,
+        kick_vel=124,
+        snare_vel=98,
+        hat_vel=78,
+        ghost_bias=1.2,
+        build_snare_max=32,
+        build_snare_curve=1.6,
     ),
 }
 
@@ -229,9 +257,12 @@ class DrumKit(Algorithm):
         # Determine grid pulses across the 16-step bar.
         if kit_focus == "build":
             # Snare grid ramps with part_progress — the canonical
-            # buildup move (2-and-4 → 16ths → 32nds machine gun).
-            ramp = progress ** 1.6
-            pulses = int(round(2 + 30 * ramp))  # 2 → 32
+            # buildup move. Per-style ceiling: techno + psy hit 32nds
+            # at the drop (machine gun); acid caps at 16ths so the
+            # build feels tense rather than frantic.
+            ramp = progress ** style.build_snare_curve
+            ceiling = style.build_snare_max
+            pulses = int(round(2 + (ceiling - 2) * ramp))
         elif snare_subdiv == "auto":
             if eff < 0.4:
                 pulses = 2  # 2 & 4
@@ -307,8 +338,13 @@ class DrumKit(Algorithm):
                 return hits
         if chh is not None:
             if kit_focus == "build":
-                # Hats ramp from 8 to 16 pulses across the build.
-                pulses = int(round(8 + 8 * progress))
+                # Hats ramp across the build. Acid stays in the 8–12
+                # range (busy enough to push, not enough to overwhelm
+                # the snare ramp); techno + psy double to 16th-density.
+                if style.name == "acid":
+                    pulses = int(round(8 + 4 * progress))
+                else:
+                    pulses = int(round(8 + 8 * progress))
             elif hat_pulses_raw >= 0:
                 pulses = hat_pulses_raw
             else:

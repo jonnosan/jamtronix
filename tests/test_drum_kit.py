@@ -185,3 +185,33 @@ def test_voicing_drops_hit_with_unknown_instrument() -> None:
     bogus = Hit(instrument="cowbell_xl", velocity=100, duration_ticks=30, tick=0)
     midi = translate_abstract_events([bogus], slot)
     assert midi == []
+
+
+def test_drum_kit_build_snare_ceiling_is_style_aware() -> None:
+    """Build-mode snare ramp tops out at 16ths for acid (tense, not
+    manic) and 32nds for techno + psy (full machine-gun into the drop).
+    """
+    slot = _slot()
+    kit = DrumKit(kit_map=slot.kit_map)
+
+    def snares_at_progress_one(style: str) -> int:
+        hits = kit.generate_bar(
+            _ctx(
+                bar_index=7,
+                pattern=({"style": style, "kit_focus": "build"}),
+                progress=1.0,
+                intensity=0.5,
+            )
+        )
+        return sum(1 for h in hits if h.instrument == "snare")
+
+    # Acid caps at 16 pulses; techno/psy ramp to 32. We're not asserting
+    # exact counts because the roll-fill on the last beat adds a few
+    # extra, but acid should be roughly half of techno.
+    acid = snares_at_progress_one("acid")
+    techno = snares_at_progress_one("techno")
+    assert acid < techno
+    # Acid ceiling check: shouldn't exceed 16 pulses + roll-fill (~6).
+    assert acid <= 24
+    # Techno full ceiling check: at least 28 snare hits at the drop.
+    assert techno >= 28
