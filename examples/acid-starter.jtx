@@ -7,125 +7,121 @@
   },
   "seed_override": null,
   "meter": "4/4",
-  "tempo": 126,
+  "tempo": 122,
   "chord_progression": {
     "degrees": [
       "i",
-      "VI",
+      "v",
       "III",
       "VII"
     ],
-    "bars_per_chord": 4
+    "bars_per_chord": 2
   },
   "voices": {
-    "kick": {
-      "algorithm": "drum_pattern",
+    "kit": {
+      "algorithm": "drum_kit",
       "pattern": {
-        "style": "four_floor",
-        "velocity": 118
+        "style": "acid",
+        "kit_focus": "full",
+        "density": 0.63,
+        "variation": 0.4,
+        "perc_complexity": 0.34
       },
-      "feel": {}
-    },
-    "snare": {
-      "algorithm": "drum_one_shot",
-      "pattern": {
-        "pulses": 2,
-        "offset": 4,
-        "velocity": 100
-      },
-      "feel": {}
-    },
-    "chh": {
-      "algorithm": "drum_pattern",
-      "pattern": {
-        "style": "euclid",
-        "pulses": 8,
-        "offset": 0,
-        "velocity": 92,
-        "vel_curve": "pulse",
-        "vel_curve_depth": 0.25
-      },
-      "feel": {
-        "swing": 0.18
-      }
-    },
-    "ohh": {
-      "algorithm": "drum_one_shot",
-      "pattern": {
-        "pulses": 2,
-        "offset": 2,
-        "velocity": 88
-      },
-      "feel": {}
+      "mix": {}
     },
     "acid": {
       "algorithm": "acid_bass",
       "pattern": {
-        "drop_prob": 0.25,
-        "slide_prob": 0.3,
-        "base_vel": 96,
-        "intensity": 1.1,
-        "gate": 0.6,
-        "cycle": 2,
-        "resonance": 105,
-        "triplet_prob": 0.08,
+        "drop_prob": 0.41,
+        "slide_prob": 0.52,
+        "base_vel": 100,
+        "intensity": 1.19,
+        "gate": 0.46,
+        "cycle": 8,
+        "resonance": 87,
+        "octave": -1,
+        "triplet_prob": 0.03,
         "triplet_subdiv": "16t"
       },
-      "feel": {}
+      "mix": {}
     },
     "stab": {
       "algorithm": "chord_stab",
       "pattern": {
-        "quality": "minor",
+        "quality": "min7",
         "pulses": 4,
         "offset": 2,
         "base_vel": 88,
-        "gate": 0.3
+        "gate": 0.31
       },
-      "feel": {}
+      "mix": {}
     },
     "lead": {
       "algorithm": "melodic_line",
       "pattern": {
-        "drop_prob": 0.55,
+        "drop_prob": 0.63,
         "octave": 1,
         "base_vel": 90,
-        "passing_prob": 0.15,
-        "palette": "tones_only",
-        "triplet_prob": 0.15,
-        "triplet_subdiv": "16t"
+        "passing_prob": 0.2,
+        "palette": "pentatonic"
       },
-      "feel": {}
+      "mix": {}
     },
     "filter": {
       "algorithm": "cc_lfo",
       "pattern": {
         "cc": 74,
         "shape": "sine",
-        "period_bars": 8,
-        "depth": 0.85,
-        "offset": 0.55
+        "period_bars": 4.0,
+        "depth": 0.67,
+        "offset": 0.46
       },
-      "feel": {}
+      "mix": {}
     }
   },
   "parts": {
     "intro": {
       "bars": 8,
-      "voice_overrides": {},
+      "intensity_start": 0.2,
+      "intensity_end": 0.35,
+      "voice_overrides": {
+        "kit": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
+          "pattern": {
+            "kit_focus": "minimal"
+          },
+          "mix": {}
+        }
+      },
       "loop": false,
       "tempo": null,
       "meter": null
     },
     "build": {
       "bars": 8,
-      "voice_overrides": {},
+      "intensity_start": 0.35,
+      "intensity_end": 0.95,
+      "voice_overrides": {
+        "kit": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
+          "pattern": {
+            "kit_focus": "build"
+          },
+          "mix": {}
+        }
+      },
       "loop": false,
       "tempo": null,
       "meter": null
     },
     "drop": {
       "bars": 16,
+      "intensity_start": 0.9,
+      "intensity_end": 0.85,
       "voice_overrides": {},
       "loop": false,
       "tempo": null,
@@ -133,6 +129,8 @@
     },
     "drop2": {
       "bars": 16,
+      "intensity_start": 0.85,
+      "intensity_end": 0.95,
       "voice_overrides": {},
       "loop": false,
       "tempo": null,
@@ -140,7 +138,19 @@
     },
     "outro": {
       "bars": 8,
-      "voice_overrides": {},
+      "intensity_start": 0.7,
+      "intensity_end": 0.15,
+      "voice_overrides": {
+        "kit": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
+          "pattern": {
+            "kit_focus": "wind_down"
+          },
+          "mix": {}
+        }
+      },
       "loop": false,
       "tempo": null,
       "meter": null
@@ -155,5 +165,12 @@
     "outro"
   ],
   "lfos": [],
-  "schema_version": 2
+  "feel": {
+    "pump": 0.51,
+    "groove": 0.22,
+    "drive": 0.47,
+    "tension": 0.56,
+    "wander": 0.12
+  },
+  "schema_version": 3
 }

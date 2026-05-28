@@ -2,259 +2,116 @@
   "title": "Phuture Lines",
   "setup_ref": "acid-demo",
   "key": {
-    "tonic": "A",
+    "tonic": "G",
     "scale": "minor"
   },
   "seed_override": null,
   "meter": "4/4",
-  "tempo": 126,
+  "tempo": 124,
   "chord_progression": {
     "degrees": [
+      "VII",
+      "VI",
+      "VII",
       "i"
     ],
-    "bars_per_chord": 16
+    "bars_per_chord": 4
   },
   "voices": {
-    "kick": {
-      "algorithm": "drum_pattern",
+    "kit": {
+      "algorithm": "drum_kit",
       "pattern": {
-        "style": "four_floor",
-        "velocity": 118,
-        "vel_curve": "drift",
-        "vel_curve_depth": 0.06
+        "style": "acid",
+        "kit_focus": "full",
+        "density": 0.73,
+        "variation": 0.27,
+        "perc_complexity": 0.43
       },
-      "feel": {}
-    },
-    "clap": {
-      "algorithm": "drum_one_shot",
-      "pattern": {
-        "velocity": 100,
-        "flam_decay": 0.65,
-        "pulses": 2,
-        "offset": 4,
-        "flam_count": 2,
-        "flam_spacing_ticks": 12
-      },
-      "feel": {
-        "humanize": 4
-      }
-    },
-    "chh": {
-      "algorithm": "drum_pattern",
-      "pattern": {
-        "style": "euclid",
-        "pulses": 8,
-        "offset": 0,
-        "velocity": 92,
-        "vel_curve": "pulse",
-        "vel_curve_depth": 0.25
-      },
-      "feel": {
-        "swing": 0.18,
-        "sidechain_from": "kick",
-        "sidechain_floor": 50,
-        "sidechain_release_beats": 0.4
-      }
-    },
-    "ohh": {
-      "algorithm": "drum_one_shot",
-      "pattern": {
-        "velocity": 90,
-        "pulses": 2,
-        "offset": 2
-      },
-      "feel": {
-        "sidechain_from": "kick",
-        "sidechain_floor": 40,
-        "sidechain_release_beats": 0.5
-      }
-    },
-    "conga_hi": {
-      "algorithm": "drum_one_shot",
-      "pattern": {
-        "velocity": 92,
-        "pulses": 4,
-        "offset": 2
-      },
-      "feel": {
-        "humanize": 3,
-        "swing": 0.12
-      }
-    },
-    "conga_lo": {
-      "algorithm": "drum_one_shot",
-      "pattern": {
-        "velocity": 96,
-        "pulses": 2,
-        "offset": 7
-      },
-      "feel": {
-        "humanize": 4
-      }
-    },
-    "maracas": {
-      "algorithm": "drum_pattern",
-      "pattern": {
-        "style": "euclid",
-        "pulses": 16,
-        "offset": 0,
-        "velocity": 70,
-        "vel_curve": "pulse",
-        "vel_curve_depth": 0.3
-      },
-      "feel": {
-        "swing": 0.18,
-        "humanize": 2
-      }
+      "mix": {}
     },
     "acid": {
       "algorithm": "acid_bass",
       "pattern": {
-        "drop_prob": 0.22,
-        "slide_prob": 0.5,
-        "octave": 0,
-        "intensity": 1.0,
-        "gate": 0.7,
-        "bend": 80,
-        "cycle": 4,
-        "resonance": 110,
-        "triplet_prob": 0.07,
+        "drop_prob": 0.26,
+        "slide_prob": 0.23,
+        "base_vel": 92,
+        "intensity": 1.07,
+        "gate": 0.92,
+        "cycle": 1,
+        "resonance": 104,
+        "octave": 1,
+        "triplet_prob": 0.02,
         "triplet_subdiv": "16t"
       },
-      "feel": {
-        "humanize": 6
-      }
+      "mix": {}
     },
     "stab": {
       "algorithm": "chord_stab",
       "pattern": {
-        "gate": 0.25,
-        "base_vel": 75,
-        "velocity_spread": 4,
-        "pulses": 1,
-        "offset": 4,
-        "quality": "power"
+        "quality": "sus4",
+        "pulses": 4,
+        "offset": 2,
+        "base_vel": 88,
+        "gate": 0.42
       },
-      "feel": {
-        "sidechain_from": "kick",
-        "sidechain_floor": 50,
-        "sidechain_release_beats": 0.5
-      }
+      "mix": {}
     },
-    "filt": {
+    "lead": {
+      "algorithm": "melodic_line",
+      "pattern": {
+        "drop_prob": 0.74,
+        "octave": 1,
+        "base_vel": 90,
+        "passing_prob": 0.12,
+        "palette": "triad"
+      },
+      "mix": {}
+    },
+    "filter": {
       "algorithm": "cc_lfo",
       "pattern": {
-        "cc": 71,
+        "cc": 74,
         "shape": "sine",
-        "period_bars": 16,
-        "depth": 0.7,
-        "offset": 0.6,
-        "samples_per_bar": 8
+        "period_bars": 4.0,
+        "depth": 0.71,
+        "offset": 0.5
       },
-      "feel": {}
-    },
-    "chord_ref": {
-      "algorithm": "root_pulse",
-      "pattern": {
-        "octave": 0,
-        "velocity": 70,
-        "pulses": 1,
-        "offset": 0
-      },
-      "feel": {}
-    },
-    "root_ref": {
-      "algorithm": "root_pulse",
-      "pattern": {
-        "octave": 1,
-        "velocity": 65,
-        "gate": 0.35,
-        "pulses": 4,
-        "offset": 0
-      },
-      "feel": {}
+      "mix": {}
     }
   },
   "parts": {
     "intro": {
       "bars": 8,
+      "intensity_start": 0.2,
+      "intensity_end": 0.35,
       "voice_overrides": {
-        "chh": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {},
-          "feel": {
-            "mute_prob": 1.0
-          }
-        },
-        "ohh": {
+        "kit": {
           "algorithm": null,
           "key": null,
           "meter": null,
           "pattern": {
-            "pulses": 0,
-            "offset": 0
+            "kit_focus": "minimal"
           },
-          "feel": {}
-        },
-        "clap": {
+          "mix": {}
+        }
+      },
+      "loop": false,
+      "tempo": null,
+      "meter": null
+    },
+    "build": {
+      "bars": 8,
+      "intensity_start": 0.35,
+      "intensity_end": 0.95,
+      "voice_overrides": {
+        "kit": {
           "algorithm": null,
           "key": null,
           "meter": null,
           "pattern": {
-            "pulses": 0,
-            "offset": 0
+            "kit_focus": "build"
           },
-          "feel": {}
-        },
-        "stab": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {},
-          "feel": {
-            "mute_prob": 1.0
-          }
-        },
-        "conga_hi": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {
-            "pulses": 0,
-            "offset": 0
-          },
-          "feel": {}
-        },
-        "conga_lo": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {
-            "pulses": 0,
-            "offset": 0
-          },
-          "feel": {}
-        },
-        "maracas": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {},
-          "feel": {
-            "mute_prob": 1.0
-          }
-        },
-        "acid": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {},
-          "feel": {
-            "evolution_start": 0.7,
-            "evolution_end": 0.95
-          }
+          "mix": {}
         }
       },
       "loop": false,
@@ -263,244 +120,35 @@
     },
     "drop": {
       "bars": 16,
-      "voice_overrides": {
-        "chh": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {},
-          "feel": {
-            "fade_in_at_bar": 0,
-            "fade_in_beats": 8
-          }
-        },
-        "stab": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {},
-          "feel": {
-            "fade_in_at_bar": 2,
-            "fade_in_beats": 8
-          }
-        },
-        "maracas": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {},
-          "feel": {
-            "fade_in_at_bar": 1,
-            "fade_in_beats": 8
-          }
-        },
-        "conga_hi": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {},
-          "feel": {
-            "fade_in_at_bar": 4,
-            "fade_in_beats": 8
-          }
-        },
-        "conga_lo": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {},
-          "feel": {
-            "fade_in_at_bar": 8,
-            "fade_in_beats": 8
-          }
-        }
-      },
+      "intensity_start": 0.9,
+      "intensity_end": 0.85,
+      "voice_overrides": {},
       "loop": false,
       "tempo": null,
       "meter": null
     },
-    "break": {
-      "bars": 8,
-      "voice_overrides": {
-        "kick": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {},
-          "feel": {
-            "mute_prob": 1.0
-          }
-        },
-        "chh": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {},
-          "feel": {
-            "mute_prob": 1.0
-          }
-        },
-        "ohh": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {
-            "pulses": 0,
-            "offset": 0
-          },
-          "feel": {}
-        },
-        "clap": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {
-            "pulses": 0,
-            "offset": 0
-          },
-          "feel": {}
-        },
-        "stab": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {},
-          "feel": {
-            "mute_prob": 1.0
-          }
-        },
-        "conga_hi": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {},
-          "feel": {}
-        },
-        "conga_lo": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {
-            "pulses": 0,
-            "offset": 0
-          },
-          "feel": {}
-        },
-        "maracas": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {},
-          "feel": {}
-        },
-        "acid": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {
-            "resonance": 120
-          },
-          "feel": {
-            "evolution_start": 1.0,
-            "evolution_end": 1.1
-          }
-        }
-      },
+    "drop2": {
+      "bars": 16,
+      "intensity_start": 0.85,
+      "intensity_end": 0.95,
+      "voice_overrides": {},
       "loop": false,
       "tempo": null,
       "meter": null
     },
     "outro": {
       "bars": 8,
+      "intensity_start": 0.7,
+      "intensity_end": 0.15,
       "voice_overrides": {
-        "chh": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {},
-          "feel": {
-            "mute_prob": 1.0
-          }
-        },
-        "ohh": {
+        "kit": {
           "algorithm": null,
           "key": null,
           "meter": null,
           "pattern": {
-            "pulses": 0,
-            "offset": 0
+            "kit_focus": "wind_down"
           },
-          "feel": {}
-        },
-        "clap": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {
-            "pulses": 0,
-            "offset": 0
-          },
-          "feel": {}
-        },
-        "stab": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {},
-          "feel": {
-            "mute_prob": 1.0
-          }
-        },
-        "conga_hi": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {
-            "pulses": 0,
-            "offset": 0
-          },
-          "feel": {}
-        },
-        "conga_lo": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {
-            "pulses": 0,
-            "offset": 0
-          },
-          "feel": {}
-        },
-        "maracas": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {},
-          "feel": {
-            "mute_prob": 1.0
-          }
-        },
-        "kick": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {
-            "velocity": 95
-          },
-          "feel": {
-            "evolution_start": 1.0,
-            "evolution_end": 0.5
-          }
-        },
-        "acid": {
-          "algorithm": null,
-          "key": null,
-          "meter": null,
-          "pattern": {},
-          "feel": {
-            "evolution_start": 1.0,
-            "evolution_end": 0.55
-          }
+          "mix": {}
         }
       },
       "loop": false,
@@ -510,10 +158,19 @@
   },
   "arrangement": [
     "intro",
+    "build",
     "drop",
-    "break",
+    "build",
+    "drop2",
     "outro"
   ],
   "lfos": [],
-  "schema_version": 2
+  "feel": {
+    "pump": 0.55,
+    "groove": 0.15,
+    "drive": 0.58,
+    "tension": 0.54,
+    "wander": 0.12
+  },
+  "schema_version": 3
 }
