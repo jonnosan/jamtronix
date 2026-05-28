@@ -3,8 +3,6 @@
   "name": "Ableton Template",
   "default_midi_port": "IAC Driver Bus 1",
   "daw_template_path": "/Users/jonno/Music/Ableton/User Library/Templates/Jamtronix.als",
-  "clock_mode": "internal_master",
-  "midi_clock_in_port": null,
   "voices": [
     {
       "name": "kick",
@@ -12,7 +10,12 @@
       "default_role": "drum",
       "midi_channel": 10,
       "midi_port": null,
-      "kit_map": {"kick": 36}
+      "kit_map": {
+        "kick": 36
+      },
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "snare",
@@ -20,7 +23,12 @@
       "default_role": "drum",
       "midi_channel": 10,
       "midi_port": null,
-      "kit_map": {"snare": 38}
+      "kit_map": {
+        "snare": 38
+      },
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "hat",
@@ -28,7 +36,12 @@
       "default_role": "drum",
       "midi_channel": 10,
       "midi_port": null,
-      "kit_map": {"hat": 42}
+      "kit_map": {
+        "hat": 42
+      },
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "crash",
@@ -36,15 +49,23 @@
       "default_role": "drum",
       "midi_channel": 10,
       "midi_port": null,
-      "kit_map": {"crash": 49}
+      "kit_map": {
+        "crash": 49
+      },
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "acid",
       "type": "mono",
       "default_role": "bass",
-      "midi_channel": 1,
+      "midi_channel": 11,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "stab",
@@ -52,7 +73,10 @@
       "default_role": "stab",
       "midi_channel": 2,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "lead",
@@ -60,7 +84,10 @@
       "default_role": "lead",
       "midi_channel": 3,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "lead_echo",
@@ -68,7 +95,10 @@
       "default_role": "follower",
       "midi_channel": 4,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "strings",
@@ -76,15 +106,21 @@
       "default_role": "follower",
       "midi_channel": 5,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "filt",
       "type": "modulator",
       "default_role": "modulator",
-      "midi_channel": 1,
+      "midi_channel": 16,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "tom",
@@ -92,7 +128,12 @@
       "default_role": "drum",
       "midi_channel": 10,
       "midi_port": null,
-      "kit_map": {"tom": 45}
+      "kit_map": {
+        "tom": 45
+      },
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "clave",
@@ -100,7 +141,12 @@
       "default_role": "drum",
       "midi_channel": 10,
       "midi_port": null,
-      "kit_map": {"clave": 75}
+      "kit_map": {
+        "clave": 75
+      },
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "shaker",
@@ -108,7 +154,12 @@
       "default_role": "drum",
       "midi_channel": 10,
       "midi_port": null,
-      "kit_map": {"shaker": 70}
+      "kit_map": {
+        "shaker": 70
+      },
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "riff",
@@ -116,7 +167,10 @@
       "default_role": "lead",
       "midi_channel": 6,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "reese",
@@ -124,7 +178,10 @@
       "default_role": "bass",
       "midi_channel": 7,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "riser",
@@ -132,15 +189,21 @@
       "default_role": "lead",
       "midi_channel": 8,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "filt_step",
       "type": "modulator",
       "default_role": "modulator",
-      "midi_channel": 1,
+      "midi_channel": 15,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "chord_ref",
@@ -148,7 +211,10 @@
       "default_role": "lead",
       "midi_channel": 15,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "root_ref",
@@ -156,8 +222,13 @@
       "default_role": "lead",
       "midi_channel": 16,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     }
   ],
-  "schema_version": 1
+  "clock_mode": "internal_master",
+  "midi_clock_in_port": null,
+  "schema_version": 2
 }

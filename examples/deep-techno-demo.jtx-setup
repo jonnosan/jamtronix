@@ -3,8 +3,6 @@
   "name": "Deep Techno Demo",
   "default_midi_port": "IAC Driver Bus 1",
   "daw_template_path": "/Users/jonno/Music/Ableton/User Library/Templates/Jamtronix Deep Techno.als",
-  "clock_mode": "internal_master",
-  "midi_clock_in_port": null,
   "voices": [
     {
       "name": "kick",
@@ -12,7 +10,12 @@
       "default_role": "drum",
       "midi_channel": 10,
       "midi_port": null,
-      "kit_map": {"kick": 36}
+      "kit_map": {
+        "kick": 36
+      },
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "snare",
@@ -20,7 +23,12 @@
       "default_role": "drum",
       "midi_channel": 10,
       "midi_port": null,
-      "kit_map": {"snare": 38}
+      "kit_map": {
+        "snare": 38
+      },
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "chh",
@@ -28,7 +36,12 @@
       "default_role": "drum",
       "midi_channel": 10,
       "midi_port": null,
-      "kit_map": {"chh": 42}
+      "kit_map": {
+        "chh": 42
+      },
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "ride",
@@ -36,7 +49,12 @@
       "default_role": "drum",
       "midi_channel": 10,
       "midi_port": null,
-      "kit_map": {"ride": 51}
+      "kit_map": {
+        "ride": 51
+      },
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "sub",
@@ -44,7 +62,10 @@
       "default_role": "bass",
       "midi_channel": 1,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "pad",
@@ -52,7 +73,10 @@
       "default_role": "pad",
       "midi_channel": 2,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "stab",
@@ -60,7 +84,10 @@
       "default_role": "stab",
       "midi_channel": 3,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "stab_echo",
@@ -68,7 +95,10 @@
       "default_role": "follower",
       "midi_channel": 4,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "chord_ref",
@@ -76,7 +106,10 @@
       "default_role": "lead",
       "midi_channel": 15,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "root_ref",
@@ -84,8 +117,13 @@
       "default_role": "lead",
       "midi_channel": 16,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     }
   ],
-  "schema_version": 1
+  "clock_mode": "internal_master",
+  "midi_clock_in_port": null,
+  "schema_version": 2
 }

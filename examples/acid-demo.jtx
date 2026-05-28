@@ -180,12 +180,18 @@
       "bars": 8,
       "voice_overrides": {
         "chh": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "ohh": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {
             "pulses": 0,
             "offset": 0
@@ -193,6 +199,9 @@
           "feel": {}
         },
         "clap": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {
             "pulses": 0,
             "offset": 0
@@ -200,12 +209,18 @@
           "feel": {}
         },
         "stab": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "conga_hi": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {
             "pulses": 0,
             "offset": 0
@@ -213,6 +228,9 @@
           "feel": {}
         },
         "conga_lo": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {
             "pulses": 0,
             "offset": 0
@@ -220,24 +238,36 @@
           "feel": {}
         },
         "maracas": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "acid": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "evolution_start": 0.7,
             "evolution_end": 0.95
           }
         }
-      }
+      },
+      "loop": false,
+      "tempo": null,
+      "meter": null
     },
     "drop": {
       "bars": 16,
       "voice_overrides": {
         "chh": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "fade_in_at_bar": 0,
@@ -245,6 +275,9 @@
           }
         },
         "stab": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "fade_in_at_bar": 2,
@@ -252,6 +285,9 @@
           }
         },
         "maracas": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "fade_in_at_bar": 1,
@@ -259,6 +295,9 @@
           }
         },
         "conga_hi": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "fade_in_at_bar": 4,
@@ -266,30 +305,45 @@
           }
         },
         "conga_lo": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "fade_in_at_bar": 8,
             "fade_in_beats": 8
           }
         }
-      }
+      },
+      "loop": false,
+      "tempo": null,
+      "meter": null
     },
     "break": {
       "bars": 8,
       "voice_overrides": {
         "kick": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "chh": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "ohh": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {
             "pulses": 0,
             "offset": 0
@@ -297,6 +351,9 @@
           "feel": {}
         },
         "clap": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {
             "pulses": 0,
             "offset": 0
@@ -304,16 +361,25 @@
           "feel": {}
         },
         "stab": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "conga_hi": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {}
         },
         "conga_lo": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {
             "pulses": 0,
             "offset": 0
@@ -321,10 +387,16 @@
           "feel": {}
         },
         "maracas": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {}
         },
         "acid": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {
             "resonance": 120
           },
@@ -333,18 +405,27 @@
             "evolution_end": 1.1
           }
         }
-      }
+      },
+      "loop": false,
+      "tempo": null,
+      "meter": null
     },
     "outro": {
       "bars": 8,
       "voice_overrides": {
         "chh": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "ohh": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {
             "pulses": 0,
             "offset": 0
@@ -352,6 +433,9 @@
           "feel": {}
         },
         "clap": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {
             "pulses": 0,
             "offset": 0
@@ -359,12 +443,18 @@
           "feel": {}
         },
         "stab": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "conga_hi": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {
             "pulses": 0,
             "offset": 0
@@ -372,6 +462,9 @@
           "feel": {}
         },
         "conga_lo": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {
             "pulses": 0,
             "offset": 0
@@ -379,12 +472,18 @@
           "feel": {}
         },
         "maracas": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "kick": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {
             "velocity": 95
           },
@@ -394,13 +493,19 @@
           }
         },
         "acid": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "evolution_start": 1.0,
             "evolution_end": 0.55
           }
         }
-      }
+      },
+      "loop": false,
+      "tempo": null,
+      "meter": null
     }
   },
   "arrangement": [
@@ -410,5 +515,5 @@
     "outro"
   ],
   "lfos": [],
-  "schema_version": 1
+  "schema_version": 2
 }

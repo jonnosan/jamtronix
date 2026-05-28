@@ -39,27 +39,19 @@ from jtx.algorithms._theory import note_to_midi
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
 from jtx.engine.events import ControlChange, Event, NoteOff, NoteOn
-
-_DEFAULT_CC: dict[str, int] = {"filter_cutoff": 74}
+from jtx.model.parameter_target import CCTarget, ParameterTarget
 
 
 class SubDrone(Algorithm):
     """Long-gated root/fifth sub-bass with optional kick-locked CC74."""
 
     name: ClassVar[str] = "sub_drone"
-    DEFAULT_CC: ClassVar[dict[str, int]] = dict(_DEFAULT_CC)
+    DEFAULT_PARAM_MAP: ClassVar[dict[str, ParameterTarget]] = {
+        "cutoff": CCTarget(74),
+    }
 
-    def __init__(
-        self,
-        *,
-        midi_channel: int,
-        cc_map: dict[str, int] | None = None,
-    ) -> None:
+    def __init__(self, *, midi_channel: int) -> None:
         self.midi_channel = midi_channel
-        self._cc_map = dict(cc_map) if cc_map else {}
-
-    def _cc(self, function: str) -> int:
-        return int(self._cc_map.get(function, _DEFAULT_CC[function]))
 
     def generate_bar(self, ctx: BarContext) -> list[Event]:
         knobs = ctx.pattern_knobs
@@ -112,8 +104,9 @@ class SubDrone(Algorithm):
                         ControlChange(
                             tick=beat_tick + i * cc_step,
                             channel=self.midi_channel,
-                            cc=self._cc("filter_cutoff"),
+                            cc=74,
                             value=max(0, min(127, value)),
+                            function="cutoff",
                         )
                     )
 

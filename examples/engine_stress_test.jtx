@@ -300,12 +300,15 @@
   "parts": {
     "drop": {
       "bars": 16,
-      "voice_overrides": {}
+      "voice_overrides": {},
+      "loop": false,
+      "tempo": null,
+      "meter": null
     }
   },
   "arrangement": [
     "drop"
   ],
   "lfos": [],
-  "schema_version": 1
+  "schema_version": 2
 }

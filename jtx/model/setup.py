@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from jtx.model.parameter_target import CCTarget, ParameterTarget
 from jtx.model.types import ROLES_BY_TYPE, SCHEMA_VERSION, ClockMode, Role, VoiceType
 
 
@@ -23,20 +24,27 @@ class VoiceSlot:
     midi_port: str | None = None  # None = inherit setup default
     kit_map: dict[str, int] = field(default_factory=dict)
     """For drum voices: piece name → MIDI note. Ignored for other types."""
-    cc_map: dict[str, int] = field(default_factory=dict)
-    """Function-name → CC number override.
+    parameter_map: dict[str, ParameterTarget] = field(default_factory=dict)
+    """Function-name → :class:`ParameterTarget` override.
 
-    Algorithms that emit standard-MIDI CCs (filter_cutoff, resonance,
-    portamento_time, portamento_on_off, ...) look up their CC numbers
-    via :meth:`cc_for`. The default mapping lives on each algorithm
-    class; ``cc_map`` overrides individual entries so Ableton macro
-    mappings can pick whatever CC numbers the user assigns during
-    MIDI Learn.
+    Algorithms emit function-tagged events (``ControlChange`` /
+    ``PitchBend`` / ``ChannelPressure`` with
+    ``function="cutoff"``/``"resonance"``/etc.); the sink-side
+    :class:`jtx.engine.parameter_router.ParameterRouter` rewrites each
+    event per this map (CC remap, MPE channel allocation, etc.). Lookup
+    falls back to the algorithm's ``DEFAULT_PARAM_MAP`` if a function
+    is unset here.
     """
+    mpe_mode: bool = False
+    """If True, the voice spans an MPE channel block starting at
+    ``midi_channel``. NoteOns round-robin through the block; tagged
+    pitch-bend / pressure / timbre events ride per-note channels."""
+    mpe_channel_count: int = 8
+    """How many channels the MPE block spans starting at ``midi_channel``.
 
-    def cc_for(self, function: str, default: int) -> int:
-        """Return the mapped CC number for ``function``, or ``default``."""
-        return self.cc_map.get(function, default)
+    Only honoured when ``mpe_mode`` is True. Default 8 matches typical
+    MPE-aware instruments (Ableton Sampler, Wavetable, Drift, Meld).
+    """
 
     def validate(self) -> list[str]:
         errors: list[str] = []
@@ -50,9 +58,27 @@ class VoiceSlot:
             )
         if self.type != "drum" and self.kit_map:
             errors.append(f"voice {self.name!r}: kit_map is only meaningful for drum voices")
-        for func, cc in self.cc_map.items():
-            if not (0 <= int(cc) <= 127):
-                errors.append(f"voice {self.name!r}: cc_map[{func!r}] = {cc} not in 0..127")
+        for func, target in self.parameter_map.items():
+            if isinstance(target, CCTarget) and not (0 <= int(target.cc) <= 127):
+                errors.append(
+                    f"voice {self.name!r}: parameter_map[{func!r}].cc = {target.cc} not in 0..127"
+                )
+        if self.mpe_mode:
+            if self.midi_channel == 1:
+                errors.append(
+                    f"voice {self.name!r}: mpe_mode collides with reserved MPE master "
+                    f"channel 1; pick midi_channel in 2..16"
+                )
+            if self.mpe_channel_count < 1:
+                errors.append(
+                    f"voice {self.name!r}: mpe_channel_count {self.mpe_channel_count} < 1"
+                )
+            block_end = self.midi_channel + self.mpe_channel_count - 1
+            if block_end > 16:
+                errors.append(
+                    f"voice {self.name!r}: MPE block ends at channel {block_end} (> 16); "
+                    f"reduce mpe_channel_count or midi_channel"
+                )
         return errors
 
 

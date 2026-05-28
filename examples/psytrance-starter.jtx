@@ -110,27 +110,37 @@
     "intro": {
       "bars": 16,
       "voice_overrides": {},
-      "loop": false
+      "loop": false,
+      "tempo": null,
+      "meter": null
     },
     "rolling": {
       "bars": 32,
       "voice_overrides": {},
-      "loop": false
+      "loop": false,
+      "tempo": null,
+      "meter": null
     },
     "lead": {
       "bars": 32,
       "voice_overrides": {},
-      "loop": false
+      "loop": false,
+      "tempo": null,
+      "meter": null
     },
     "breakdown": {
       "bars": 16,
       "voice_overrides": {},
-      "loop": false
+      "loop": false,
+      "tempo": null,
+      "meter": null
     },
     "outro": {
       "bars": 16,
       "voice_overrides": {},
-      "loop": false
+      "loop": false,
+      "tempo": null,
+      "meter": null
     }
   },
   "arrangement": [
@@ -142,5 +152,5 @@
     "outro"
   ],
   "lfos": [],
-  "schema_version": 1
+  "schema_version": 2
 }

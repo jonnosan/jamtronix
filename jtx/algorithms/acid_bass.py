@@ -42,7 +42,6 @@ from __future__ import annotations
 
 import math
 import random
-from collections.abc import Callable
 from typing import ClassVar
 
 from jtx.algorithms._cycle import parse_cycle_bars
@@ -52,40 +51,28 @@ from jtx.algorithms._theory import note_to_midi
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
 from jtx.engine.events import ControlChange, Event, NoteOff, NoteOn, PitchBend
+from jtx.model.parameter_target import CCTarget, ParameterTarget
 
 # Pitch-pick probabilities once a step has been decided to fire.
 _OCTAVE_UP_PROB = 0.20
 _MINOR_THIRD_PROB = 0.10
-
-# CC controller numbers (MIDI standard defaults). A voice slot's
-# ``cc_map`` can remap any of these by function name — useful when the
-# DAW target wants a different CC number on a specific instrument.
-_DEFAULT_CC: dict[str, int] = {
-    "portamento_time": 5,
-    "filter_cutoff": 74,
-    "resonance": 71,
-    "portamento_on_off": 65,
-}
 
 
 class AcidBass(Algorithm):
     """TB-303 line: 16-step probabilistic, with CC74/71 + pitch-bend."""
 
     name: ClassVar[str] = "acid_bass"
-    DEFAULT_CC: ClassVar[dict[str, int]] = dict(_DEFAULT_CC)
-    """Function → CC number; mirrored on the class for setup-editor lookup."""
+    DEFAULT_PARAM_MAP: ClassVar[dict[str, ParameterTarget]] = {
+        "cutoff": CCTarget(74),
+        "resonance": CCTarget(71),
+        "glide": CCTarget(5),
+        "glide_on": CCTarget(65),
+        # "bend" deliberately omitted: its natural target is the
+        # PitchBend event itself; no CC remap makes sense.
+    }
 
-    def __init__(
-        self,
-        *,
-        midi_channel: int,
-        cc_map: dict[str, int] | None = None,
-    ) -> None:
+    def __init__(self, *, midi_channel: int) -> None:
         self.midi_channel = midi_channel
-        self._cc_map = dict(cc_map) if cc_map else {}
-
-    def _cc(self, function: str) -> int:
-        return int(self._cc_map.get(function, _DEFAULT_CC[function]))
 
     def generate_bar(self, ctx: BarContext) -> list[Event]:
         knobs = ctx.pattern_knobs
@@ -123,16 +110,18 @@ class AcidBass(Algorithm):
                 ControlChange(
                     tick=0,
                     channel=self.midi_channel,
-                    cc=self._cc("portamento_on_off"),
+                    cc=65,
                     value=127,
+                    function="glide_on",
                 )
             )
             events.append(
                 ControlChange(
                     tick=0,
                     channel=self.midi_channel,
-                    cc=self._cc("portamento_time"),
+                    cc=5,
                     value=0,
+                    function="glide",
                 )
             )
 
@@ -150,8 +139,9 @@ class AcidBass(Algorithm):
                     ControlChange(
                         tick=tick,
                         channel=self.midi_channel,
-                        cc=self._cc("filter_cutoff"),
+                        cc=74,
                         value=max(0, min(127, cutoff)),
+                        function="cutoff",
                     )
                 )
                 if resonance_ceiling > 0:
@@ -161,8 +151,9 @@ class AcidBass(Algorithm):
                         ControlChange(
                             tick=tick,
                             channel=self.midi_channel,
-                            cc=self._cc("resonance"),
+                            cc=71,
                             value=max(0, min(127, resonance)),
+                            function="resonance",
                         )
                     )
 
@@ -197,7 +188,6 @@ class AcidBass(Algorithm):
             is_accent = step % 4 == 0
             prev_pitch = _emit_acid_note(
                 events,
-                cc_fn=self._cc,
                 channel=self.midi_channel,
                 tick=tick,
                 pitch=pitch,
@@ -227,7 +217,6 @@ class AcidBass(Algorithm):
                 tri_duration = max(1, int(triplet_spacing * gate))
                 beat_prev_pitch = _emit_acid_note(
                     events,
-                    cc_fn=self._cc,
                     channel=self.midi_channel,
                     tick=tick,
                     pitch=pitch,
@@ -260,7 +249,6 @@ def _roll_pitch(rng: random.Random, root: int, octave_up: int, minor_third: int)
 def _emit_acid_note(
     events: list[Event],
     *,
-    cc_fn: Callable[[str], int],
     channel: int,
     tick: int,
     pitch: int,
@@ -286,8 +274,9 @@ def _emit_acid_note(
             ControlChange(
                 tick=max(0, tick - 2),
                 channel=channel,
-                cc=cc_fn("portamento_time"),
+                cc=5,
                 value=glide,
+                function="glide",
             )
         )
 
@@ -297,11 +286,12 @@ def _emit_acid_note(
                 tick=max(0, tick - 1),
                 channel=channel,
                 value=pitch_rng.randint(-bend_amount, bend_amount),
+                function="bend",
             )
         )
     clamped_pitch = max(0, min(127, pitch))
     events.append(NoteOn(tick=tick, channel=channel, note=clamped_pitch, velocity=vel))
     events.append(NoteOff(tick=tick + duration, channel=channel, note=clamped_pitch))
     if bend_amount > 0:
-        events.append(PitchBend(tick=tick + duration, channel=channel, value=0))
+        events.append(PitchBend(tick=tick + duration, channel=channel, value=0, function="bend"))
     return pitch

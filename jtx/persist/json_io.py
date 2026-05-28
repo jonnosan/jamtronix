@@ -7,6 +7,11 @@ fields the same way.
 Construction from dict is hand-rolled rather than relying on a
 serialisation library so the on-disk shape stays explicit and the
 schema-version migration path remains under our control.
+
+Schema v1 → v2 (Phase A) migration: ``VoiceSlot.cc_map: {fn: cc}`` is
+auto-rewritten to ``parameter_map: {fn: CCTarget(cc)}`` at load time;
+the in-memory ``Setup.schema_version`` is bumped to 2 so the next save
+writes the new shape silently.
 """
 
 from __future__ import annotations
@@ -17,6 +22,12 @@ from pathlib import Path
 from typing import Any, cast
 
 from jtx.model.lfo import LFO, LFOApplication
+from jtx.model.parameter_target import (
+    CCTarget,
+    ParameterTarget,
+    parameter_target_from_dict,
+    parameter_target_to_dict,
+)
 from jtx.model.setup import Setup, VoiceSlot
 from jtx.model.song import (
     ChordProgression,
@@ -26,34 +37,58 @@ from jtx.model.song import (
     VoiceConfig,
     VoiceOverride,
 )
-from jtx.model.types import ClockMode, LFOShape, Role, VoiceType
+from jtx.model.types import SCHEMA_VERSION, ClockMode, LFOShape, Role, VoiceType
 from jtx.model.validate import ValidationError, validate_song
 
 # ---------------------------------------------------------------- setup
 
 
-def _voice_slot_from_dict(d: dict[str, Any]) -> VoiceSlot:
+def _parameter_map_from_dict(
+    d: dict[str, Any], *, schema_version: int
+) -> dict[str, ParameterTarget]:
+    """Parse ``parameter_map`` (v2) or migrate from ``cc_map`` (v1).
+
+    The two field names are mutually exclusive in practice; if both
+    appear, ``parameter_map`` wins (treat the file as v2 with a
+    leftover ``cc_map`` field).
+    """
+    if "parameter_map" in d:
+        raw = d.get("parameter_map") or {}
+        return {fn: parameter_target_from_dict(entry) for fn, entry in raw.items()}
+    if schema_version == 1 and "cc_map" in d:
+        raw_cc = d.get("cc_map") or {}
+        return {fn: CCTarget(cc=int(cc)) for fn, cc in raw_cc.items()}
+    return {}
+
+
+def _voice_slot_from_dict(d: dict[str, Any], *, schema_version: int) -> VoiceSlot:
     return VoiceSlot(
         name=d["name"],
-        type=cast(VoiceType, d["type"]),
-        default_role=cast(Role, d["default_role"]),
+        type=cast("VoiceType", d["type"]),
+        default_role=cast("Role", d["default_role"]),
         midi_channel=d["midi_channel"],
         midi_port=d.get("midi_port"),
         kit_map=dict(d.get("kit_map", {})),
-        cc_map={k: int(v) for k, v in d.get("cc_map", {}).items()},
+        parameter_map=_parameter_map_from_dict(d, schema_version=schema_version),
+        mpe_mode=bool(d.get("mpe_mode", False)),
+        mpe_channel_count=int(d.get("mpe_channel_count", 8)),
     )
 
 
 def setup_from_dict(d: dict[str, Any]) -> Setup:
+    file_schema_version = int(d.get("schema_version", SCHEMA_VERSION))
     setup = Setup(
         id=d["id"],
         name=d["name"],
         default_midi_port=d["default_midi_port"],
         daw_template_path=d.get("daw_template_path"),
-        voices=[_voice_slot_from_dict(v) for v in d.get("voices", [])],
-        clock_mode=cast(ClockMode, d.get("clock_mode", "internal_master")),
+        voices=[
+            _voice_slot_from_dict(v, schema_version=file_schema_version)
+            for v in d.get("voices", [])
+        ],
+        clock_mode=cast("ClockMode", d.get("clock_mode", "internal_master")),
         midi_clock_in_port=d.get("midi_clock_in_port"),
-        schema_version=d.get("schema_version", 1),
+        schema_version=SCHEMA_VERSION,  # post-migration the in-memory copy is v2
     )
     errors = setup.validate()
     if errors:
@@ -66,12 +101,47 @@ def load_setup(path: Path | str) -> Setup:
     return setup_from_dict(data)
 
 
+def _voice_slot_to_dict(slot: VoiceSlot) -> dict[str, Any]:
+    return {
+        "name": slot.name,
+        "type": slot.type,
+        "default_role": slot.default_role,
+        "midi_channel": slot.midi_channel,
+        "midi_port": slot.midi_port,
+        "kit_map": dict(slot.kit_map),
+        "parameter_map": {
+            fn: parameter_target_to_dict(target) for fn, target in slot.parameter_map.items()
+        },
+        "mpe_mode": slot.mpe_mode,
+        "mpe_channel_count": slot.mpe_channel_count,
+    }
+
+
+def setup_to_dict(setup: Setup) -> dict[str, Any]:
+    """Serialise a setup to its on-disk dict form.
+
+    Hand-rolled (rather than ``asdict``) because ``ParameterTarget``
+    is a discriminated sum type — ``asdict`` would lose the
+    ``"kind"`` tag.
+    """
+    return {
+        "id": setup.id,
+        "name": setup.name,
+        "default_midi_port": setup.default_midi_port,
+        "daw_template_path": setup.daw_template_path,
+        "voices": [_voice_slot_to_dict(v) for v in setup.voices],
+        "clock_mode": setup.clock_mode,
+        "midi_clock_in_port": setup.midi_clock_in_port,
+        "schema_version": setup.schema_version,
+    }
+
+
 def save_setup(setup: Setup, path: Path | str) -> None:
     errors = setup.validate()
     if errors:
         raise ValidationError(errors)
     Path(path).write_text(
-        json.dumps(asdict(setup), indent=2, sort_keys=False) + "\n",
+        json.dumps(setup_to_dict(setup), indent=2, sort_keys=False) + "\n",
         encoding="utf-8",
     )
 
@@ -129,7 +199,7 @@ def _lfo_application_from_dict(d: dict[str, Any]) -> LFOApplication:
 def _lfo_from_dict(d: dict[str, Any]) -> LFO:
     return LFO(
         name=d["name"],
-        shape=cast(LFOShape, d["shape"]),
+        shape=cast("LFOShape", d["shape"]),
         period_bars=d["period_bars"],
         phase=d.get("phase", 0.0),
         depth=d.get("depth", 1.0),
@@ -138,6 +208,9 @@ def _lfo_from_dict(d: dict[str, Any]) -> LFO:
 
 
 def song_from_dict(d: dict[str, Any]) -> Song:
+    # Song shape didn't change between v1 and v2 (only Setup did), so
+    # we silently bump the in-memory copy to current SCHEMA_VERSION.
+    # Save then re-writes with the current version.
     song = Song(
         title=d["title"],
         setup_ref=d["setup_ref"],
@@ -150,7 +223,7 @@ def song_from_dict(d: dict[str, Any]) -> Song:
         parts={name: _part_from_dict(p) for name, p in d.get("parts", {}).items()},
         arrangement=list(d.get("arrangement", [])),
         lfos=[_lfo_from_dict(lfo) for lfo in d.get("lfos", [])],
-        schema_version=d.get("schema_version", 1),
+        schema_version=SCHEMA_VERSION,
     )
     errors = validate_song(song)
     if errors:

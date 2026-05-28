@@ -160,24 +160,36 @@
       "bars": 8,
       "voice_overrides": {
         "kick": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "snare": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "chh": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "ride": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {
             "pulses": 0,
             "offset": 0
@@ -185,36 +197,54 @@
           "feel": {}
         },
         "stab": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "stab_echo": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "pad": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "evolution_start": 0.55,
             "evolution_end": 0.85
           }
         }
-      }
+      },
+      "loop": false,
+      "tempo": null,
+      "meter": null
     },
     "build": {
       "bars": 8,
       "voice_overrides": {
         "snare": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "chh": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "fade_in_at_bar": 0,
@@ -222,6 +252,9 @@
           }
         },
         "ride": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {
             "pulses": 0,
             "offset": 0
@@ -229,18 +262,27 @@
           "feel": {}
         },
         "stab": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "stab_echo": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "kick": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "evolution_start": 0.85,
@@ -248,18 +290,27 @@
           }
         },
         "pad": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "evolution_start": 0.85,
             "evolution_end": 0.95
           }
         }
-      }
+      },
+      "loop": false,
+      "tempo": null,
+      "meter": null
     },
     "drop": {
       "bars": 16,
       "voice_overrides": {
         "ride": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {
             "pulses": 1,
             "offset": 14
@@ -270,6 +321,9 @@
           }
         },
         "stab": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "fade_in_at_bar": 0,
@@ -277,36 +331,54 @@
           }
         },
         "pad": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "evolution_start": 0.95,
             "evolution_end": 1.0
           }
         }
-      }
+      },
+      "loop": false,
+      "tempo": null,
+      "meter": null
     },
     "break": {
       "bars": 8,
       "voice_overrides": {
         "kick": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "snare": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "chh": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "ride": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {
             "pulses": 0,
             "offset": 0
@@ -314,40 +386,61 @@
           "feel": {}
         },
         "stab_echo": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {}
         },
         "pad": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "evolution_start": 1.0,
             "evolution_end": 0.9
           }
         }
-      }
+      },
+      "loop": false,
+      "tempo": null,
+      "meter": null
     },
     "outro": {
       "bars": 8,
       "voice_overrides": {
         "kick": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "snare": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "chh": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "ride": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {
             "pulses": 0,
             "offset": 0
@@ -355,18 +448,27 @@
           "feel": {}
         },
         "stab": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "stab_echo": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "mute_prob": 1.0
           }
         },
         "sub": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "evolution_start": 1.0,
@@ -374,13 +476,19 @@
           }
         },
         "pad": {
+          "algorithm": null,
+          "key": null,
+          "meter": null,
           "pattern": {},
           "feel": {
             "evolution_start": 0.9,
             "evolution_end": 0.3
           }
         }
-      }
+      },
+      "loop": false,
+      "tempo": null,
+      "meter": null
     }
   },
   "arrangement": [
@@ -391,5 +499,5 @@
     "outro"
   ],
   "lfos": [],
-  "schema_version": 1
+  "schema_version": 2
 }

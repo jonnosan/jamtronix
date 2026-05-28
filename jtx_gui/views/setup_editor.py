@@ -41,17 +41,68 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from jtx.model import ClockMode, Setup, ValidationError, VoiceSlot
+from jtx.model import (
+    CCTarget,
+    ClockMode,
+    MPEPitchBendTarget,
+    MPEPressureTarget,
+    MPETimbreTarget,
+    ParameterTarget,
+    Setup,
+    ValidationError,
+    VoiceSlot,
+)
 from jtx.model.types import ROLES_BY_TYPE
 from jtx.persist import save_setup
 from jtx_gui import theme
-from jtx_gui.cc_functions import CC_FUNCTIONS, all_functions_used_by
+from jtx_gui.cc_functions import DEFAULT_TARGETS, functions_for_type
 
 AuditionFn = Callable[[VoiceSlot, str, int], None]
 """Callable that fires a CC audition. Args: voice, function name, cc number."""
 
+MPEAuditionFn = Callable[[VoiceSlot, str, str], None]
+"""Callable that fires an MPE-target audition.
+
+Args: voice, function name, kind (one of ``"mpe_pitch_bend"``,
+``"mpe_pressure"``, ``"mpe_timbre"``). Sends a NoteOn + ramp + NoteOff
+on the voice's first MPE channel so an MPE-aware instrument latches.
+"""
+
 NoteAuditionFn = Callable[[VoiceSlot, list[int]], None]
 """Callable that fires a brief MIDI note (or chord) audition on the voice."""
+
+# UI-visible kind keys for the parameter target combo.
+_KIND_LABELS: tuple[tuple[str, str], ...] = (
+    ("cc", "CC"),
+    ("mpe_pitch_bend", "MPE pitch bend"),
+    ("mpe_pressure", "MPE pressure"),
+    ("mpe_timbre", "MPE timbre (CC 74)"),
+)
+
+
+def _target_kind(target: ParameterTarget) -> str:
+    if isinstance(target, CCTarget):
+        return "cc"
+    if isinstance(target, MPEPitchBendTarget):
+        return "mpe_pitch_bend"
+    if isinstance(target, MPEPressureTarget):
+        return "mpe_pressure"
+    if isinstance(target, MPETimbreTarget):
+        return "mpe_timbre"
+    return "cc"  # pragma: no cover
+
+
+def _target_from_kind(kind: str, cc: int) -> ParameterTarget:
+    if kind == "cc":
+        return CCTarget(int(cc))
+    if kind == "mpe_pitch_bend":
+        return MPEPitchBendTarget()
+    if kind == "mpe_pressure":
+        return MPEPressureTarget()
+    if kind == "mpe_timbre":
+        return MPETimbreTarget()
+    raise ValueError(f"unknown parameter target kind: {kind!r}")
+
 
 _VOICE_TYPES: tuple[str, ...] = ("drum", "mono", "poly", "modulator", "follower")
 
@@ -83,6 +134,7 @@ class SetupEditor(QDialog):
         setup_path: Path | None,
         audition_fn: AuditionFn | None = None,
         note_audition_fn: NoteAuditionFn | None = None,
+        mpe_audition_fn: MPEAuditionFn | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -96,6 +148,7 @@ class SetupEditor(QDialog):
         self._setup_path = setup_path
         self._audition_fn = audition_fn or _default_audition
         self._note_audition_fn = note_audition_fn or _default_note_audition
+        self._mpe_audition_fn = mpe_audition_fn or _default_mpe_audition
         self.setWindowTitle(f"Jamtronix — Edit Setup ({setup.name})")
         self.resize(900, 660)
 
@@ -308,6 +361,7 @@ class SetupEditor(QDialog):
             slot=slot,
             audition_fn=self._audition_fn,
             note_audition_fn=self._note_audition_fn,
+            mpe_audition_fn=self._mpe_audition_fn,
             on_changed=self._refresh_voice_list,
         )
         # Insert above the trailing stretch (which is index 0 because we
@@ -428,6 +482,7 @@ class _VoiceSlotEditor(QFrame):
         slot: VoiceSlot,
         audition_fn: AuditionFn,
         note_audition_fn: NoteAuditionFn,
+        mpe_audition_fn: MPEAuditionFn,
         on_changed: Callable[[], None],
     ) -> None:
         super().__init__()
@@ -435,6 +490,7 @@ class _VoiceSlotEditor(QFrame):
         self._slot = slot
         self._audition_fn = audition_fn
         self._note_audition_fn = note_audition_fn
+        self._mpe_audition_fn = mpe_audition_fn
         self._on_changed = on_changed
 
         title = QLabel(f"VOICE  ·  {slot.name.upper()}")
@@ -465,10 +521,35 @@ class _VoiceSlotEditor(QFrame):
         self._port_edit.setPlaceholderText("(use setup default)")
         self._port_edit.editingFinished.connect(self._on_port_changed)
 
+        # MPE mode toggle + channel-count spinner.
+        self._mpe_mode_chk = QCheckBox("MPE mode")
+        self._mpe_mode_chk.setChecked(slot.mpe_mode)
+        self._mpe_mode_chk.setToolTip(
+            "When on, the voice spans a block of MIDI channels starting at "
+            "the voice's MIDI channel; NoteOns round-robin through the block "
+            "so per-note pitch bend lands on the right note."
+        )
+        self._mpe_mode_chk.toggled.connect(self._on_mpe_mode_changed)
+        self._mpe_count_spin = QSpinBox()
+        self._mpe_count_spin.setRange(1, 16)
+        self._mpe_count_spin.setValue(slot.mpe_channel_count)
+        self._mpe_count_spin.setEnabled(slot.mpe_mode)
+        self._mpe_count_spin.valueChanged.connect(self._on_mpe_count_changed)
+        mpe_row = QHBoxLayout()
+        mpe_row.setContentsMargins(0, 0, 0, 0)
+        mpe_row.setSpacing(8)
+        mpe_row.addWidget(self._mpe_mode_chk)
+        mpe_row.addWidget(QLabel("MPE channels"))
+        mpe_row.addWidget(self._mpe_count_spin)
+        mpe_row.addStretch(1)
+        mpe_wrap = QWidget()
+        mpe_wrap.setLayout(mpe_row)
+
         form.addRow("Type", self._type_combo)
         form.addRow("Role", self._role_combo)
         form.addRow("MIDI channel", self._channel_spin)
         form.addRow("Port override", self._port_edit)
+        form.addRow("MPE", mpe_wrap)
 
         # Voice-level note audition (mono / poly). Drum voices use the
         # per-row buttons in the kit map instead.
@@ -485,8 +566,12 @@ class _VoiceSlotEditor(QFrame):
         self._kit_panel = _KitMapEditor(slot=slot, note_audition_fn=note_audition_fn)
         self._kit_panel.setVisible(slot.type == "drum")
 
-        # CC-mapping section — shows all known functions across algorithms.
-        self._cc_section = _CCMapSection(slot=slot, audition_fn=audition_fn)
+        # Parameter-map section — function rows from FUNCTIONS_BY_VOICE_TYPE.
+        self._param_section = _ParameterMapSection(
+            slot=slot,
+            audition_fn=audition_fn,
+            mpe_audition_fn=mpe_audition_fn,
+        )
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 10, 12, 12)
@@ -495,7 +580,7 @@ class _VoiceSlotEditor(QFrame):
         layout.addLayout(form)
         layout.addWidget(self._note_audition_btn, 0, Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self._kit_panel)
-        layout.addWidget(self._cc_section)
+        layout.addWidget(self._param_section)
 
     def _on_note_audition(self) -> None:
         notes = _AUDITION_PITCHES.get(self._slot.default_role, [60])
@@ -529,6 +614,16 @@ class _VoiceSlotEditor(QFrame):
             self._role_combo.setCurrentText(roles[0])
         self._kit_panel.setVisible(new_type == "drum")
         self._note_audition_btn.setVisible(new_type in {"mono", "poly"})
+        self._param_section.refresh_rows()
+        self._on_changed()
+
+    def _on_mpe_mode_changed(self, checked: bool) -> None:
+        self._slot.mpe_mode = bool(checked)
+        self._mpe_count_spin.setEnabled(checked)
+        self._on_changed()
+
+    def _on_mpe_count_changed(self, value: int) -> None:
+        self._slot.mpe_channel_count = int(value)
         self._on_changed()
 
     def _refresh_role_combo(self) -> None:
@@ -661,49 +756,100 @@ class _KitMapEditor(QFrame):
 
 
 # --------------------------------------------------------------------------
-#                          CC-mapping section
+#                       parameter-mapping section
 # --------------------------------------------------------------------------
 
 
-class _CCMapSection(QFrame):
-    """Function → CC number table with per-row override + audition."""
+class _ParameterMapSection(QFrame):
+    """Function → :class:`ParameterTarget` table with per-row override.
 
-    def __init__(self, *, slot: VoiceSlot, audition_fn: AuditionFn) -> None:
+    For each function in the v1 vocabulary appropriate to the voice
+    type, surfaces:
+
+    * a kind combo (``CC`` / ``MPE pitch bend`` / ``MPE pressure`` /
+      ``MPE timbre``) — picks the target type;
+    * a CC# spinner (visible only when kind == CC);
+    * an OVERRIDE checkbox toggling whether the row writes to
+      ``slot.parameter_map`` (otherwise the slot inherits the
+      algorithm's ``DEFAULT_PARAM_MAP``);
+    * an AUDITION button that fires the right kind of MIDI for the
+      selected target type.
+
+    Functions present in the voice's ``parameter_map`` but absent from
+    the v1 vocab (``detune``, ``glide_on``) render as read-only
+    "custom" rows so users can see them without surprise.
+    """
+
+    def __init__(
+        self,
+        *,
+        slot: VoiceSlot,
+        audition_fn: AuditionFn,
+        mpe_audition_fn: MPEAuditionFn,
+    ) -> None:
         super().__init__()
         self.setObjectName("Panel")
         self._slot = slot
         self._audition_fn = audition_fn
-        self._spinners: dict[str, QSpinBox] = {}
+        self._mpe_audition_fn = mpe_audition_fn
+
+        self._kind_combos: dict[str, QComboBox] = {}
+        self._cc_spinners: dict[str, QSpinBox] = {}
         self._overrides: dict[str, QCheckBox] = {}
 
-        title = QLabel("CC MAPPING")
-        title.setObjectName("FieldLabel")
-
-        defaults = all_functions_used_by(*CC_FUNCTIONS.keys())
-        body = QVBoxLayout()
-        body.setContentsMargins(0, 0, 0, 0)
-        body.setSpacing(4)
-        for function, default_cc in sorted(defaults.items()):
-            body.addLayout(self._make_row(function, default_cc))
-        if not defaults:
-            note = QLabel("(no mappable CC functions yet)")
-            note.setStyleSheet(f"color: {theme.INK_DIM.name()};")
-            body.addWidget(note)
+        self._title = QLabel("PARAMETER MAP")
+        self._title.setObjectName("FieldLabel")
+        self._body = QVBoxLayout()
+        self._body.setContentsMargins(0, 0, 0, 0)
+        self._body.setSpacing(4)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 8, 10, 10)
         layout.setSpacing(6)
-        layout.addWidget(title)
-        layout.addLayout(body)
+        layout.addWidget(self._title)
+        layout.addLayout(self._body)
 
-    def _make_row(self, function: str, default_cc: int) -> QHBoxLayout:
-        current = self._slot.cc_map.get(function)
-        if current is not None:
-            is_override = True
-            value = int(current)
-        else:
-            is_override = False
-            value = default_cc
+        self.refresh_rows()
+
+    def refresh_rows(self) -> None:
+        """Rebuild the row list. Called when the voice type changes."""
+        # Clear existing rows.
+        while self._body.count():
+            item = self._body.takeAt(0)
+            if item is None:
+                continue
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+            else:
+                child_layout = item.layout()
+                if child_layout is not None:
+                    _drain_layout(child_layout)
+        self._kind_combos.clear()
+        self._cc_spinners.clear()
+        self._overrides.clear()
+
+        functions = functions_for_type(self._slot.type)
+        # Show v1 vocab rows first, then any extra ("custom") functions
+        # present in the parameter_map but not in the vocab.
+        extras = tuple(fn for fn in self._slot.parameter_map if fn not in functions)
+
+        if not functions and not extras:
+            note = QLabel("(no mappable parameters for this voice type)")
+            note.setStyleSheet(f"color: {theme.INK_DIM.name()};")
+            self._body.addWidget(note)
+            return
+
+        for function in functions:
+            self._body.addLayout(self._make_param_row(function))
+        for function in extras:
+            self._body.addLayout(self._make_custom_row(function))
+
+    def _make_param_row(self, function: str) -> QHBoxLayout:
+        override_target = self._slot.parameter_map.get(function)
+        default_target = DEFAULT_TARGETS.get(function, CCTarget(0))
+        is_override = override_target is not None
+        target = override_target if override_target is not None else default_target
 
         override_chk = QCheckBox("OVERRIDE")
         override_chk.setChecked(is_override)
@@ -714,56 +860,137 @@ class _CCMapSection(QFrame):
         self._overrides[function] = override_chk
 
         func_label = QLabel(function.replace("_", " ").upper())
-        func_label.setMinimumWidth(160)
-        default_label = QLabel(f"DEFAULT  CC {default_cc}")
-        default_label.setObjectName("FieldLabel")
+        func_label.setMinimumWidth(120)
 
-        spinner = QSpinBox()
-        spinner.setRange(0, 127)
-        spinner.setValue(value)
-        spinner.setPrefix("CC ")
-        spinner.setEnabled(is_override)
-        self._spinners[function] = spinner
+        kind_combo = QComboBox()
+        for kind, label in _KIND_LABELS:
+            kind_combo.addItem(label, kind)
+        current_kind = _target_kind(target)
+        for index in range(kind_combo.count()):
+            if kind_combo.itemData(index) == current_kind:
+                kind_combo.setCurrentIndex(index)
+                break
+        kind_combo.setEnabled(is_override)
+        self._kind_combos[function] = kind_combo
 
-        override_chk.toggled.connect(spinner.setEnabled)
-        override_chk.toggled.connect(lambda _v, fn=function: self._sync(fn))
-        spinner.valueChanged.connect(lambda _v, fn=function: self._sync(fn))
+        cc_spinner = QSpinBox()
+        cc_spinner.setRange(0, 127)
+        cc_spinner.setPrefix("CC ")
+        cc_value = target.cc if isinstance(target, CCTarget) else _default_cc_for(function)
+        cc_spinner.setValue(int(cc_value))
+        cc_spinner.setEnabled(is_override and current_kind == "cc")
+        cc_spinner.setVisible(current_kind == "cc")
+        self._cc_spinners[function] = cc_spinner
 
         audition_btn = QPushButton("AUDITION")
         audition_btn.setToolTip(
-            "Send CC 0 → 64 → 127 → 64 on this voice's port + channel "
-            "so Ableton MIDI Learn can latch it."
+            "Send a probe sequence appropriate for the target kind so the "
+            "receiving instrument latches (CC sweep for CC; NoteOn + ramp + "
+            "NoteOff for MPE kinds)."
         )
+
+        def on_override(checked: bool, fn: str = function) -> None:
+            self._kind_combos[fn].setEnabled(checked)
+            kind = self._current_kind(fn)
+            self._cc_spinners[fn].setEnabled(checked and kind == "cc")
+            self._sync_param(fn)
+
+        def on_kind_changed(_idx: int, fn: str = function) -> None:
+            kind = self._current_kind(fn)
+            self._cc_spinners[fn].setVisible(kind == "cc")
+            self._cc_spinners[fn].setEnabled(self._overrides[fn].isChecked() and kind == "cc")
+            self._sync_param(fn)
+
+        def on_cc_changed(_v: int, fn: str = function) -> None:
+            self._sync_param(fn)
+
+        override_chk.toggled.connect(on_override)
+        kind_combo.currentIndexChanged.connect(on_kind_changed)
+        cc_spinner.valueChanged.connect(on_cc_changed)
         audition_btn.clicked.connect(
-            lambda _checked=False, fn=function: self._on_audition(fn),
+            lambda _checked=False, fn=function: self._on_audition_param(fn),
         )
 
         row = QHBoxLayout()
         row.setSpacing(8)
         row.addWidget(override_chk)
         row.addWidget(func_label)
-        row.addWidget(default_label)
-        row.addWidget(spinner)
+        row.addWidget(kind_combo)
+        row.addWidget(cc_spinner)
         row.addWidget(audition_btn)
         row.addStretch(1)
         return row
 
-    def _sync(self, function: str) -> None:
-        if self._overrides[function].isChecked():
-            self._slot.cc_map[function] = int(self._spinners[function].value())
-        else:
-            self._slot.cc_map.pop(function, None)
+    def _make_custom_row(self, function: str) -> QHBoxLayout:
+        target = self._slot.parameter_map[function]
+        kind = _target_kind(target)
+        label = next((lbl for k, lbl in _KIND_LABELS if k == kind), kind)
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        marker = QLabel("CUSTOM")
+        marker.setStyleSheet(f"color: {theme.INK_DIM.name()};")
+        func_label = QLabel(function.replace("_", " ").upper())
+        func_label.setMinimumWidth(120)
+        info = QLabel(label)
+        if isinstance(target, CCTarget):
+            info = QLabel(f"{label}  ·  CC {target.cc}")
+        row.addWidget(marker)
+        row.addWidget(func_label)
+        row.addWidget(info)
+        row.addStretch(1)
+        return row
 
-    def _on_audition(self, function: str) -> None:
-        cc = int(self._spinners[function].value())
+    def _current_kind(self, function: str) -> str:
+        combo = self._kind_combos[function]
+        data = combo.currentData()
+        return str(data) if data is not None else "cc"
+
+    def _sync_param(self, function: str) -> None:
+        if not self._overrides[function].isChecked():
+            self._slot.parameter_map.pop(function, None)
+            return
+        kind = self._current_kind(function)
+        cc = int(self._cc_spinners[function].value())
+        self._slot.parameter_map[function] = _target_from_kind(kind, cc)
+
+    def _on_audition_param(self, function: str) -> None:
+        kind = self._current_kind(function)
         try:
-            self._audition_fn(self._slot, function, cc)
+            if kind == "cc":
+                cc = int(self._cc_spinners[function].value())
+                self._audition_fn(self._slot, function, cc)
+            else:
+                self._mpe_audition_fn(self._slot, function, kind)
         except Exception as exc:  # noqa: BLE001 — surface verbatim
             QMessageBox.critical(
                 self,
                 "Audition failed",
-                f"Couldn't audition CC {cc}: {exc}",
+                f"Couldn't audition {function!r}: {exc}",
             )
+
+
+def _default_cc_for(function: str) -> int:
+    target = DEFAULT_TARGETS.get(function)
+    return target.cc if isinstance(target, CCTarget) else 0
+
+
+def _drain_layout(layout: object) -> None:
+    """Recursively delete all children of a layout."""
+    from PySide6.QtWidgets import QLayout
+
+    if not isinstance(layout, QLayout):  # pragma: no cover — defensive
+        return
+    while layout.count():
+        item = layout.takeAt(0)
+        if item is None:
+            continue
+        widget = item.widget()
+        if widget is not None:
+            widget.deleteLater()
+        else:
+            child = item.layout()
+            if child is not None:
+                _drain_layout(child)
 
 
 # --------------------------------------------------------------------------
@@ -813,5 +1040,53 @@ def _default_note_audition(voice: VoiceSlot, notes: list[int]) -> None:
         for note in notes:
             note = max(0, min(127, int(note)))
             out.send(mido.Message("note_off", channel=channel, note=note, velocity=0))
+    finally:
+        out.close()
+
+
+def _default_mpe_audition(voice: VoiceSlot, _function: str, kind: str) -> None:
+    """Probe an MPE target so the receiving instrument latches.
+
+    Sends NoteOn + a 4-step ramp of the appropriate expression message
+    + NoteOff on the voice's first MPE channel. The receiving track
+    (set to MPE in) will pick up on the per-note expression and learn
+    the mapping.
+    """
+    import time
+
+    import mido
+
+    if not voice.mpe_mode:
+        # Caller wired this up for an MPE kind on a non-MPE voice;
+        # fall through to the voice's main channel.
+        channel = voice.midi_channel - 1
+    else:
+        channel = voice.midi_channel - 1  # first channel of the MPE block
+    port_name = voice.midi_port
+    out = mido.open_output(port_name) if port_name else mido.open_output()
+    audition_note = 69  # A4 — neutral mid-register probe
+    try:
+        out.send(mido.Message("note_on", channel=channel, note=audition_note, velocity=100))
+        if kind == "mpe_pitch_bend":
+            for pb in (-4096, 0, 4096, 0):
+                out.send(mido.Message("pitchwheel", channel=channel, pitch=pb))
+                time.sleep(0.06)
+        elif kind == "mpe_pressure":
+            for value in (0, 64, 127, 64):
+                out.send(mido.Message("aftertouch", channel=channel, value=value))
+                time.sleep(0.06)
+        elif kind == "mpe_timbre":
+            for value in (0, 64, 127, 64):
+                out.send(
+                    mido.Message(
+                        "control_change",
+                        channel=channel,
+                        control=74,
+                        value=value,
+                    )
+                )
+                time.sleep(0.06)
+        time.sleep(0.08)
+        out.send(mido.Message("note_off", channel=channel, note=audition_note, velocity=0))
     finally:
         out.close()
