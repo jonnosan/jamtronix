@@ -68,26 +68,28 @@ voice uses MPE so per-note pitch bends land on the right note.
      leads.
    - **Sampler** if you want sample-based.
    - **Meld** (modern wavetable, MPE-native).
-6. Drop **`JtxParameterRouter.amxd`** on this track.
-7. Set its **Voice name** to `lead`.
-8. **Slider mappings**:
-   - `Cutoff` → instrument's filter cutoff. **But** —
-     `setups/psytrance.jtx-setup` maps `cutoff` to
-     `MPETimbreTarget` (CC 74), so per-note timbre arrives over
-     MIDI directly. The M4L device's Cutoff slider therefore
-     stays *unmapped* (or maps to a global fallback if you want
-     redundancy).
-   - `Resonance` → filter resonance. This DOES route through OSC
-     by default (mapped to `CCTarget(71)` via the algorithm
-     default).
-   - `Glide` → unmapped (lead voice doesn't currently emit glide).
-   - `Bend` → unmapped on the device (per-note bend arrives
-     natively over MIDI on the MPE channel, no OSC needed).
+6. **Drag `JtxCCRack` from your User Library** onto this track. The
+   rack's eight Macros come up pre-wired to CCs 74, 71, 5, 65, 1,
+   102, 103, 104.
+7. Drag your chosen instrument inside the rack.
+8. **Macro mappings** (Live's Map mode):
+   - Macro 1 (Cutoff) → instrument's filter cutoff. **Heads up** —
+     `setups/psytrance.jtx-setup` maps `cutoff` to `MPETimbreTarget`,
+     so per-note CC 74 arrives over MIDI directly on each note's
+     MPE channel. The rack's Macro 1 ends up receiving track-level
+     CC 74 only if the channel routing sends it there too; usually
+     for an MPE lead you'd map Macro 1 to a *global* filter cutoff
+     fallback (or leave unmapped) and rely on MPE's per-note timbre
+     for the active modulation.
+   - Macro 2 (Resonance) → filter resonance.
+   - Macro 3-4 → optional.
 
 ### 3. Other tracks
 
-Standard pattern (see [`acid.md`](./acid.md#2-per-track-wiring) for
-the full per-track wiring procedure).
+Standard pattern: drag `JtxCCRack` onto each instrument track,
+drag instrument inside, Map Macros to instrument params. See
+[`acid.md`](./acid.md#2-per-track-wiring) for the full per-track
+wiring procedure.
 
 #### `bass` voice — psy bass
 
@@ -99,12 +101,12 @@ the full per-track wiring procedure).
     release (16th-note bass needs short notes to leave gaps for
     the kick).
   - Glide off for clean transitions.
-- **Device slider mappings**:
-  - `Cutoff` → Drift filter cutoff (heavy LFO from jtx side
+- **Macro mappings** (Live's Map mode):
+  - Macro 1 (Cutoff) → Drift filter cutoff (heavy LFO from jtx side
     drives this — the psy filter wobble).
-  - `Resonance` → Drift filter resonance.
-  - `Glide` → Drift glide (rarely used in psy bass but available).
-  - `Bend` → unmapped.
+  - Macro 2 (Resonance) → Drift filter resonance.
+  - Macro 3 (Glide) → Drift glide (rarely used in psy bass but
+    available).
 
 #### `pluck` voice
 
@@ -114,10 +116,10 @@ the full per-track wiring procedure).
   - Algorithm 5 (one carrier + one modulator).
   - Modulator decay short (~100ms).
   - Amp envelope short.
-- **Device slider mappings**:
-  - `Cutoff` → Operator's global filter cutoff (added via the
+- **Macro mappings**:
+  - Macro 1 → Operator's global filter cutoff (added via the
     filter section at the bottom).
-  - `Resonance` → Operator's filter resonance.
+  - Macro 2 → Operator's filter resonance.
 
 #### `riser` voice
 
@@ -128,11 +130,12 @@ the full per-track wiring procedure).
     jtx's `noise_riser` algorithm via CC74 + pitch-bend ramp.
   - Amp envelope: slow attack (the riser swells across multiple
     bars).
-- **Device slider mappings**:
-  - `Cutoff` → Wavetable filter cutoff (the riser's CC74 ramp
-    sweeps this).
-  - `Bend` → leave native MIDI pitch-bend (the riser's pitch ramp
-    arrives directly).
+- **Macro mappings**:
+  - Macro 1 (Cutoff) → Wavetable filter cutoff (jtx's CC74 ramp
+    sweeps this via the rack).
+  - Pitch wheel passes through directly to the instrument — no
+    Macro needed for bend (the riser's pitch ramp lands on the
+    track's MIDI input as native pitch wheel messages).
 
 #### `filter` voice (modulator)
 

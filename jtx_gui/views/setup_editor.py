@@ -73,8 +73,8 @@ OscAuditionFn = Callable[[Setup, VoiceSlot, str, str], None]
 """Callable that fires an OSC-target audition.
 
 Args: setup (for host/port), voice, function name, OSC address. Sends
-a 0.0 → 0.5 → 1.0 → 0.5 float sweep so the M4L receiver device's
-\"Map\" gesture can latch onto the target.
+a 0.0 → 0.5 → 1.0 → 0.5 float sweep so the receiving OSC consumer
+can pick up the address and confirm wire-up.
 """
 
 NoteAuditionFn = Callable[[VoiceSlot, list[int]], None]
@@ -622,9 +622,7 @@ class _VoiceSlotEditor(QFrame):
         # editor) or drum voices (single MIDI note spinbox).
         self._kit_panel = _KitMapEditor(slot=slot, note_audition_fn=note_audition_fn)
         self._kit_panel.setVisible(slot.type == "drum_kit")
-        self._drum_note_panel = _DrumNoteEditor(
-            slot=slot, note_audition_fn=note_audition_fn
-        )
+        self._drum_note_panel = _DrumNoteEditor(slot=slot, note_audition_fn=note_audition_fn)
         self._drum_note_panel.setVisible(slot.type == "drum")
 
         # Parameter-map section — function rows from FUNCTIONS_BY_VOICE_TYPE.
@@ -870,9 +868,7 @@ class _KitMapEditor(QFrame):
                 )
                 self._note_audition_fn(temp_slot, [int(note_spin.value())])
             except Exception as exc:  # noqa: BLE001
-                QMessageBox.critical(
-                    self, "Audition failed", f"Couldn't audition piece: {exc}"
-                )
+                QMessageBox.critical(self, "Audition failed", f"Couldn't audition piece: {exc}")
 
         audition_btn.clicked.connect(on_audition)
 
@@ -1284,10 +1280,9 @@ def _default_mpe_audition(voice: VoiceSlot, _function: str, kind: str) -> None:
 def _default_osc_audition(setup: Setup, _voice: VoiceSlot, _function: str, address: str) -> None:
     """Send 0.0 → 0.5 → 1.0 → 0.5 float sweep to the configured OSC dest.
 
-    The M4L receiver device listens on ``setup.osc_host:osc_port`` for
-    ``/jtx/<voice>/<function>`` float messages; the sweep makes the
-    target slider visibly move so the user can latch a Live \"Map\"
-    gesture onto it.
+    The user's OSC consumer should listen on ``setup.osc_host:osc_port``;
+    the sweep arrives as ``/jtx/<voice>/<function>`` float messages so
+    the receiver can latch on or be visually confirmed.
     """
     import time
 
