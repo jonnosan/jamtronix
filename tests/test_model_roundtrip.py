@@ -177,6 +177,30 @@ def test_load_setup_ableton_mpe_validates() -> None:
     assert setup.voice("root_ref") is not None
 
 
+def test_load_setup_deep_techno_validates() -> None:
+    """The bundled deep_techno setup loads cleanly with no MPE collisions."""
+    setup = load_setup("setups/deep_techno.jtx-setup")
+    assert setup.voice("sub") is not None
+    assert setup.voice("pad") is not None
+    # No voice on ch 1 (reserved for future MPE master if user enables it).
+    assert all(v.midi_channel != 1 for v in setup.voices)
+    # Utility reference channels are preserved across style setups.
+    assert setup.voice("chord_ref") is not None
+    assert setup.voice("root_ref") is not None
+
+
+def test_load_setup_psytrance_validates() -> None:
+    """The bundled psytrance setup loads cleanly with MPE lead."""
+    setup = load_setup("setups/psytrance.jtx-setup")
+    lead = setup.voice("lead")
+    assert lead is not None
+    assert lead.mpe_mode is True
+    assert lead.mpe_channel_count == 6
+    # MPE block ch 2-7; bass / pluck / riser live outside (12-14).
+    assert setup.voice("bass").midi_channel == 12  # type: ignore[union-attr]
+    assert setup.voice("riser") is not None
+
+
 def test_load_setup_ableton_osc_validates() -> None:
     """The bundled ableton-osc setup loads cleanly and exposes OSC + MPE coexistence."""
     from jtx.model import MPEPitchBendTarget, OscTarget

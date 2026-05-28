@@ -5,9 +5,14 @@ abstraction (cutoff / resonance / glide / bend per voice) survives
 swapping instrument patches without re-doing MIDI Learn every time.
 
 This is the **cross-style fundamentals** doc. For per-style recipes
-(acid / deep techno / psytrance — which instrument to pick, which
-patch to load, what to map each slider to) see the per-style docs
-under `docs/templates/` once they land (#105).
+(which instrument to pick per track, what to map each slider to)
+see:
+
+* [`templates/acid.md`](./templates/acid.md) — acid house
+* [`templates/deep_techno.md`](./templates/deep_techno.md) — deep techno
+* [`templates/psytrance.md`](./templates/psytrance.md) — psytrance + MPE lead
+
+Pick a style after you've worked through the fundamentals below.
 
 ## The pieces
 
