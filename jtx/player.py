@@ -103,16 +103,9 @@ def instantiate_algorithm(algorithm_name: str, voice_slot: VoiceSlot) -> Algorit
     if algorithm_name == "drum_kit":
         return DrumKit(kit_map=dict(voice_slot.kit_map))
     if algorithm_name == "drum_pattern":
-        return DrumPattern(
-            piece=voice_slot.name,
-            midi_channel=ch,
-            midi_note=voice_slot.note,
-        )
+        return DrumPattern(piece=voice_slot.name)
     if algorithm_name == "drum_one_shot":
-        return DrumOneShot(
-            midi_channel=ch,
-            midi_note=voice_slot.note,
-        )
+        return DrumOneShot()
     if algorithm_name == "acid_bass":
         return AcidBass(midi_channel=ch)
     if algorithm_name == "sub_drone":
