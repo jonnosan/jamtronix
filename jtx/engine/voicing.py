@@ -175,6 +175,10 @@ def _param_to_midi(param: Param, slot: VoiceSlot) -> Event | None:
 
     * Bend-style functions emit a :class:`PitchBend` (the router will
       re-route to CC or OSC if the slot's parameter_map says so).
+    * ``cc<N>``-named params emit a :class:`ControlChange` with the
+      embedded CC number — the convention modulator algorithms
+      (``cc_lfo`` / ``cc_envelope`` / ``step_cc``) use to ride a
+      user-chosen controller.
     * Everything else emits a :class:`ControlChange` with placeholder
       ``cc=0`` (the router replaces ``cc`` based on the target).
     """
@@ -190,13 +194,26 @@ def _param_to_midi(param: Param, slot: VoiceSlot) -> Event | None:
             function=param.name,
         )
     cc_value = max(0, min(127, int(round(param.value * 127))))
+    cc_num = _extract_cc_number(param.name)
     return ControlChange(
         tick=param.tick,
         channel=slot.midi_channel,
-        cc=0,
+        cc=cc_num if cc_num is not None else 0,
         value=cc_value,
         function=param.name,
     )
+
+
+def _extract_cc_number(name: str) -> int | None:
+    """Return the embedded CC number for a ``cc<N>`` Param name, else None."""
+    if name.startswith("cc") and len(name) > 2:
+        try:
+            n = int(name[2:])
+        except ValueError:
+            return None
+        if 0 <= n <= 127:
+            return n
+    return None
 
 
 def _polyaftertouch_to_midi(pa: PolyAftertouch, slot: VoiceSlot) -> Event:

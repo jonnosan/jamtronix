@@ -22,33 +22,33 @@ from typing import ClassVar
 from jtx.algorithms._steps import step_ticks, steps_per_bar
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
-from jtx.engine.events import ControlChange, Event
+from jtx.model.events import AbstractEvent, Param
 
 
 class CCLFO(Algorithm):
     """Free-running CC LFO on one CC number.
 
-    Emits at a fixed tick rate so the receiving synth gets a smooth
-    sweep. Phase is anchored to ``ctx.bar_index`` so the LFO is
-    continuous across bars.
+    Schema v3: MIDI-naive. Emits ``Param(name="cc<N>", value=v/127)``
+    events. The voicing stage uses the embedded CC number to emit a
+    :class:`ControlChange` on the slot's channel.
 
     Knobs:
     * ``cc`` (74) — controller number.
     * ``shape`` — ``sine`` (default) / ``tri`` / ``saw`` / ``square``
       / ``random``.
-    * ``period_bars`` (4.0) — full cycle length in bars; floats OK.
+    * ``period_bars`` (4.0) — full cycle length in bars.
     * ``phase`` (0.0) — starting phase in ``[0, 1)``.
     * ``depth`` (1.0) — 0..1, output amplitude scale.
     * ``offset`` (0.5) — DC offset of the centre point (0..1).
-    * ``samples_per_bar`` (16) — how many CC events per bar.
+    * ``samples_per_bar`` (16) — how many Param events per bar.
     """
 
     name: ClassVar[str] = "cc_lfo"
 
-    def __init__(self, *, midi_channel: int) -> None:
-        self.midi_channel = midi_channel
+    def __init__(self) -> None:
+        pass
 
-    def generate_bar(self, ctx: BarContext) -> list[Event]:
+    def generate_bar(self, ctx: BarContext) -> list[AbstractEvent]:
         knobs = ctx.pattern_knobs
         rng = ctx.rng
 
@@ -64,20 +64,17 @@ class CCLFO(Algorithm):
             raise ValueError("cc_lfo: period_bars must be > 0")
 
         sample_ticks = max(1, ctx.ticks_per_bar // samples)
-        events: list[Event] = []
+        events: list[AbstractEvent] = []
+        function_name = f"cc{cc}"
 
         for i in range(samples):
             tick = i * sample_ticks
-            # Absolute phase: bar_index + tick-within-bar fraction.
             within_bar = tick / ctx.ticks_per_bar
             absolute_phase = (ctx.bar_index + within_bar) / period_bars + phase
             absolute_phase -= math.floor(absolute_phase)
             raw = _wave_sample(shape, absolute_phase, rng)
-            # Map raw [0..1] to [offset - depth/2, offset + depth/2],
-            # clamped to [0, 1] then to MIDI 0..127.
-            value_unit = offset + (raw - 0.5) * depth
-            value = int(round(max(0.0, min(1.0, value_unit)) * 127))
-            events.append(ControlChange(tick=tick, channel=self.midi_channel, cc=cc, value=value))
+            value_unit = max(0.0, min(1.0, offset + (raw - 0.5) * depth))
+            events.append(Param(name=function_name, value=value_unit, tick=tick))
         return events
 
 
@@ -102,31 +99,14 @@ def _wave_sample(shape: str, phase: float, rng: object) -> float:
 
 
 class CCEnvelope(Algorithm):
-    """Triggered envelope on a CC.
-
-    Linear A-D-S-R shape retriggered on an even distribution of
-    ``pulses`` + ``offset`` across the 16-step bar. The envelope
-    ramps from rest up to a peak (``peak_value``) over
-    ``attack_ticks``, decays to ``sustain_value`` over
-    ``decay_ticks``, holds, then releases to ``rest_value`` over
-    ``release_ticks``.
-
-    Knobs:
-    * ``cc`` (74).
-    * ``pulses`` (4) + ``offset`` (0) — euclid trigger distribution.
-    * ``attack_ticks`` (40), ``decay_ticks`` (120),
-      ``release_ticks`` (240).
-    * ``peak_value`` (120), ``sustain_value`` (90), ``rest_value`` (40).
-    * ``samples`` (8) — number of intermediate CC events per envelope
-      segment (smoother sweep ↔ more MIDI traffic).
-    """
+    """Triggered envelope on a CC. MIDI-naive — emits Param("cc<N>")."""
 
     name: ClassVar[str] = "cc_envelope"
 
-    def __init__(self, *, midi_channel: int) -> None:
-        self.midi_channel = midi_channel
+    def __init__(self) -> None:
+        pass
 
-    def generate_bar(self, ctx: BarContext) -> list[Event]:
+    def generate_bar(self, ctx: BarContext) -> list[AbstractEvent]:
         from jtx.algorithms._euclid import euclid
 
         knobs = ctx.pattern_knobs
@@ -145,38 +125,35 @@ class CCEnvelope(Algorithm):
 
         s = step_ticks(ctx.ppq)
         total_steps = steps_per_bar(ctx.ticks_per_bar, ctx.ppq)
-        events: list[Event] = []
+        events: list[AbstractEvent] = []
+        function_name = f"cc{cc}"
 
         pattern = euclid(pulses, total_steps, offset)
         for step_idx, fires in enumerate(pattern):
             if not fires:
                 continue
             start = step_idx * s
-            # Attack: rest → peak.
-            events.extend(self._ramp(cc, start, attack, rest, peak, samples))
-            # Decay: peak → sustain.
-            events.extend(self._ramp(cc, start + attack, decay, peak, sustain, samples))
-            # Release: sustain → rest, starting at release-ticks before next trigger
-            # (or end-of-segment if no next trigger).
+            events.extend(_ramp(function_name, start, attack, rest, peak, samples))
+            events.extend(_ramp(function_name, start + attack, decay, peak, sustain, samples))
             release_start = start + attack + decay
-            events.extend(self._ramp(cc, release_start, release, sustain, rest, samples))
+            events.extend(_ramp(function_name, release_start, release, sustain, rest, samples))
 
         return events
 
-    def _ramp(
-        self,
-        cc: int,
-        start: int,
-        duration: int,
-        from_val: int,
-        to_val: int,
-        samples: int,
-    ) -> list[Event]:
-        events: list[Event] = []
-        for i in range(samples):
-            frac = i / max(1, samples - 1)
-            value = int(round(from_val + (to_val - from_val) * frac))
-            value = max(0, min(127, value))
-            tick = start + int(round(duration * frac))
-            events.append(ControlChange(tick=tick, channel=self.midi_channel, cc=cc, value=value))
-        return events
+
+def _ramp(
+    function_name: str,
+    start: int,
+    duration: int,
+    from_val: int,
+    to_val: int,
+    samples: int,
+) -> list[AbstractEvent]:
+    events: list[AbstractEvent] = []
+    for i in range(samples):
+        frac = i / max(1, samples - 1)
+        value = int(round(from_val + (to_val - from_val) * frac))
+        value = max(0, min(127, value))
+        tick = start + int(round(duration * frac))
+        events.append(Param(name=function_name, value=value / 127.0, tick=tick))
+    return events

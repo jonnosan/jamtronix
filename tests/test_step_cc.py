@@ -1,4 +1,8 @@
-"""Tests for the step_cc modulator algorithm."""
+"""Tests for the step_cc modulator algorithm.
+
+Schema v3: MIDI-naive. Emits ``Param(name="cc<N>")`` events with
+normalised [0,1] values.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +12,7 @@ import pytest
 
 from jtx.algorithms import StepCC
 from jtx.engine.context import BarContext
-from jtx.engine.events import ControlChange
+from jtx.model.events import Param
 from jtx.model.song import Key
 
 
@@ -25,24 +29,24 @@ def _ctx(*, pattern_knobs: dict[str, object] | None = None, seed: int = 0) -> Ba
     )
 
 
+def _params(events) -> list[Param]:
+    return [e for e in events if isinstance(e, Param)]
+
+
 def test_step_cc_emits_one_value_per_step_at_default_subdivision() -> None:
-    mod = StepCC(midi_channel=1)
+    mod = StepCC()
     events = mod.generate_bar(_ctx(pattern_knobs={"value_curve": "ramp_up"}))
-    ccs = [e for e in events if isinstance(e, ControlChange)]
-    # Default subdivision "16" → 16 steps per bar.
-    assert len(ccs) == 16
+    assert len(_params(events)) == 16
 
 
 def test_step_cc_triplet_subdivision() -> None:
-    mod = StepCC(midi_channel=1)
+    mod = StepCC()
     events = mod.generate_bar(_ctx(pattern_knobs={"subdivision": "16t", "value_curve": "ramp_up"}))
-    ccs = [e for e in events if isinstance(e, ControlChange)]
-    # 16t = 24 per bar.
-    assert len(ccs) == 24
+    assert len(_params(events)) == 24
 
 
 def test_step_cc_ramp_up_ascends() -> None:
-    mod = StepCC(midi_channel=1)
+    mod = StepCC()
     events = mod.generate_bar(
         _ctx(
             pattern_knobs={
@@ -54,12 +58,12 @@ def test_step_cc_ramp_up_ascends() -> None:
             }
         )
     )
-    ccs = sorted((e for e in events if isinstance(e, ControlChange)), key=lambda c: c.tick)
-    assert ccs[0].value < ccs[-1].value
+    params = sorted(_params(events), key=lambda p: p.tick)
+    assert params[0].value < params[-1].value
 
 
 def test_step_cc_flat_curve_at_centre() -> None:
-    mod = StepCC(midi_channel=1)
+    mod = StepCC()
     events = mod.generate_bar(
         _ctx(
             pattern_knobs={
@@ -70,13 +74,12 @@ def test_step_cc_flat_curve_at_centre() -> None:
             }
         )
     )
-    ccs = [e for e in events if isinstance(e, ControlChange)]
-    # Flat curve = centre of [30, 110] = 70.
-    assert all(c.value == 70 for c in ccs)
+    # Centre of [30,110] = 70 → normalised 70/127.
+    assert all(p.value == pytest.approx(70 / 127.0) for p in _params(events))
 
 
 def test_step_cc_depth_zero_collapses_to_centre() -> None:
-    mod = StepCC(midi_channel=1)
+    mod = StepCC()
     events = mod.generate_bar(
         _ctx(
             pattern_knobs={
@@ -87,19 +90,17 @@ def test_step_cc_depth_zero_collapses_to_centre() -> None:
             }
         )
     )
-    ccs = [e for e in events if isinstance(e, ControlChange)]
-    assert all(c.value == 70 for c in ccs)
+    assert all(p.value == pytest.approx(70 / 127.0) for p in _params(events))
 
 
-def test_step_cc_uses_configured_cc_number() -> None:
-    mod = StepCC(midi_channel=1)
+def test_step_cc_uses_configured_cc_number_as_function_name() -> None:
+    mod = StepCC()
     events = mod.generate_bar(_ctx(pattern_knobs={"cc": 71}))
-    ccs = [e for e in events if isinstance(e, ControlChange)]
-    assert all(c.cc == 71 for c in ccs)
+    assert all(p.name == "cc71" for p in _params(events))
 
 
 def test_step_cc_samples_per_step_smooths() -> None:
-    mod = StepCC(midi_channel=1)
+    mod = StepCC()
     events = mod.generate_bar(
         _ctx(
             pattern_knobs={
@@ -109,19 +110,17 @@ def test_step_cc_samples_per_step_smooths() -> None:
             }
         )
     )
-    ccs = [e for e in events if isinstance(e, ControlChange)]
-    # 16 steps × 4 samples = 64 emissions.
-    assert len(ccs) == 64
+    assert len(_params(events)) == 64
 
 
 def test_step_cc_unknown_curve_raises() -> None:
-    mod = StepCC(midi_channel=1)
+    mod = StepCC()
     with pytest.raises(ValueError, match="unknown value_curve"):
         mod.generate_bar(_ctx(pattern_knobs={"value_curve": "bogus"}))
 
 
 def test_step_cc_pulse_curve_emphasises_downbeats() -> None:
-    mod = StepCC(midi_channel=1)
+    mod = StepCC()
     events = mod.generate_bar(
         _ctx(
             pattern_knobs={
@@ -133,11 +132,10 @@ def test_step_cc_pulse_curve_emphasises_downbeats() -> None:
             }
         )
     )
-    ccs = sorted((e for e in events if isinstance(e, ControlChange)), key=lambda c: c.tick)
-    # Steps 0, 4, 8, 12 should be high; others low.
+    params = sorted(_params(events), key=lambda p: p.tick)
     high_steps = {0, 4, 8, 12}
-    for i, c in enumerate(ccs):
+    for i, p in enumerate(params):
         if i in high_steps:
-            assert c.value >= 100
+            assert p.value >= 100 / 127.0
         else:
-            assert c.value <= 20
+            assert p.value <= 20 / 127.0

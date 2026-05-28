@@ -34,7 +34,7 @@ from typing import ClassVar
 from jtx.algorithms._subdivision import subdivision_grid
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
-from jtx.engine.events import ControlChange, Event
+from jtx.model.events import AbstractEvent, Param
 
 _VALUE_CURVES = (
     "flat",
@@ -49,14 +49,17 @@ _VALUE_CURVES = (
 
 
 class StepCC(Algorithm):
-    """Step-sequenced CC modulator with curve-driven values."""
+    """Step-sequenced CC modulator with curve-driven values.
+
+    MIDI-naive: emits ``Param(name="cc<N>", value=v/127)`` events.
+    """
 
     name: ClassVar[str] = "step_cc"
 
-    def __init__(self, *, midi_channel: int) -> None:
-        self.midi_channel = midi_channel
+    def __init__(self) -> None:
+        pass
 
-    def generate_bar(self, ctx: BarContext) -> list[Event]:
+    def generate_bar(self, ctx: BarContext) -> list[AbstractEvent]:
         knobs = ctx.pattern_knobs
         rng = ctx.rng
 
@@ -81,7 +84,8 @@ class StepCC(Algorithm):
         # Compute the per-step normalized values (-1..1 around centre).
         normalized = [_curve_value(value_curve, step, positions, rng) for step in range(positions)]
 
-        events: list[Event] = []
+        events: list[AbstractEvent] = []
+        function_name = f"cc{cc}"
         for i in range(positions):
             tick = i * spacing
             v_next = normalized[(i + 1) % positions]
@@ -94,14 +98,8 @@ class StepCC(Algorithm):
                 else:
                     v = v_curr
                 cc_value = centre + half_range * depth * v
-                events.append(
-                    ControlChange(
-                        tick=sub_tick,
-                        channel=self.midi_channel,
-                        cc=cc,
-                        value=max(0, min(127, int(round(cc_value)))),
-                    )
-                )
+                cc_int = max(0, min(127, int(round(cc_value))))
+                events.append(Param(name=function_name, value=cc_int / 127.0, tick=sub_tick))
         return events
 
 

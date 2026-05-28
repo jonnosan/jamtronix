@@ -126,13 +126,15 @@ def instantiate_algorithm(algorithm_name: str, voice_slot: VoiceSlot) -> Algorit
         return NoiseRiser()
     if algorithm_name == "reese_bass":
         return ReeseBass()
-    # Algorithms still pinned to their MIDI channel — refactor pending.
     if algorithm_name == "cc_lfo":
-        return CCLFO(midi_channel=ch)
+        return CCLFO()
     if algorithm_name == "cc_envelope":
-        return CCEnvelope(midi_channel=ch)
+        return CCEnvelope()
     if algorithm_name == "step_cc":
-        return StepCC(midi_channel=ch)
+        return StepCC()
+    # voice_follower still consumes ctx.source_events as MIDI; its own
+    # output channel stays pinned to slot.midi_channel pending the
+    # dedicated refactor below.
     if algorithm_name == "voice_follower":
         return VoiceFollower(midi_channel=ch)
     raise ValueError(f"unknown algorithm: {algorithm_name!r}")
