@@ -1,8 +1,9 @@
 """Psytrance style — rolling offbeat bass, fast arp leads.
 
-Knob jitter at build time keeps each new psytrance song fresh: tonic,
-tempo, bass character, arp shape, filter sweep rate. Per-bar pitch
-choices still flow from the title-seeded RNG.
+Schema v3: one ``kit`` voice with the drum_kit algorithm; the drop
+gets a brief ``kick_only`` "moment of silence" override (psy's
+signature mid-bar drop). Drive runs hot, Pump stays relatively low —
+the psy mix is broadband, not pumping.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from jtx.model import (
     Part,
     Song,
     VoiceConfig,
+    VoiceOverride,
 )
 
 _PSY_PROGRESSIONS: tuple[tuple[str, ...], ...] = (
@@ -36,43 +38,17 @@ def build(title: str, setup_ref: str) -> Song:
     bars_per_chord = random.choice((2, 4, 4, 4))
 
     voices = {
-        "kick": VoiceConfig(
-            # Strict 4-on-floor; variation belongs on hats / snare / ohh.
-            algorithm="drum_pattern",
-            pattern={"style": "four_floor", "velocity": 122},
-        ),
-        "snare": VoiceConfig(
-            algorithm="drum_one_shot",
+        "kit": VoiceConfig(
+            algorithm="drum_kit",
             pattern={
-                "pulses": random.choice((1, 2, 2)),
-                "offset": random.choice((4, 4, 6)),
-                "velocity": random.randint(92, 102),
+                "style": "psy",
+                "kit_focus": "full",
+                "density": round(random.uniform(0.6, 0.85), 2),
+                "variation": round(random.uniform(0.2, 0.4), 2),
+                "perc_complexity": round(random.uniform(0.4, 0.65), 2),
             },
         ),
-        "chh": VoiceConfig(
-            algorithm="drum_pattern",
-            pattern={
-                "style": "euclid",
-                "pulses": random.choice((10, 12, 12, 14)),
-                "offset": random.choice((0, 0, 1)),
-                "velocity": random.randint(80, 96),
-                "vel_curve": random.choice(("pulse", "ramp_up", "drift")),
-                "vel_curve_depth": round(random.uniform(0.10, 0.30), 2),
-                # Psy hat roll into the drop — sparse so it stays a fill.
-                "roll_pos": random.choice(("none", "none", "last_bar_of_8")),
-                "roll_subdiv": "16t",
-                "roll_depth": round(random.uniform(0.55, 0.8), 2),
-            },
-        ),
-        "ohh": VoiceConfig(
-            algorithm="drum_one_shot",
-            pattern={
-                "pulses": random.choice((2, 4, 4, 8)),
-                "offset": random.choice((2, 2, 6)),
-                "velocity": random.randint(72, 88),
-            },
-        ),
-        "acid": VoiceConfig(
+        "bass": VoiceConfig(
             algorithm="acid_bass",
             pattern={
                 "drop_prob": round(random.uniform(0.0, 0.15), 2),
@@ -84,7 +60,7 @@ def build(title: str, setup_ref: str) -> Song:
                 "cycle": random.choice((0, 0, 1, 2)),
             },
         ),
-        "stab": VoiceConfig(
+        "pluck": VoiceConfig(
             algorithm="chord_stab",
             pattern={
                 "quality": random.choice(("power", "power", "minor", "sus4")),
@@ -119,11 +95,46 @@ def build(title: str, setup_ref: str) -> Song:
     }
 
     parts = {
-        "intro": Part(bars=16),
-        "rolling": Part(bars=32),
-        "lead": Part(bars=32),
-        "breakdown": Part(bars=16),
-        "outro": Part(bars=16),
+        "intro": Part(
+            bars=16,
+            intensity_start=0.2,
+            intensity_end=0.4,
+            voice_overrides={"kit": VoiceOverride(pattern={"kit_focus": "minimal"})},
+        ),
+        "rolling": Part(
+            bars=32,
+            intensity_start=0.6,
+            intensity_end=0.9,
+            voice_overrides={"kit": VoiceOverride(pattern={"kit_focus": "build"})},
+        ),
+        "lead": Part(
+            bars=32,
+            intensity_start=0.9,
+            intensity_end=0.95,
+            # The classic psy "moment of silence" — drop everything to
+            # just the kick for the drop part.
+            voice_overrides={"kit": VoiceOverride(pattern={"kit_focus": "kick_only"})},
+        ),
+        "breakdown": Part(
+            bars=16,
+            intensity_start=0.5,
+            intensity_end=0.3,
+            voice_overrides={"kit": VoiceOverride(pattern={"kit_focus": "percussion"})},
+        ),
+        "outro": Part(
+            bars=16,
+            intensity_start=0.7,
+            intensity_end=0.15,
+            voice_overrides={"kit": VoiceOverride(pattern={"kit_focus": "wind_down"})},
+        ),
+    }
+
+    feel = {
+        "pump": round(random.uniform(0.15, 0.3), 2),
+        "groove": round(random.uniform(0.0, 0.1), 2),
+        "drive": round(random.uniform(0.6, 0.85), 2),
+        "tension": round(random.uniform(0.6, 0.85), 2),
+        "wander": round(random.uniform(0.1, 0.2), 2),
     }
 
     return Song(
@@ -139,4 +150,5 @@ def build(title: str, setup_ref: str) -> Song:
         voices=voices,
         parts=parts,
         arrangement=["intro", "rolling", "lead", "breakdown", "lead", "outro"],
+        feel=feel,
     )

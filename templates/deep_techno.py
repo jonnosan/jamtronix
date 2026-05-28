@@ -1,9 +1,10 @@
 """Deep techno style — sub drone, dub stab, sparse top-end.
 
-Knob ranges jitter at build time so each new deep_techno song lands
-on a different tonic, tempo, kick-locked filter envelope strength,
-chord voicing, and stab density. Bar-by-bar pitch / step choices
-still derive from the title-seeded RNG.
+Schema v3: one ``kit`` voice with the drum_kit algorithm replaces the
+separate kick / snare / chh / ohh setup. Parts carry intensity
+envelopes; the build / outro override ``kit_focus`` for the canonical
+snare-density ramp and wind-down. Song-wide Pump runs hot — deep
+techno's signature pulsing sidechain on the sub.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from jtx.model import (
     Part,
     Song,
     VoiceConfig,
+    VoiceOverride,
 )
 
 _DEEP_PROGRESSIONS: tuple[tuple[str, ...], ...] = (
@@ -37,48 +39,17 @@ def build(title: str, setup_ref: str) -> Song:
     bars_per_chord = random.choice((4, 8, 8, 8, 16))
 
     voices = {
-        "kick": VoiceConfig(
-            # Strict 4-on-floor; variation belongs on hats / snare / ohh.
-            algorithm="drum_pattern",
-            pattern={"style": "four_floor", "velocity": 116},
-        ),
-        "snare": VoiceConfig(
-            algorithm="drum_one_shot",
+        "kit": VoiceConfig(
+            algorithm="drum_kit",
             pattern={
-                "pulses": random.choice((1, 2, 2)),
-                "offset": random.choice((4, 4, 6, 8)),
-                "velocity": random.randint(86, 98),
-            },
-            feel={"humanize": random.randint(4, 10)},
-        ),
-        "chh": VoiceConfig(
-            algorithm="drum_pattern",
-            pattern={
-                "style": "euclid",
-                "pulses": random.choice((4, 6, 6, 8)),
-                "offset": random.choice((0, 1, 2)),
-                "velocity": random.randint(68, 84),
-                "vel_curve": random.choice(("flat", "drift", "valley")),
-                "vel_curve_depth": round(random.uniform(0.08, 0.22), 2),
-                # Signature deep-techno: continuous triplet hat polyrhythm
-                # and an occasional triplet roll fill into the bar of 8.
-                "polyrhythm": random.choice((0, 8, 8, 12)),
-                "polyrhythm_subdiv": random.choice(("16", "8t", "8t")),
-                "roll_pos": random.choice(("none", "none", "last_bar_of_8")),
-                "roll_subdiv": "16t",
-                "roll_depth": round(random.uniform(0.5, 0.75), 2),
-            },
-            feel={"swing": round(random.uniform(0.15, 0.35), 2)},
-        ),
-        "ohh": VoiceConfig(
-            algorithm="drum_one_shot",
-            pattern={
-                "pulses": random.choice((1, 1, 2)),
-                "offset": random.choice((4, 6, 8, 10)),
-                "velocity": random.randint(78, 90),
+                "style": "techno",
+                "kit_focus": "full",
+                "density": round(random.uniform(0.45, 0.7), 2),
+                "variation": round(random.uniform(0.15, 0.35), 2),
+                "perc_complexity": round(random.uniform(0.3, 0.55), 2),
             },
         ),
-        "acid": VoiceConfig(
+        "sub": VoiceConfig(
             algorithm="sub_drone",
             pattern={
                 "gate": round(random.uniform(0.85, 1.0), 2),
@@ -99,18 +70,13 @@ def build(title: str, setup_ref: str) -> Song:
                 "gate": round(random.uniform(0.25, 0.5), 2),
                 "drop_prob": round(random.uniform(0.25, 0.55), 2),
             },
-            feel={"swing": round(random.uniform(0.10, 0.25), 2), "humanize": 8},
         ),
-        "lead": VoiceConfig(
-            algorithm="melodic_line",
+        "pad": VoiceConfig(
+            algorithm="sustained_chord",
             pattern={
-                "drop_prob": round(random.uniform(0.7, 0.85), 2),
-                "octave": 0,
-                "base_vel": 80,
-                "passing_prob": round(random.uniform(0.15, 0.3), 2),
-                "palette": random.choice(("pentatonic", "triad", "tones_only")),
-                "triplet_prob": round(random.uniform(0.0, 0.15), 2),
-                "triplet_subdiv": "16t",
+                "quality": random.choice(("min7", "min9", "minor", "sus4")),
+                "base_vel": random.randint(54, 70),
+                "gate": round(random.uniform(0.85, 1.0), 2),
             },
         ),
         "filter": VoiceConfig(
@@ -126,11 +92,43 @@ def build(title: str, setup_ref: str) -> Song:
     }
 
     parts = {
-        "intro": Part(bars=16),
-        "groove": Part(bars=16),
-        "main": Part(bars=32),
-        "breakdown": Part(bars=16),
-        "outro": Part(bars=16),
+        "intro": Part(
+            bars=16,
+            intensity_start=0.15,
+            intensity_end=0.4,
+            voice_overrides={"kit": VoiceOverride(pattern={"kit_focus": "minimal"})},
+        ),
+        "groove": Part(
+            bars=16,
+            intensity_start=0.4,
+            intensity_end=0.7,
+            voice_overrides={"kit": VoiceOverride(pattern={"kit_focus": "build"})},
+        ),
+        "main": Part(
+            bars=32,
+            intensity_start=0.85,
+            intensity_end=0.95,
+        ),
+        "breakdown": Part(
+            bars=16,
+            intensity_start=0.5,
+            intensity_end=0.3,
+            voice_overrides={"kit": VoiceOverride(pattern={"kit_focus": "no_kick"})},
+        ),
+        "outro": Part(
+            bars=16,
+            intensity_start=0.7,
+            intensity_end=0.1,
+            voice_overrides={"kit": VoiceOverride(pattern={"kit_focus": "wind_down"})},
+        ),
+    }
+
+    feel = {
+        "pump": round(random.uniform(0.5, 0.75), 2),
+        "groove": round(random.uniform(0.2, 0.35), 2),
+        "drive": round(random.uniform(0.2, 0.4), 2),
+        "tension": round(random.uniform(0.5, 0.8), 2),
+        "wander": round(random.uniform(0.1, 0.25), 2),
     }
 
     return Song(
@@ -146,4 +144,5 @@ def build(title: str, setup_ref: str) -> Song:
         voices=voices,
         parts=parts,
         arrangement=["intro", "groove", "main", "breakdown", "main", "outro"],
+        feel=feel,
     )
