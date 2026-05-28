@@ -110,13 +110,24 @@
 			},
 			{
 				"box" : 				{
-					"id" : "obj-sprintfset",
+					"id" : "obj-msgset",
+					"maxclass" : "message",
+					"numinlets" : 2,
+					"numoutlets" : 1,
+					"outlettype" : [ "" ],
+					"patching_rect" : [ 180.0, 65.0, 110.0, 22.0 ],
+					"text" : "set /$1"
+				}
+			},
+			{
+				"box" : 				{
+					"id" : "obj-loadmess",
 					"maxclass" : "newobj",
 					"numinlets" : 1,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 180.0, 65.0, 110.0, 22.0 ],
-					"text" : "sprintf set /%s"
+					"patching_rect" : [ 310.0, 30.0, 130.0, 22.0 ],
+					"text" : "loadmess set /lead"
 				}
 			},
 			{
@@ -354,14 +365,20 @@
 			},
 			{
 				"patchline" : 				{
-					"destination" : [ "obj-sprintfset", 0 ],
+					"destination" : [ "obj-msgset", 0 ],
 					"source" : [ "obj-voicename", 0 ]
 				}
 			},
 			{
 				"patchline" : 				{
 					"destination" : [ "obj-routevoice", 1 ],
-					"source" : [ "obj-sprintfset", 0 ]
+					"source" : [ "obj-msgset", 0 ]
+				}
+			},
+			{
+				"patchline" : 				{
+					"destination" : [ "obj-routevoice", 1 ],
+					"source" : [ "obj-loadmess", 0 ]
 				}
 			},
 			{
