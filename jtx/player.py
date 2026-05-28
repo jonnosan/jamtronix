@@ -415,7 +415,13 @@ class SongPlayer:
         voice_events: dict[str, list[Event]] = {}
         for v in self._voices:
             ctx = contexts[v.name]
-            shaped = apply_feel(mixed_voice_events[v.name], ctx.mix_knobs, self.ppq, ctx.rng)
+            shaped = apply_feel(
+                mixed_voice_events[v.name],
+                ctx.song_feel,
+                v.slot,
+                self.ppq,
+                ctx.rng,
+            )
             voice_events[v.name] = self._routers[v.name].route(shaped)
 
         # Cache for next bar's lookback. We cache the *post-mix* events
