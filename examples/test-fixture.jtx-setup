@@ -1,16 +1,16 @@
 {
-  "id": "acid-demo",
-  "name": "Acid Demo",
+  "id": "test-fixture",
+  "name": "Test Fixture Rig",
   "default_midi_port": "IAC Driver Bus 1",
-  "daw_template_path": "/Users/jonno/Music/Ableton/User Library/Templates/Jamtronix Acid.als",
-  "clock_mode": "internal_master",
-  "midi_clock_in_port": null,
+  "daw_template_path": null,
   "voices": [
     {
       "name": "kit",
       "type": "drum_kit",
       "default_role": "drum_kit",
       "midi_channel": 10,
+      "midi_port": null,
+      "note": 36,
       "kit_map": {
         "kick": {
           "note": 36,
@@ -35,43 +35,50 @@
         "perc": {
           "note": 75,
           "channel": 10
-        },
-        "clave": {
-          "note": 64,
-          "channel": 10
         }
-      }
+      },
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
-      "name": "acid",
+      "name": "bass",
       "type": "mono",
       "default_role": "bass",
-      "midi_channel": 1
-    },
-    {
-      "name": "stab",
-      "type": "poly",
-      "default_role": "stab",
-      "midi_channel": 2
-    },
-    {
-      "name": "lead",
-      "type": "mono",
-      "default_role": "lead",
-      "midi_channel": 3
-    },
-    {
-      "name": "filter",
-      "type": "modulator",
-      "default_role": "modulator",
       "midi_channel": 1,
+      "midi_port": null,
+      "note": 36,
+      "kit_map": {},
       "parameter_map": {
         "cutoff": {
           "kind": "cc",
           "cc": 74
         }
-      }
+      },
+      "mpe_mode": false,
+      "mpe_channel_count": 8
+    },
+    {
+      "name": "filter",
+      "type": "modulator",
+      "default_role": "modulator",
+      "midi_channel": 5,
+      "midi_port": null,
+      "note": 36,
+      "kit_map": {},
+      "parameter_map": {
+        "cutoff": {
+          "kind": "cc",
+          "cc": 74
+        }
+      },
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     }
   ],
+  "clock_mode": "internal_master",
+  "midi_clock_in_port": null,
+  "osc_host": "127.0.0.1",
+  "osc_port": 11000,
   "schema_version": 3
 }
