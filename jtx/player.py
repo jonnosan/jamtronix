@@ -58,6 +58,7 @@ from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
 from jtx.engine.events import Event
 from jtx.engine.feel import apply_feel
+from jtx.engine.global_feel import compile_global_feel, merge_synthetic_into_mix
 from jtx.engine.lfo import apply_lfos_to_bar
 from jtx.engine.meter import ticks_per_bar
 from jtx.engine.mix import apply_mix_pass
@@ -351,6 +352,19 @@ class SongPlayer:
             self.ticks_per_bar,
             _r.Random(lfo_seed),
         )
+
+        # Compile song-wide feel knobs (Pump) into per-voice mix knobs.
+        # Runs after LFOs so global_feel: LFO targets are reflected in
+        # the snapshot. Explicit user values in ``ctx.mix_knobs`` win on
+        # key collision — synthetic Pump only fills in unset keys.
+        synthetic_mix = compile_global_feel(
+            shared_song_feel,
+            [(v.name, v.slot) for v in self._voices],
+        )
+        for v in self._voices:
+            voice_synthetic = synthetic_mix.get(v.name)
+            if voice_synthetic:
+                merge_synthetic_into_mix(contexts[v.name].mix_knobs, voice_synthetic)
 
         # Did the caller request consecutive bars? Only then does the
         # cached previous bar count as "history" for cross-bar lookback.
