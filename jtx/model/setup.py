@@ -151,12 +151,13 @@ class Setup:
     """Host the sink-side parameter router sends OSC messages to.
 
     Used only by voices with an :class:`OscTarget` in their
-    ``parameter_map``. Defaults to localhost — the JTX M4L receiver
-    device runs inside Ableton on the same machine.
+    ``parameter_map``. Defaults to localhost; users with an OSC
+    consumer on the same machine (custom Max patch, TouchDesigner,
+    hardware OSC bridge) don't need to change this.
     """
     osc_port: int = 11000
-    """UDP port the OSC client targets. The bundled M4L receiver device
-    listens on the same port."""
+    """UDP port the OSC client targets. The user's OSC consumer must
+    listen on the same port."""
     schema_version: int = SCHEMA_VERSION
 
     def validate(self) -> list[str]:

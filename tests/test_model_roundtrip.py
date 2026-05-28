@@ -207,22 +207,6 @@ def test_load_setup_psytrance_validates() -> None:
     assert setup.voice("riser") is not None
 
 
-def test_load_setup_ableton_osc_validates() -> None:
-    """The bundled ableton-osc setup loads cleanly and exposes OSC + MPE coexistence."""
-    from jtx.model import MPEPitchBendTarget, OscTarget
-
-    setup = load_setup("setups/ableton-osc.jtx-setup")
-    assert setup.osc_host == "127.0.0.1"
-    assert setup.osc_port == 11000
-    lead = setup.voice("lead")
-    assert lead is not None
-    # Lead has OSC routing for cutoff/resonance/glide AND MPE pitch bend
-    # for bend — same voice, two transports.
-    assert isinstance(lead.parameter_map["cutoff"], OscTarget)
-    assert isinstance(lead.parameter_map["bend"], MPEPitchBendTarget)
-    assert lead.parameter_map["cutoff"].address == "/jtx/lead/cutoff"
-
-
 def test_setup_osc_host_port_round_trip(tmp_path: Path) -> None:
     """osc_host + osc_port round-trip through save_setup / load_setup."""
     setup = _sample_setup()

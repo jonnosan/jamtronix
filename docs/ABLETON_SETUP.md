@@ -1,11 +1,11 @@
 # Ableton + JTX — setup guide
 
-How to connect jtx to Ableton Live so the **parameter-mapping**
-abstraction (cutoff / resonance / glide / bend per voice) survives
-swapping instrument patches without re-doing MIDI Learn every time.
+How to connect jtx to Ableton Live so per-voice modulation (cutoff /
+resonance / glide / bend) survives swapping instrument patches
+without re-doing MIDI Learn every time.
 
 This is the **cross-style fundamentals** doc. For per-style recipes
-(which instrument to pick per track, what to map each slider to)
+(which instrument to pick per track, what to map each Macro to)
 see:
 
 * [`templates/acid.md`](./templates/acid.md) — acid house
@@ -16,103 +16,113 @@ Pick a style after you've worked through the fundamentals below.
 
 ## The pieces
 
-* `jtx/` — generates MIDI + OSC to Ableton over IAC bus + UDP.
-* `setups/ableton-osc.jtx-setup` — bundled setup that demonstrates
-  OSC parameter routing alongside MPE and standard MIDI.
-* `daw_templates/JtxParameterRouter.maxpat` — the Max for Live device
-  source. Receives `/jtx/<voice>/<function>` OSC messages on port
-  11000 and routes them to eight Live-mappable parameter sliders.
-* `daw_templates/JtxParameterRouter.amxd` — best-effort wrap of the
-  `.maxpat`. **If Ableton refuses to load it**, regenerate from the
-  `.maxpat` (one click — see "Building the device" below). The
-  patcher uses pure Max objects (`udpreceive`, `route`, `sprintf`,
-  `live.dial`) with no external dependencies — nothing to copy
-  alongside the `.amxd`.
+* `jtx/` — generates MIDI to Ableton over IAC bus.
+* `setups/ableton.jtx-setup` — bundled generic Ableton starter setup
+  (channel layout for acid house). `setups/deep_techno.jtx-setup`
+  and `setups/psytrance.jtx-setup` are per-style variants.
+* `daw_templates/JtxCCRack.adg` — **the** Ableton Instrument Rack
+  preset that does the heavy lifting. Eight Macro knobs are
+  pre-wired to the MIDI CCs jtx emits. Drop the rack on a track,
+  drop your chosen instrument inside, click Live's Map mode to wire
+  each Macro to the instrument's matching param. Swap the
+  instrument later → re-Map the Macros once; jtx side stays
+  unchanged.
 
 ## How parameter mapping works in practice
 
-Each jtx voice's `parameter_map` decides what each abstract function
-becomes on the wire:
+jtx algorithms emit function-tagged events (e.g. `function="cutoff"`)
+which the engine routes to MIDI CCs per each voice's
+`parameter_map`. The defaults match the Rack's wiring:
 
-* `CCTarget(74)` → MIDI CC 74 on the voice's channel (the legacy
-  path).
-* `MPEPitchBendTarget()` → MIDI pitch-bend on the per-note MPE
-  channel (poly bend works).
-* `MPETimbreTarget()` → MIDI CC 74 on the per-note MPE channel.
-* `MPEPressureTarget()` → MIDI channel pressure on the per-note MPE
-  channel.
-* `OscTarget("/jtx/<voice>/<function>")` → UDP OSC float to the
-  setup's `osc_host:osc_port`, ignoring MIDI entirely.
+| jtx function | MIDI CC | Rack Macro |
+|---|---|---|
+| `cutoff` | 74 | Macro 1 — Cutoff |
+| `resonance` | 71 | Macro 2 — Resonance |
+| `glide` | 5 | Macro 3 — Glide |
+| `glide_on` | 65 | Macro 4 — Port |
+| `detune` | 1 | Macro 5 — Mod |
+| (user-routable) | 102 | Macro 6 — Aux 1 |
+| (user-routable) | 103 | Macro 7 — Aux 2 |
+| (user-routable) | 104 | Macro 8 — Aux 3 |
 
-The key win for OSC: the address `/jtx/lead/cutoff` is stable
-forever. Swap Wavetable for Drift on the lead track — the
-`JtxParameterRouter` device on that track still receives
-`/jtx/lead/cutoff`, still drives its `Cutoff` slider. The user only
-has to re-do Live's "Map" gesture from the slider to the new
-instrument's filter-frequency param. jtx's config doesn't change.
+CC 102–104 are in MIDI's "undefined" range, used here as jtx-Live
+agreed-upon channels for arbitrary user routing — LFO targets, FX
+sends, anything you point a `cc_lfo` or `step_cc` modulator voice at.
 
-## Building the device
+## One-time setup
 
-The bundled `.amxd` is a best-effort binary wrap of the `.maxpat`.
-If Live loads it cleanly: skip ahead. If Live refuses
-("Could not open device" or similar):
+### Install the Rack preset
 
-1. Open Max for Live (Live → top menu → Help → "Open Max").
-2. File → Open → pick `daw_templates/JtxParameterRouter.maxpat`.
-3. The patcher opens. Confirm there are no red boxes (red = error).
-4. File → Save As Device → save back over
-   `daw_templates/JtxParameterRouter.amxd` (or to your User Library's
-   Max for Live folder for personal use).
+The repo ships `daw_templates/JtxCCRack.adg`. Copy it into your
+Ableton User Library so Live shows it in the browser:
 
-The `.maxpat` is the canonical source — `tools/build_amxd.py` is the
-script that produces the bundled `.amxd`. Future edits go through
-the `.maxpat`; re-run the script (or re-save from Max) to regenerate
-the binary.
+```
+~/Music/Ableton/User Library/Presets/Instruments/Instrument Rack/
+```
 
-## Wiring a track to the device
+Drag the file there in Finder, then restart Live (or refresh the
+browser) — `JtxCCRack` should appear under **User Library → Presets
+→ Instruments → Instrument Rack** in Live's left panel.
 
-Drop the device on any track jtx controls (one device per track):
+### Configure Live's MIDI input
 
-1. Drag `JtxParameterRouter.amxd` from Finder onto an Ableton track.
-   (Or place it in your User Library and drag from there.)
-2. Set the device's **Voice name** parameter (text field at the top
-   of the device) to match the jtx voice's name. E.g. for the
-   `lead` voice in `setups/ableton-osc.jtx-setup`, type `lead`.
-3. The device has eight Live-mappable parameters: **Cutoff**,
-   **Resonance**, **Glide**, **Bend**, **Spare 1..4**.
-4. Click Live's **Map** mode (top-right corner of Live's screen).
-5. Click the device's **Cutoff** slider, then click the destination
-   on the track's instrument (e.g. Wavetable's "Filter Freq"). Live
-   shows the mapping; click Map again to exit Map mode.
-6. Repeat for Resonance / Glide / Bend.
-7. The spare sliders are for forward-compat — the v1 jtx vocabulary
-   doesn't drive them. Leave unmapped unless an algorithm grows a
-   new function.
+`Live → Preferences → Link / Tempo / MIDI`:
 
-## OSC config
+1. Set the IAC Driver Bus 1 input's **Track** column to **On** so
+   tracks can listen on it. (MPE and Remote can stay off unless a
+   specific track needs them.)
+2. (Optional, for MPE leads) enable **MPE** on the same row.
 
-Default: jtx sends to `127.0.0.1:11000`. The device listens on the
-same port. To change:
+## Per-track wiring
 
-* In jtx: Setup editor → General tab → "OSC host : port" row.
-* In the device: open the `.maxpat`, change the `udpreceive 11000`
-  object's argument to your new port, save.
+For each Ableton track jtx will control:
 
-Most users want to leave it at `127.0.0.1:11000`.
+1. Add a **MIDI track**, rename it after the matching jtx voice.
+2. **MIDI From**: `IAC Driver Bus 1`. **Channel**: the channel from
+   the matching `setups/*.jtx-setup` (or `All Ch` for MPE leads).
+3. **Monitor**: `In`.
+4. **MIDI To**: `No Output`.
+5. Drag **`JtxCCRack`** from your User Library onto the track. The
+   eight Macros come up already wired to the agreed CCs.
+6. Drag your chosen instrument inside the Rack. Drop it next to or
+   between the Macros — Live's Rack UI shows a "Drop an Instrument
+   here" area; that's where it goes.
+7. Click Live's **Map** button (top-right corner). The interface
+   tints. Click each Macro, then click the instrument param it
+   should drive (e.g. Macro 1 → instrument's filter cutoff). Click
+   **Map** again when done.
 
-## MPE alongside OSC
+That's the per-track setup. The CC → Macro plumbing is baked into
+the Rack; you only ever map Macro → instrument param.
 
-OSC and MPE compose. A typical lead voice has:
+## Swap workflow (the whole point)
 
-* `cutoff`, `resonance`, `glide` → `OscTarget` (smooth modulation
-  via the M4L device, no MIDI Learn needed).
-* `bend` → `MPEPitchBendTarget()` (per-note pitch bend over MIDI to
-  the MPE-aware instrument).
+When you decide a different instrument fits better:
 
-This is what `setups/ableton-osc.jtx-setup` demonstrates. The
-device only handles OSC — MPE pitch-bend flows over MIDI directly to
-the instrument, which must be MPE-aware (Sampler / Wavetable / Drift
-/ Meld + the track's MIDI-In set to MPE).
+1. Inside the Rack, drag in the new instrument; drag the old one
+   out.
+2. Click **Map**.
+3. Click each Macro in turn → click the new instrument's matching
+   param.
+4. Click **Map** again.
+
+Done. jtx side untouched, no MIDI Learn, no audition. The CC → Macro
+mappings inside the Rack persist across all such swaps.
+
+## MPE
+
+For per-note pitch bend on an MPE lead voice (e.g. psytrance):
+
+1. Set the track's **MIDI From** input row's **Channel** dropdown to
+   `All Ch`.
+2. Enable the **MPE** toggle that appears next to the channel
+   dropdown.
+3. Pick an MPE-aware instrument inside the Rack — Wavetable, Drift,
+   Sampler, Meld all support MPE.
+
+JTX's MPE-mode voices emit per-note pitch bend on each note's
+allocated channel directly (no Rack involvement). The Rack still
+handles cutoff / resonance / etc. via its CCs.
 
 ## Ableton Link
 
@@ -125,5 +135,5 @@ pip install 'jamtronix[link]'
 ```
 
 When Link is active, jtx tempo follows the Link session; start/stop
-participates in the shared transport. No further setup — Link auto-
-peers on the local network.
+participates in the shared transport. No further setup — Link
+auto-peers on the local network.

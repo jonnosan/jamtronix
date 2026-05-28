@@ -50,11 +50,12 @@ Matching setup: **`setups/deep_techno.jtx-setup`**.
 ### 2. Per-track wiring
 
 Same pattern as the acid recipe: MIDI From = `IAC Driver Bus 1` on
-the right channel, Monitor = In, instrument + `JtxParameterRouter.amxd`
-on instrument tracks. See [`acid.md`](./acid.md#2-per-track-wiring)
-for the full step-by-step if you haven't done it before.
+the right channel, Monitor = In, drag `JtxCCRack` onto the track,
+drag instrument inside the rack. See
+[`acid.md`](./acid.md#2-per-track-wiring) for the full step-by-step
+if you haven't done it before.
 
-### 3. Instruments + per-voice slider mappings
+### 3. Instruments + per-voice Macro-to-param mappings
 
 #### `sub` voice (the engine)
 
@@ -68,11 +69,10 @@ for the full step-by-step if you haven't done it before.
     release.
   - Glide off (sub doesn't slide between notes — `sub_drone` holds
     each pitch fully).
-- **Device slider mappings**:
-  - `Cutoff` → Drift's filter cutoff. Even sub-bass benefits from
-    subtle filter movement under `kick_env` modulation.
-  - `Resonance`, `Glide` → unmapped (sub doesn't need either).
-  - `Bend` → unmapped.
+- **Macro mappings** (Live's Map mode):
+  - Macro 1 (Cutoff) → Drift's filter cutoff. Even sub-bass benefits
+    from subtle filter movement under `kick_env` modulation.
+  - Other Macros optional.
 
 #### `pad` voice
 
@@ -80,17 +80,15 @@ for the full step-by-step if you haven't done it before.
 - **Patch starting point**:
   - Two wavetable oscillators, slight detune (~5 cents), polyphonic
     (8 voices min).
-  - Filter: 12 dB lowpass, modulated by a slow LFO inside Wavetable
-    for *internal* movement, but the M4L Cutoff slider gets primary
+  - Filter: 12 dB lowpass, modulated by a slow internal LFO for
+    background movement, but Macro 1 of the rack gets primary
     control.
   - Amp envelope: long attack (1–2s), long release (3s+).
   - Hi-cut around 4 kHz so it sits behind the lead-frequency
     elements.
-- **Device slider mappings**:
-  - `Cutoff` → Wavetable filter cutoff.
-  - `Resonance` → Wavetable filter resonance.
-  - `Bend` → unmapped (the pad voice in deep techno is held; no
-    pitch movement).
+- **Macro mappings**:
+  - Macro 1 (Cutoff) → Wavetable filter cutoff.
+  - Macro 2 (Resonance) → Wavetable filter resonance.
 
 #### `stab` voice + `stab_echo` follower
 
@@ -100,11 +98,10 @@ for the full step-by-step if you haven't done it before.
   `voice_follower` algorithm — it derives from `stab`'s output. Use
   the SAME instrument (or a quieter copy) so the echo follows the
   primary stab's tone.
-- **Device slider mappings** (stab only — stab_echo follows it
-  automatically):
-  - `Cutoff` → Wavetable filter cutoff.
-  - `Resonance` → Wavetable filter resonance.
-  - `Bend` → unmapped.
+- **Macro mappings** (stab track — stab_echo gets its own rack but
+  the mappings inside can be left unmapped or just mirror the stab):
+  - Macro 1 (Cutoff) → Wavetable filter cutoff.
+  - Macro 2 (Resonance) → Wavetable filter resonance.
 
 #### `filter` voice (modulator)
 

@@ -279,8 +279,8 @@ templates/                    Python modules that BUILD a Song from scratch
 setups/                       bundled .jtx-setup files (ableton, iac, etc.)
 examples/                     bundled .jtx + .jtx-setup pairs (acid-starter, etc.)
 docs/                         this directory
-tools/                        CLI utilities (jtx_player, build_amxd, iac_smoke)
-daw_templates/                Max-for-Live device (JtxParameterRouter)
+tools/                        CLI utilities (jtx_player, iac_smoke)
+daw_templates/                bundled Ableton Live Instrument Rack (JtxCCRack)
 tests/                        pytest suite (~470 tests)
 ```
 
@@ -338,8 +338,7 @@ shift-by-1-bar.
 
 * **Knob meanings, JSON shapes, voice types**: [`SPEC.md`](SPEC.md)
 * **Ableton-side setup recipes**: [`ABLETON_SETUP.md`](ABLETON_SETUP.md)
-* **How to wire MPE / OSC**: `SPEC.md` §Parameter Mapping +
-  `daw_templates/JtxParameterRouter.amxd`
+* **How to wire MPE / OSC**: `SPEC.md` §Parameter Mapping
 * **A new algorithm**: copy `jtx/algorithms/melodic_line.py` (a good
   reference for the `generate_bar` shape + Note/Param emission).
 * **Adding an LFO target kind**: `jtx/engine/lfo.py` —

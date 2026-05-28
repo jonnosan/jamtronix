@@ -173,12 +173,11 @@ The float arg is normalised: CC-style sources (`cutoff`/`resonance`/
 `glide`) land in `[0, 1]`; bend-style sources land in `[-1, 1]`.
 
 One OSC destination per setup (`Setup.osc_host` / `Setup.osc_port`,
-default `127.0.0.1:11000`). The bundled `JtxParameterRouter.amxd` Max
-for Live device listens on that port and dispatches by matching the
-device's per-instance "voice name" parameter against the message's
-voice segment, then driving one of eight Live-mappable parameter
-sliders (Cutoff / Resonance / Glide / Bend / Spare 1..4). See
-`docs/ABLETON_SETUP.md` for the device + per-track setup.
+default `127.0.0.1:11000`). Users who route via OSC are expected to
+have their own receiver wired to that destination (custom Max
+patches, TouchDesigner, hardware OSC bridges, etc.). The default
+bundled Ableton workflow uses MIDI CCs into a Live Instrument Rack
+(`daw_templates/JtxCCRack.adg`); see `docs/ABLETON_SETUP.md`.
 
 **MPE channel allocation** (when `mpe_mode == true`):
 

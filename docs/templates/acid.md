@@ -4,13 +4,13 @@ Build an Ableton Live set that pairs with jtx's acid-house workflow.
 End state: open the `.als`, hit play in jtx with
 `setups/ableton.jtx-setup` selected → punchy 808/909 drums, a
 303-style acid bass with filter sweeps, a clavy stab, and a clean
-lead. Everything jtx modulates rides Ableton through the
-`JtxParameterRouter` M4L device.
+lead. Modulation rides Ableton through `JtxCCRack` (the bundled
+Instrument Rack preset with all eight Macros pre-wired to CCs).
 
 **Read first**: [`../ABLETON_SETUP.md`](../ABLETON_SETUP.md) — covers
-the cross-style fundamentals (how OSC + MPE work, how to drop the
-device, how to map sliders). This doc is the per-style instrument
-picks + slider routing.
+the cross-style fundamentals (how the rack works, how to drop it on
+each track, how to wire Macros to instrument params). This doc is
+the per-style instrument picks + Macro-to-param mappings.
 
 ## Style snapshot
 
@@ -53,36 +53,40 @@ underlying chord progression).
    "Track" on the **IAC Driver Bus 1** input. (macOS — for other
    platforms, route jtx's output to a virtual MIDI bus and accept
    that here.)
+4. **Install the rack preset** (one-time, if you haven't already):
+   copy `daw_templates/JtxCCRack.adg` to
+   `~/Music/Ableton/User Library/Presets/Instruments/Instrument Rack/`.
+   Restart Live or refresh its browser; the rack should appear
+   under **User Library → Presets → Instruments → Instrument Rack**.
 
 ### 2. Per-track wiring
 
-For **each** MIDI track listed in the table above:
+For **each instrument** MIDI track in the table above (acid, stab,
+lead — NOT drum tracks):
 
 1. Add a MIDI track. Rename it (e.g. "Acid Bass").
 2. **MIDI From**: set to `IAC Driver Bus 1`. Set the channel to the
    number from the table.
 3. **Monitor**: `In`.
-4. **MIDI To**: `No Output` (the instrument on the track plays the
-   sound).
-5. Drop the instrument (see "Instruments" below).
-6. **Drop `JtxParameterRouter.amxd`** on the track *before* the
-   instrument in the device chain (so it can intercept OSC and
-   drive the mapped Live params).
-7. Set the device's **Voice name** parameter to the jtx voice name
-   (e.g. `acid`, `lead`, `stab`).
-8. Click Live's **Map** mode (top-right) and map the device's
-   sliders to the instrument's params (see per-voice details
-   below).
+4. **MIDI To**: `No Output`.
+5. **Drag `JtxCCRack` from your User Library onto the track**. The
+   rack lands with all eight Macros pre-wired to incoming CCs (74,
+   71, 5, 65, 1, 102, 103, 104) — no MIDI Learn needed.
+6. Drag the instrument (see "Instruments" below) inside the rack
+   (Live's Rack UI shows a "Drop an Instrument here" slot — drop it
+   there).
+7. Click Live's **Map** button (top-right). Click each rack Macro
+   knob, then click the corresponding instrument param. Click **Map**
+   again to exit.
 
-Drum tracks skip the M4L device (drums don't have a parameter map
-in jtx).
+Drum + modulator + utility tracks skip the rack (they're either
+drum racks playing notes, or CC sources passing through).
 
-### 3. Instruments + per-voice slider mappings
+### 3. Instruments + per-voice Macro-to-param mappings
 
 #### `acid` voice (TB-303 territory)
 
-- **Instrument**: **Drift** (built-in monosynth, MPE-capable but
-  not required for acid since acid_bass doesn't use MPE).
+- **Instrument**: **Drift** (built-in monosynth).
 - **Patch starting point**:
   - Oscillator: saw, single voice.
   - Filter: 24 dB ladder lowpass, resonance ~75%.
@@ -91,13 +95,13 @@ in jtx).
     (303 is a percussive sound).
   - Pitch: -1 octave (jtx acid_bass plays in the low register
     already; if it sounds boomy, raise back to 0).
-- **Device slider mappings**:
-  - `Cutoff` → Drift's Filter Cutoff.
-  - `Resonance` → Drift's Filter Resonance.
-  - `Glide` → Drift's Glide (the "glide time" knob in the Voice
-    section).
-  - `Bend` → leave unmapped — pitch-bend already arrives natively
-    over MIDI on this channel.
+- **Macro mappings** (Live's Map mode):
+  - Macro 1 (Cutoff) → Drift's Filter Cutoff.
+  - Macro 2 (Resonance) → Drift's Filter Resonance.
+  - Macro 3 (Glide) → Drift's Glide (the "glide time" knob in the
+    Voice section).
+  - Macro 4 (Port) → Drift's Glide On/Off (toggle, mapped from CC65).
+  - Other Macros stay unmapped unless you have a use for them.
 
 #### `stab` voice
 
@@ -107,10 +111,10 @@ in jtx).
   - Amp envelope: fast attack, ~100ms decay, no sustain (it's a
     stab, not a held chord).
   - Reverb send to a Return track with a small Hall.
-- **Device slider mappings**:
-  - `Cutoff` → Wavetable's filter cutoff.
-  - `Resonance` → Wavetable's filter resonance.
-  - `Bend` → unmapped (no MPE on stab in this template).
+- **Macro mappings**:
+  - Macro 1 (Cutoff) → Wavetable's filter cutoff.
+  - Macro 2 (Resonance) → Wavetable's filter resonance.
+  - Other Macros optional.
 
 #### `lead` voice
 
@@ -121,9 +125,10 @@ in jtx).
   - Filter: 12 dB lowpass, moderate resonance.
   - Amp envelope: medium attack, long release.
   - Pitch -1 octave to land in the mid-register.
-- **Device slider mappings**:
-  - `Cutoff`, `Resonance`, `Glide` → corresponding Drift params.
-  - `Bend` → unmapped (acid songs use the lead voice straight).
+- **Macro mappings**:
+  - Macro 1 → Drift's Filter Cutoff.
+  - Macro 2 → Drift's Filter Resonance.
+  - Macro 3 → Drift's Glide time.
 
 #### `filter` voice (modulator)
 
@@ -134,8 +139,7 @@ in jtx).
 - **Quick wiring**: set this track's **MIDI To** to the **Acid
   Bass** track (track-style routing), or leave it disconnected if
   you're not using LFO modulators in your songs.
-- No `JtxParameterRouter.amxd` needed (no parameter map; raw CC
-  passthrough).
+- No rack needed (raw CC passes straight through to the target).
 
 #### Drums
 
@@ -169,9 +173,7 @@ when writing, mute on final mixdown.
 ## Save
 
 `File → Save Live Set As… → daw_templates/acid.als` (or wherever
-you keep templates locally — committing the `.als` back to the repo
-is up to you; the binary lives in `daw_templates/` per **#105**'s
-plan).
+you keep templates locally).
 
 ## Verify
 
@@ -182,9 +184,11 @@ plan).
    - Kick on every beat (4-on-the-floor).
    - Acid line snaking through ch 2.
    - Stab punctuating on the off-beats.
-   - The acid track's filter cutoff sliding smoothly (via the M4L
-     device's Cutoff slider).
-3. If the filter doesn't move: open Live's Output meter on the Acid
-   Bass track — confirm MIDI CC74 (or whichever CC acid_bass emits)
-   is arriving, OR if you switched the voice to OSC routing, open
-   the `JtxParameterRouter` device and watch its banner.
+   - The acid track's filter cutoff sliding smoothly (driven by jtx's
+     CC74 LFO landing on Macro 1 of the rack, then Macro 1 → Drift's
+     filter cutoff).
+3. If the filter doesn't move: confirm the Acid Bass track is
+   receiving MIDI (track's input meter blinks on each note). Then
+   check the rack — its Macro 1 should be visibly moving. If Macro 1
+   moves but the instrument doesn't respond, the Macro → instrument
+   mapping is missing or wrong; redo Map mode.
