@@ -370,9 +370,9 @@ def test_toolbar_clock_mode_disables_during_play(qapp: QApplication) -> None:
     bar.deleteLater()
 
 
-def test_voice_slot_cc_map_persists(tmp_path: Path) -> None:
-    """cc_map round-trips through save_setup / load_setup."""
-    from jtx.model import Setup, VoiceSlot
+def test_voice_slot_parameter_map_persists(tmp_path: Path) -> None:
+    """parameter_map round-trips through save_setup / load_setup."""
+    from jtx.model import CCTarget, Setup, VoiceSlot
     from jtx.persist import load_setup, save_setup
 
     setup = Setup(
@@ -384,59 +384,95 @@ def test_voice_slot_cc_map_persists(tmp_path: Path) -> None:
                 name="acid",
                 type="mono",
                 default_role="bass",
-                midi_channel=1,
-                cc_map={"resonance": 90, "filter_cutoff": 100},
+                midi_channel=2,
+                parameter_map={"resonance": CCTarget(90), "cutoff": CCTarget(100)},
             )
         ],
     )
     path = tmp_path / "x.jtx-setup"
     save_setup(setup, path)
     reloaded = load_setup(path)
-    assert reloaded.voices[0].cc_map == {"resonance": 90, "filter_cutoff": 100}
-    assert reloaded.voices[0].cc_for("resonance", 71) == 90
-    assert reloaded.voices[0].cc_for("portamento_time", 5) == 5
+    assert reloaded.voices[0].parameter_map == {
+        "resonance": CCTarget(90),
+        "cutoff": CCTarget(100),
+    }
+    # Functions not in the parameter_map fall back to the algorithm's
+    # DEFAULT_PARAM_MAP at router resolution time, not the slot.
+    assert "glide" not in reloaded.voices[0].parameter_map
 
 
-def test_acid_bass_honours_cc_map_override() -> None:
-    """AcidBass with a remapped resonance should emit that CC, not CC 71."""
-    import random
+def test_voice_slot_cc_map_v1_migrates_to_parameter_map(tmp_path: Path) -> None:
+    """A schema-v1 setup with cc_map auto-migrates to parameter_map of CCTargets."""
+    import json
 
-    from jtx.algorithms import AcidBass
-    from jtx.engine.context import BarContext
-    from jtx.engine.events import ControlChange
-    from jtx.model import Key
+    from jtx.model import CCTarget
+    from jtx.persist import load_setup
 
-    algo = AcidBass(midi_channel=1, cc_map={"resonance": 100, "filter_cutoff": 105})
-    ctx = BarContext(
-        bar_index=0,
-        ticks_per_bar=1920,
-        ppq=480,
-        tempo_bpm=120.0,
-        rng=random.Random(123456),
-        key=Key(tonic="A", scale="minor"),
-        chord_root_semitones=0,
-        pattern_knobs={"slide_prob": 0.5, "cycle": 2, "resonance": 100},
-        feel_knobs={},
-        tick_offset=0,
+    v1_setup = {
+        "id": "legacy",
+        "name": "Legacy",
+        "default_midi_port": "IAC",
+        "voices": [
+            {
+                "name": "acid",
+                "type": "mono",
+                "default_role": "bass",
+                "midi_channel": 2,
+                "cc_map": {"resonance": 90, "filter_cutoff": 100},
+            }
+        ],
+        "schema_version": 1,
+    }
+    path = tmp_path / "legacy.jtx-setup"
+    path.write_text(json.dumps(v1_setup), encoding="utf-8")
+    loaded = load_setup(path)
+    assert loaded.schema_version == 2
+    assert loaded.voices[0].parameter_map == {
+        "resonance": CCTarget(90),
+        "filter_cutoff": CCTarget(100),
+    }
+
+
+def test_setup_validation_rejects_mpe_mode_on_channel_1() -> None:
+    """A voice with mpe_mode=True must not sit on the MPE master channel."""
+    from jtx.model import VoiceSlot
+
+    slot = VoiceSlot(
+        name="lead",
+        type="mono",
+        default_role="lead",
+        midi_channel=1,
+        mpe_mode=True,
     )
-    events = algo.generate_bar(ctx)
-    ccs = {e.cc for e in events if isinstance(e, ControlChange)}
-    # Should contain the *remapped* CC numbers, never the defaults 71/74.
-    assert 100 in ccs
-    assert 105 in ccs
-    assert 71 not in ccs
-    assert 74 not in ccs
+    errors = slot.validate()
+    assert any("channel 1" in e for e in errors)
+
+
+def test_setup_validation_rejects_mpe_block_overflowing_channel_16() -> None:
+    """midi_channel + count - 1 > 16 is rejected at validate()."""
+    from jtx.model import VoiceSlot
+
+    slot = VoiceSlot(
+        name="lead",
+        type="mono",
+        default_role="lead",
+        midi_channel=12,
+        mpe_mode=True,
+        mpe_channel_count=8,  # block ends at ch 19
+    )
+    errors = slot.validate()
+    assert any("MPE block" in e for e in errors)
 
 
 @pytest.mark.skip(
     reason="Constructs the full SetupEditor; segfaults at process exit "
     "on macOS PySide6 under pytest. Editor works at runtime."
 )
-def test_setup_editor_cc_map_writes_immediately(tmp_path: Path, qapp: QApplication) -> None:
-    """SetupEditor CC-map rows write back as soon as the user toggles override."""
-    from jtx.model import Setup, VoiceSlot
+def test_setup_editor_parameter_map_writes_immediately(tmp_path: Path, qapp: QApplication) -> None:
+    """SetupEditor parameter-map rows write back as soon as the user toggles override."""
+    from jtx.model import CCTarget, Setup, VoiceSlot
     from jtx.persist import load_setup, save_setup
-    from jtx_gui.views.setup_editor import SetupEditor, _CCMapSection
+    from jtx_gui.views.setup_editor import SetupEditor, _ParameterMapSection
 
     setup = Setup(
         id="t",
@@ -447,7 +483,7 @@ def test_setup_editor_cc_map_writes_immediately(tmp_path: Path, qapp: QApplicati
                 name="acid",
                 type="mono",
                 default_role="bass",
-                midi_channel=1,
+                midi_channel=2,
             )
         ],
     )
@@ -460,19 +496,17 @@ def test_setup_editor_cc_map_writes_immediately(tmp_path: Path, qapp: QApplicati
         audition_calls.append((function, cc))
 
     editor = SetupEditor(setup=setup, setup_path=path, audition_fn=fake_audition)
-    # Find the CC-map section for the (only) voice and twist the
-    # resonance row.
-    cc_sections = editor.findChildren(_CCMapSection)
-    assert cc_sections, "expected at least one CC-map section"
-    section = cc_sections[0]
+    sections = editor.findChildren(_ParameterMapSection)
+    assert sections, "expected at least one parameter-map section"
+    section = sections[0]
     section._overrides["resonance"].setChecked(True)  # type: ignore[attr-defined]
-    section._spinners["resonance"].setValue(99)  # type: ignore[attr-defined]
-    section._on_audition("resonance")  # type: ignore[attr-defined]
+    section._cc_spinners["resonance"].setValue(99)  # type: ignore[attr-defined]
+    section._on_audition_param("resonance")  # type: ignore[attr-defined]
     assert audition_calls == [("resonance", 99)]
-    assert setup.voices[0].cc_map == {"resonance": 99}
+    assert setup.voices[0].parameter_map == {"resonance": CCTarget(99)}
 
     save_setup(setup, path)
-    assert load_setup(path).voices[0].cc_map == {"resonance": 99}
+    assert load_setup(path).voices[0].parameter_map == {"resonance": CCTarget(99)}
 
 
 @pytest.mark.skip(

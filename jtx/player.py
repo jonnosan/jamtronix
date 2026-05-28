@@ -60,6 +60,7 @@ from jtx.engine.feel import apply_feel
 from jtx.engine.lfo import apply_lfos_to_bar
 from jtx.engine.meter import ticks_per_bar
 from jtx.engine.mix import apply_mix_pass
+from jtx.engine.parameter_router import ParameterRouter
 from jtx.engine.root_provider import ProgressionRootProvider, RootProvider
 from jtx.model.setup import Setup, VoiceSlot
 from jtx.model.song import KnobDict, Song, VoiceConfig, VoiceOverride
@@ -88,9 +89,9 @@ def instantiate_algorithm(algorithm_name: str, voice_slot: VoiceSlot) -> Algorit
             midi_note=voice_slot.kit_map.get(voice_slot.name, _GM_DRUM_DEFAULT),
         )
     if algorithm_name == "acid_bass":
-        return AcidBass(midi_channel=ch, cc_map=voice_slot.cc_map)
+        return AcidBass(midi_channel=ch)
     if algorithm_name == "sub_drone":
-        return SubDrone(midi_channel=ch, cc_map=voice_slot.cc_map)
+        return SubDrone(midi_channel=ch)
     if algorithm_name == "melodic_line":
         return MelodicLine(midi_channel=ch)
     if algorithm_name == "motif_phrase":
@@ -108,9 +109,9 @@ def instantiate_algorithm(algorithm_name: str, voice_slot: VoiceSlot) -> Algorit
     if algorithm_name == "step_cc":
         return StepCC(midi_channel=ch)
     if algorithm_name == "noise_riser":
-        return NoiseRiser(midi_channel=ch, cc_map=voice_slot.cc_map)
+        return NoiseRiser(midi_channel=ch)
     if algorithm_name == "reese_bass":
-        return ReeseBass(midi_channel=ch, cc_map=voice_slot.cc_map)
+        return ReeseBass(midi_channel=ch)
     if algorithm_name == "voice_follower":
         return VoiceFollower(midi_channel=ch)
     if algorithm_name == "root_pulse":
@@ -184,6 +185,13 @@ class SongPlayer:
         # Topological order: non-followers first, then followers in
         # dependency order. Cycle-free by validation.
         self._run_order = self._topo_sort()
+
+        # Per-voice parameter routers. Stateful across bars so MPE
+        # channel allocations + most-recently-allocated tracking
+        # survive bar boundaries (notes can sustain across bars).
+        self._routers: dict[str, ParameterRouter] = {
+            v.name: ParameterRouter(v.slot, v.algorithm.DEFAULT_PARAM_MAP) for v in self._voices
+        }
 
         # Previous-bar event cache for cross-bar sidechain lookback
         # and (later) follower lookback. Updated at the end of every
@@ -305,11 +313,13 @@ class SongPlayer:
         )
 
         # Feel post-emit pass per voice (bar-internal jitter/accent/swing).
+        # Then route through the parameter router for CC remapping +
+        # MPE channel allocation.
         voice_events: dict[str, list[Event]] = {}
         for v in self._voices:
             ctx = contexts[v.name]
             shaped = apply_feel(mixed_voice_events[v.name], ctx.feel_knobs, self.ppq, ctx.rng)
-            voice_events[v.name] = shaped
+            voice_events[v.name] = self._routers[v.name].route(shaped)
 
         # Cache for next bar's lookback. We cache the *post-mix* events
         # because that's what next-bar sidechain triggers reference —

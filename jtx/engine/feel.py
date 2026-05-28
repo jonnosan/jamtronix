@@ -33,7 +33,14 @@ from __future__ import annotations
 import random
 
 from jtx.algorithms._steps import step_ticks
-from jtx.engine.events import ControlChange, Event, NoteOff, NoteOn, PitchBend
+from jtx.engine.events import (
+    ChannelPressure,
+    ControlChange,
+    Event,
+    NoteOff,
+    NoteOn,
+    PitchBend,
+)
 from jtx.model.song import KnobDict
 
 
@@ -161,12 +168,21 @@ def apply_feel(
                 channel=ev.channel,
                 cc=ev.cc,
                 value=ev.value,
+                function=ev.function,
             )
         elif isinstance(ev, PitchBend):
             new_ev = PitchBend(
                 tick=new_tick,
                 channel=ev.channel,
                 value=ev.value,
+                function=ev.function,
+            )
+        elif isinstance(ev, ChannelPressure):
+            new_ev = ChannelPressure(
+                tick=new_tick,
+                channel=ev.channel,
+                value=ev.value,
+                function=ev.function,
             )
         else:  # pragma: no cover — exhaustive over Event union
             new_ev = ev

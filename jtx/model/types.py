@@ -35,5 +35,11 @@ its concrete binding is deferred (see ``jtx.engine.AbletonLinkClock``);
 selecting it will raise until that's resolved.
 """
 
-SCHEMA_VERSION = 1
-"""Bump when the on-disk JSON shape changes incompatibly."""
+SCHEMA_VERSION = 2
+"""Bump when the on-disk JSON shape changes incompatibly.
+
+* v1 → v2 (Phase A): ``VoiceSlot.cc_map: {fn: cc}`` replaced by
+  ``parameter_map: {fn: ParameterTarget}``; added ``mpe_mode`` +
+  ``mpe_channel_count``. ``persist.json_io.load_setup`` auto-migrates
+  v1 files at load time (cc_map entries become ``CCTarget``s).
+"""

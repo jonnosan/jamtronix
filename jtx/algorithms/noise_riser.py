@@ -37,8 +37,11 @@ Knobs:
 * ``curve`` (``"exp"``) — shape of the rise. ``"linear"`` / ``"exp"``
   (slow start, fast finish — the conventional "build" feel) /
   ``"s_curve"`` (slow start, slow finish, fast middle).
-* ``cutoff_cc`` (74) — CC remap.
 * ``samples_per_bar`` (16) — CC density inside the bar.
+
+The cutoff CC routing is now handled by the voice slot's
+``parameter_map`` (function ``"cutoff"``) rather than a per-knob
+``cutoff_cc`` override.
 """
 
 from __future__ import annotations
@@ -49,8 +52,7 @@ from jtx.algorithms._theory import note_to_midi
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
 from jtx.engine.events import ControlChange, Event, NoteOff, NoteOn, PitchBend
-
-_DEFAULT_CC: dict[str, int] = {"filter_cutoff": 74}
+from jtx.model.parameter_target import CCTarget, ParameterTarget
 
 _CURVES = ("linear", "exp", "s_curve")
 _TRIGGERS = ("once", "every", "last_bar_of_4", "last_bar_of_8", "last_bar_of_16")
@@ -60,14 +62,12 @@ class NoiseRiser(Algorithm):
     """Crescendo voice — retriggers + CC ramp + optional pitch rise."""
 
     name: ClassVar[str] = "noise_riser"
-    DEFAULT_CC: ClassVar[dict[str, int]] = dict(_DEFAULT_CC)
+    DEFAULT_PARAM_MAP: ClassVar[dict[str, ParameterTarget]] = {
+        "cutoff": CCTarget(74),
+    }
 
-    def __init__(self, *, midi_channel: int, cc_map: dict[str, int] | None = None) -> None:
+    def __init__(self, *, midi_channel: int) -> None:
         self.midi_channel = midi_channel
-        self._cc_map = dict(cc_map) if cc_map else {}
-
-    def _cc(self, function: str) -> int:
-        return int(self._cc_map.get(function, _DEFAULT_CC[function]))
 
     def generate_bar(self, ctx: BarContext) -> list[Event]:
         knobs = ctx.pattern_knobs
@@ -88,7 +88,6 @@ class NoiseRiser(Algorithm):
         pitch_rise_cents = int(knobs.get("pitch_rise_cents", 0))
         curve = str(knobs.get("curve", "exp"))
         samples_per_bar = max(2, int(knobs.get("samples_per_bar", 16)))
-        cutoff_cc = int(knobs.get("cutoff_cc", self._cc("filter_cutoff")))
 
         if curve not in _CURVES:
             raise ValueError(f"noise_riser: unknown curve {curve!r} (expected one of {_CURVES})")
@@ -126,8 +125,9 @@ class NoiseRiser(Algorithm):
                 ControlChange(
                     tick=tick,
                     channel=self.midi_channel,
-                    cc=cutoff_cc,
+                    cc=74,
                     value=_clamp_cc(cutoff),
+                    function="cutoff",
                 )
             )
             if pitch_rise_cents > 0:
@@ -141,6 +141,7 @@ class NoiseRiser(Algorithm):
                         tick=tick,
                         channel=self.midi_channel,
                         value=max(-8192, min(8191, bend)),
+                        function="bend",
                     )
                 )
 

@@ -9,7 +9,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from jtx.engine.events import ControlChange, Event, NoteOff, NoteOn, PitchBend
+from jtx.engine.events import (
+    ChannelPressure,
+    ControlChange,
+    Event,
+    NoteOff,
+    NoteOn,
+    PitchBend,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - mido has no stubs
     import mido
@@ -50,5 +57,11 @@ def event_to_mido(event: Event) -> mido.Message:
             "pitchwheel",
             channel=event.channel - 1,
             pitch=event.value,
+        )
+    if isinstance(event, ChannelPressure):
+        return mido.Message(
+            "aftertouch",
+            channel=event.channel - 1,
+            value=event.value,
         )
     raise TypeError(f"unsupported event type: {type(event).__name__}")

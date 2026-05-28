@@ -3,8 +3,6 @@
   "name": "Acid Demo",
   "default_midi_port": "IAC Driver Bus 1",
   "daw_template_path": "/Users/jonno/Music/Ableton/User Library/Templates/Jamtronix Acid.als",
-  "clock_mode": "internal_master",
-  "midi_clock_in_port": null,
   "voices": [
     {
       "name": "kick",
@@ -12,7 +10,12 @@
       "default_role": "drum",
       "midi_channel": 10,
       "midi_port": null,
-      "kit_map": {"kick": 36}
+      "kit_map": {
+        "kick": 36
+      },
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "clap",
@@ -20,7 +23,12 @@
       "default_role": "drum",
       "midi_channel": 10,
       "midi_port": null,
-      "kit_map": {"clap": 39}
+      "kit_map": {
+        "clap": 39
+      },
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "chh",
@@ -28,7 +36,12 @@
       "default_role": "drum",
       "midi_channel": 10,
       "midi_port": null,
-      "kit_map": {"chh": 42}
+      "kit_map": {
+        "chh": 42
+      },
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "ohh",
@@ -36,7 +49,12 @@
       "default_role": "drum",
       "midi_channel": 10,
       "midi_port": null,
-      "kit_map": {"ohh": 46}
+      "kit_map": {
+        "ohh": 46
+      },
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "conga_hi",
@@ -44,7 +62,12 @@
       "default_role": "drum",
       "midi_channel": 11,
       "midi_port": null,
-      "kit_map": {"conga_hi": 63}
+      "kit_map": {
+        "conga_hi": 63
+      },
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "conga_lo",
@@ -52,7 +75,12 @@
       "default_role": "drum",
       "midi_channel": 11,
       "midi_port": null,
-      "kit_map": {"conga_lo": 64}
+      "kit_map": {
+        "conga_lo": 64
+      },
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "maracas",
@@ -60,7 +88,12 @@
       "default_role": "drum",
       "midi_channel": 11,
       "midi_port": null,
-      "kit_map": {"maracas": 70}
+      "kit_map": {
+        "maracas": 70
+      },
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "acid",
@@ -68,7 +101,10 @@
       "default_role": "bass",
       "midi_channel": 1,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "stab",
@@ -76,7 +112,10 @@
       "default_role": "stab",
       "midi_channel": 2,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "filt",
@@ -84,7 +123,10 @@
       "default_role": "modulator",
       "midi_channel": 1,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "chord_ref",
@@ -92,7 +134,10 @@
       "default_role": "lead",
       "midi_channel": 15,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "root_ref",
@@ -100,8 +145,13 @@
       "default_role": "lead",
       "midi_channel": 16,
       "midi_port": null,
-      "kit_map": {}
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     }
   ],
-  "schema_version": 1
+  "clock_mode": "internal_master",
+  "midi_clock_in_port": null,
+  "schema_version": 2
 }

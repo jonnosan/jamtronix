@@ -1,15 +1,24 @@
 {
-  "id": "ableton",
-  "name": "Ableton (IAC Bus 1)",
+  "id": "ableton-mpe",
+  "name": "Ableton MPE (IAC Bus 1)",
   "default_midi_port": "IAC Driver Bus 1",
   "daw_template_path": null,
   "clock_mode": "internal_master",
   "midi_clock_in_port": null,
   "voices": [
-    {"name": "acid",       "type": "mono",      "default_role": "bass",      "midi_channel": 2},
-    {"name": "stab",       "type": "poly",      "default_role": "stab",      "midi_channel": 3},
-    {"name": "lead",       "type": "mono",      "default_role": "lead",      "midi_channel": 4},
-    {"name": "filter",     "type": "modulator", "default_role": "modulator", "midi_channel": 5},
+    {
+      "name": "lead",
+      "type": "mono",
+      "default_role": "lead",
+      "midi_channel": 2,
+      "mpe_mode": true,
+      "mpe_channel_count": 6,
+      "parameter_map": {
+        "bend": {"kind": "mpe_pitch_bend"},
+        "cutoff": {"kind": "mpe_timbre"}
+      }
+    },
+    {"name": "filter",     "type": "modulator", "default_role": "modulator", "midi_channel": 8},
     {"name": "kick",       "type": "drum",      "default_role": "drum",      "midi_channel": 9,  "kit_map": {"kick": 36}},
     {"name": "snare",      "type": "drum",      "default_role": "drum",      "midi_channel": 10, "kit_map": {"snare": 38}},
     {"name": "chh",        "type": "drum",      "default_role": "drum",      "midi_channel": 10, "kit_map": {"chh": 42}},
@@ -17,6 +26,8 @@
     {"name": "tom",        "type": "drum",      "default_role": "drum",      "midi_channel": 11, "kit_map": {"tom": 45}},
     {"name": "clave",      "type": "drum",      "default_role": "drum",      "midi_channel": 11, "kit_map": {"clave": 75}},
     {"name": "shaker",     "type": "drum",      "default_role": "drum",      "midi_channel": 11, "kit_map": {"shaker": 82}},
+    {"name": "acid",       "type": "mono",      "default_role": "bass",      "midi_channel": 12},
+    {"name": "stab",       "type": "poly",      "default_role": "stab",      "midi_channel": 13},
     {"name": "chord_ref",  "type": "mono",      "default_role": "lead",      "midi_channel": 15},
     {"name": "root_ref",   "type": "mono",      "default_role": "lead",      "midi_channel": 16}
   ],

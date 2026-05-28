@@ -13,7 +13,9 @@
       "kit_map": {
         "kick": 36
       },
-      "cc_map": {}
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "snare",
@@ -24,7 +26,9 @@
       "kit_map": {
         "snare": 38
       },
-      "cc_map": {}
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "chh",
@@ -35,7 +39,9 @@
       "kit_map": {
         "chh": 42
       },
-      "cc_map": {}
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "ohh",
@@ -46,7 +52,9 @@
       "kit_map": {
         "ohh": 46
       },
-      "cc_map": {}
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "acid",
@@ -55,7 +63,9 @@
       "midi_channel": 1,
       "midi_port": null,
       "kit_map": {},
-      "cc_map": {}
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "stab",
@@ -64,7 +74,9 @@
       "midi_channel": 2,
       "midi_port": null,
       "kit_map": {},
-      "cc_map": {}
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "lead",
@@ -73,7 +85,9 @@
       "midi_channel": 3,
       "midi_port": null,
       "kit_map": {},
-      "cc_map": {}
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "filter",
@@ -82,10 +96,12 @@
       "midi_channel": 1,
       "midi_port": null,
       "kit_map": {},
-      "cc_map": {}
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     }
   ],
   "clock_mode": "internal_master",
   "midi_clock_in_port": null,
-  "schema_version": 1
+  "schema_version": 2
 }

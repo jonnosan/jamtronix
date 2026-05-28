@@ -47,22 +47,20 @@ from jtx.algorithms._theory import note_to_midi
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
 from jtx.engine.events import ControlChange, Event, NoteOff, NoteOn
-
-_DEFAULT_CC: dict[str, int] = {"filter_cutoff": 74, "detune": 1}
+from jtx.model.parameter_target import CCTarget, ParameterTarget
 
 
 class ReeseBass(Algorithm):
     """Modulating wobble-bass with CC74 wobble + CC1 detune LFO."""
 
     name: ClassVar[str] = "reese_bass"
-    DEFAULT_CC: ClassVar[dict[str, int]] = dict(_DEFAULT_CC)
+    DEFAULT_PARAM_MAP: ClassVar[dict[str, ParameterTarget]] = {
+        "cutoff": CCTarget(74),
+        "detune": CCTarget(1),
+    }
 
-    def __init__(self, *, midi_channel: int, cc_map: dict[str, int] | None = None) -> None:
+    def __init__(self, *, midi_channel: int) -> None:
         self.midi_channel = midi_channel
-        self._cc_map = dict(cc_map) if cc_map else {}
-
-    def _cc(self, function: str) -> int:
-        return int(self._cc_map.get(function, _DEFAULT_CC[function]))
 
     def generate_bar(self, ctx: BarContext) -> list[Event]:
         knobs = ctx.pattern_knobs
@@ -102,7 +100,6 @@ class ReeseBass(Algorithm):
         ]
 
         # Cutoff wobble — sine-LFO sampled on the wobble subdivision grid.
-        wobble_cc_num = self._cc("filter_cutoff")
         cutoff_centre = (cutoff_min + cutoff_max) / 2.0
         cutoff_amp = (cutoff_max - cutoff_min) / 2.0 * wobble_depth
         if cutoff_amp > 0:
@@ -116,15 +113,15 @@ class ReeseBass(Algorithm):
                     ControlChange(
                         tick=tick,
                         channel=self.midi_channel,
-                        cc=wobble_cc_num,
+                        cc=74,
                         value=max(0, min(127, int(round(value)))),
+                        function="cutoff",
                     )
                 )
 
         # Detune LFO — smooth slow sine across detune_cycle_bars, phase
         # anchored to absolute bar index so continuous across bars.
         if detune_depth > 0 and detune_cycle_bars > 0:
-            detune_cc_num = self._cc("detune")
             cycle_ticks = max(1, int(detune_cycle_bars * ctx.ticks_per_bar))
             detune_samples = max(2, int(knobs.get("detune_samples_per_bar", 8)))
             step = max(1, ctx.ticks_per_bar // detune_samples)
@@ -138,8 +135,9 @@ class ReeseBass(Algorithm):
                     ControlChange(
                         tick=tick,
                         channel=self.midi_channel,
-                        cc=detune_cc_num,
+                        cc=1,
                         value=max(0, min(127, int(round(value)))),
+                        function="detune",
                     )
                 )
 

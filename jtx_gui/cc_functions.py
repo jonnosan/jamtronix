@@ -1,37 +1,56 @@
-"""Discoverable list of CC functions per algorithm.
+"""Function vocabulary surfaced in the setup editor.
 
-The setup editor surfaces these as the function names you can remap on
-a voice slot. They're derived from the algorithm classes' ``DEFAULT_CC``
-class attribute so adding a new mappable CC to an algorithm is a
-one-line change without touching the GUI.
+The setup editor's parameter-map section renders one row per function
+listed in :data:`FUNCTIONS_BY_VOICE_TYPE` for the selected voice's type.
+``DEFAULT_TARGETS`` supplies the "what would the router pick if this
+slot has nothing set?" answer (a :class:`CCTarget` with the algorithm's
+historical stock CC number). The actual lookup the router performs at
+runtime is per-algorithm (each ``Algorithm`` subclass declares
+``DEFAULT_PARAM_MAP``); this table is purely a UI affordance.
+
+``detune`` and ``glide_on`` are intentionally NOT in
+``FUNCTIONS_BY_VOICE_TYPE`` — they're algorithm-specific
+(``reese_bass`` and ``acid_bass`` respectively), not portable
+mono/poly knobs. They still have a ``DEFAULT_TARGETS`` entry so the
+router has a fallback if a song's parameter_map references them
+explicitly.
 """
 
 from __future__ import annotations
 
-from jtx.algorithms import AcidBass, SubDrone
+from jtx.model.parameter_target import CCTarget, ParameterTarget
+from jtx.model.types import VoiceType
 
-# Algorithm name → {function name: default CC number}.
-# Algorithms not in this map have no CC mappings to override.
-CC_FUNCTIONS: dict[str, dict[str, int]] = {
-    AcidBass.name: dict(AcidBass.DEFAULT_CC),
-    SubDrone.name: dict(SubDrone.DEFAULT_CC),
+FUNCTIONS_BY_VOICE_TYPE: dict[VoiceType, tuple[str, ...]] = {
+    "drum": (),
+    "mono": ("cutoff", "resonance", "glide", "bend"),
+    "poly": ("cutoff", "resonance", "bend"),
+    "modulator": (),
+    "follower": (),
+}
+
+DEFAULT_TARGETS: dict[str, ParameterTarget] = {
+    "cutoff": CCTarget(74),
+    "resonance": CCTarget(71),
+    "glide": CCTarget(5),
+    # ``bend`` has no CC anchor; the placeholder CC keeps the UI
+    # picker workable for the legacy CC row even though the natural
+    # use is MPEPitchBendTarget.
+    "bend": CCTarget(0),
+    "detune": CCTarget(1),
+    "glide_on": CCTarget(65),
 }
 
 
-def functions_for(algorithm_name: str) -> dict[str, int]:
-    """Return the default CC mapping for ``algorithm_name`` (empty if none)."""
-    return dict(CC_FUNCTIONS.get(algorithm_name, {}))
+def functions_for_type(voice_type: VoiceType) -> tuple[str, ...]:
+    """Return the v1 function vocabulary for *voice_type* (empty if none)."""
+    return FUNCTIONS_BY_VOICE_TYPE.get(voice_type, ())
 
 
-def all_functions_used_by(*algorithm_names: str) -> dict[str, int]:
-    """Union of CC functions across the named algorithms.
+def default_target(function: str) -> ParameterTarget:
+    """Return the documented default target for *function*.
 
-    Useful when a voice slot doesn't pin to one algorithm (an override
-    may swap the algorithm per-part). The merged dict uses the *first*
-    default seen for any duplicated function name.
+    Falls back to ``CCTarget(0)`` for unknown functions so the UI
+    doesn't crash when rendering an exotic parameter_map entry.
     """
-    merged: dict[str, int] = {}
-    for name in algorithm_names:
-        for func, default in CC_FUNCTIONS.get(name, {}).items():
-            merged.setdefault(func, default)
-    return merged
+    return DEFAULT_TARGETS.get(function, CCTarget(0))

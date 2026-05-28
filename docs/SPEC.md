@@ -112,13 +112,71 @@ file (or embedded inside a song if the user prefers). Contents:
   - `midi_port` (defaults to setup's default port),
   - `midi_channel` (1–16),
   - For `drum`: `kit_map` (`{kick: 36, snare: 38, hat: 42, …}`), defaulting to
-    GM drums (channel 10).
+    GM drums (channel 10),
+  - `parameter_map` (function name → `ParameterTarget`; see Parameter Mapping
+    below),
+  - `mpe_mode` (bool, default `false`) + `mpe_channel_count` (default `8`) —
+    when on, the voice owns the contiguous MPE channel block
+    `[midi_channel, midi_channel + mpe_channel_count - 1]` and NoteOns
+    round-robin through it for per-note expression.
 
 Songs reference a setup by id; multiple songs can share a setup.
 
 Two bundled starter setups: `IAC Bus 1` (acid/deep-techno default) and `Ableton`
 (same routing but with an Ableton `.als` template path empty by default so the
-user can fill it in).
+user can fill it in). A third setup, `Ableton MPE`, demonstrates the MPE
+channel-block layout for an MPE-aware lead voice.
+
+### Parameter Mapping
+
+Algorithms emit function-tagged events (`ControlChange` / `PitchBend` /
+`ChannelPressure` carrying a `function="cutoff"` / `"resonance"` / `"glide"` /
+`"bend"` / … tag). A sink-side router consults each voice's `parameter_map` to
+rewrite the event for the DAW target. Lookup precedence: voice-slot override →
+algorithm `DEFAULT_PARAM_MAP` → unchanged passthrough.
+
+**Function vocabulary** (v1):
+
+| voice type | functions |
+|---|---|
+| `drum` | (none — drums emit only notes) |
+| `mono` | `cutoff`, `resonance`, `glide`, `bend` |
+| `poly` | `cutoff`, `resonance`, `bend` |
+| `modulator` | (none — emits CC directly) |
+| `follower` | (none — passes source events through unchanged) |
+
+**`ParameterTarget` sum type**:
+
+```
+CCTarget(cc: int)        # MIDI CC on the voice's channel (default; CC# remap)
+MPEPitchBendTarget()     # per-note pitch bend on the MPE-allocated channel
+MPEPressureTarget()      # channel pressure on the MPE-allocated channel
+MPETimbreTarget()        # CC 74 on the MPE-allocated channel (MPE timbre slot)
+```
+
+`OscTarget(address: str)` is reserved for Phase B (#102) — the sum type's
+on-disk shape is dict-discriminated (`{"kind": "cc", "cc": 74}` etc.) so
+adding a new variant doesn't bump the schema.
+
+**MPE channel allocation** (when `mpe_mode == true`):
+
+- Channel 1 is reserved as the **MPE master**. JTX never emits on ch 1 for
+  MPE voices; setup validation rejects `mpe_mode=true` with `midi_channel=1`.
+- A voice with `midi_channel=2`, `mpe_channel_count=8` owns channels 2..9.
+  Each NoteOn claims the next channel in the block round-robin from the
+  most-recently-allocated index.
+- **Steal-oldest** when the block is full: the displaced note's channel is
+  reused, with a synthetic `NoteOff` emitted on it before the new `NoteOn`.
+- Tagged events bind to the most-recently-allocated note via a three-tier
+  rule that handles `acid_bass`'s leading + trailing pitch-bend wrap:
+  1. **Leading**: a NoteOn whose tick is within the next 2 ticks wins
+     (catches `tick=NoteOn.tick - 1` pre-bend).
+  2. **Trailing**: a note whose NoteOff is exactly at the current tick wins
+     (catches the zero-bend reset at `tick=NoteOff.tick`).
+  3. **In-lifetime**: any currently-sounding note; most recent wins.
+  4. Else: most-recently-allocated channel.
+- Notes that span bars survive in the allocator across `events_for_bar` calls
+  — the router is per-voice and stateful for the lifetime of a `SongPlayer`.
 
 ### Song
 

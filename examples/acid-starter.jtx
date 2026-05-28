@@ -113,27 +113,37 @@
     "intro": {
       "bars": 8,
       "voice_overrides": {},
-      "loop": false
+      "loop": false,
+      "tempo": null,
+      "meter": null
     },
     "build": {
       "bars": 8,
       "voice_overrides": {},
-      "loop": false
+      "loop": false,
+      "tempo": null,
+      "meter": null
     },
     "drop": {
       "bars": 16,
       "voice_overrides": {},
-      "loop": false
+      "loop": false,
+      "tempo": null,
+      "meter": null
     },
     "drop2": {
       "bars": 16,
       "voice_overrides": {},
-      "loop": false
+      "loop": false,
+      "tempo": null,
+      "meter": null
     },
     "outro": {
       "bars": 8,
       "voice_overrides": {},
-      "loop": false
+      "loop": false,
+      "tempo": null,
+      "meter": null
     }
   },
   "arrangement": [
@@ -145,5 +155,5 @@
     "outro"
   ],
   "lfos": [],
-  "schema_version": 1
+  "schema_version": 2
 }

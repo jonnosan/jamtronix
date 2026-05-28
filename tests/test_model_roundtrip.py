@@ -160,3 +160,18 @@ def test_setup_validation_rejects_bad_midi_channel() -> None:
     setup.voices[0].midi_channel = 17
     with pytest.raises(ValidationError, match="midi_channel 17"):
         save_setup(setup, "/tmp/should-never-write.jtx-setup")
+
+
+def test_load_setup_ableton_mpe_validates() -> None:
+    """The bundled ableton-mpe setup loads cleanly and has an MPE lead voice."""
+    setup = load_setup("setups/ableton-mpe.jtx-setup")
+    lead = setup.voice("lead")
+    assert lead is not None
+    assert lead.mpe_mode is True
+    assert lead.mpe_channel_count == 6
+    assert lead.midi_channel == 2
+    # No voice may collide with the reserved MPE master channel 1.
+    assert all(v.midi_channel != 1 for v in setup.voices)
+    # Utility reference channels are preserved.
+    assert setup.voice("chord_ref") is not None
+    assert setup.voice("root_ref") is not None

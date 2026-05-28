@@ -6,6 +6,15 @@ in :mod:`jtx.persist`.
 """
 
 from jtx.model.lfo import LFO, LFOApplication
+from jtx.model.parameter_target import (
+    CCTarget,
+    MPEPitchBendTarget,
+    MPEPressureTarget,
+    MPETimbreTarget,
+    ParameterTarget,
+    parameter_target_from_dict,
+    parameter_target_to_dict,
+)
 from jtx.model.setup import Setup, VoiceSlot
 from jtx.model.song import (
     ChordProgression,
@@ -28,6 +37,7 @@ from jtx.model.types import (
 from jtx.model.validate import ValidationError, cross_validate, validate_song
 
 __all__ = [
+    "CCTarget",
     "ChordProgression",
     "ClockMode",
     "Key",
@@ -36,6 +46,10 @@ __all__ = [
     "LFO",
     "LFOApplication",
     "LFOShape",
+    "MPEPitchBendTarget",
+    "MPEPressureTarget",
+    "MPETimbreTarget",
+    "ParameterTarget",
     "Part",
     "ROLES_BY_TYPE",
     "Role",
@@ -48,5 +62,7 @@ __all__ = [
     "VoiceSlot",
     "VoiceType",
     "cross_validate",
+    "parameter_target_from_dict",
+    "parameter_target_to_dict",
     "validate_song",
 ]
