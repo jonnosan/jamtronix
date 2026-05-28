@@ -132,11 +132,8 @@ def instantiate_algorithm(algorithm_name: str, voice_slot: VoiceSlot) -> Algorit
         return CCEnvelope()
     if algorithm_name == "step_cc":
         return StepCC()
-    # voice_follower still consumes ctx.source_events as MIDI; its own
-    # output channel stays pinned to slot.midi_channel pending the
-    # dedicated refactor below.
     if algorithm_name == "voice_follower":
-        return VoiceFollower(midi_channel=ch)
+        return VoiceFollower()
     raise ValueError(f"unknown algorithm: {algorithm_name!r}")
 
 

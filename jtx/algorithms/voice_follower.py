@@ -66,18 +66,25 @@ from jtx.algorithms._theory import note_to_midi, scale_intervals
 from jtx.engine.algorithm import Algorithm
 from jtx.engine.context import BarContext
 from jtx.engine.events import Event, NoteOff, NoteOn
+from jtx.model.events import AbstractEvent, Note
 from jtx.model.song import KnobDict
 
 
 class VoiceFollower(Algorithm):
-    """Fixed-pipeline follower; reads ``ctx.source_events`` set by the glue."""
+    """Fixed-pipeline follower; reads ``ctx.source_events`` set by the glue.
+
+    Schema v3: emits abstract :class:`Note` events. The follower's
+    input (``ctx.source_events``) is still the source voice's
+    post-voicing MIDI stream — SongPlayer pairs NoteOn/NoteOff into
+    the internal note tuples used by the pipeline.
+    """
 
     name: ClassVar[str] = "voice_follower"
 
-    def __init__(self, *, midi_channel: int) -> None:
-        self.midi_channel = midi_channel
+    def __init__(self) -> None:
+        pass
 
-    def generate_bar(self, ctx: BarContext) -> list[Event]:
+    def generate_bar(self, ctx: BarContext) -> list[AbstractEvent]:
         knobs = ctx.pattern_knobs
         rng = ctx.rng
 
@@ -105,13 +112,17 @@ class VoiceFollower(Algorithm):
         notes = _quantize(notes, knobs, ctx)
         notes = _ratchet(notes, knobs, ctx)
 
-        events: list[Event] = []
+        events: list[AbstractEvent] = []
         for tick, pitch, velocity, duration in notes:
             pitch = max(0, min(127, pitch))
             events.append(
-                NoteOn(tick=tick, channel=self.midi_channel, note=pitch, velocity=velocity)
+                Note(
+                    pitch=pitch,
+                    velocity=max(1, min(127, velocity)),
+                    duration_ticks=max(1, duration),
+                    tick=tick,
+                )
             )
-            events.append(NoteOff(tick=tick + duration, channel=self.midi_channel, note=pitch))
         return events
 
 
