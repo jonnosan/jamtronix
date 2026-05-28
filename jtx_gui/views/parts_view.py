@@ -23,6 +23,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDoubleSpinBox,
     QFrame,
     QHBoxLayout,
     QInputDialog,
@@ -389,14 +390,61 @@ class _PartHeaderPanel(QFrame):
 
         tempo_row = self._make_tempo_row()
         meter_row = self._make_meter_row()
+        intensity_row = self._make_intensity_row()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 10, 14, 12)
         layout.setSpacing(6)
         layout.addWidget(title)
         layout.addLayout(bars_row)
+        layout.addLayout(intensity_row)
         layout.addLayout(tempo_row)
         layout.addLayout(meter_row)
+
+    # ----- intensity envelope --------------------------------------------
+
+    def _make_intensity_row(self) -> QHBoxLayout:
+        label = QLabel("INTENSITY")
+        label.setObjectName("FieldLabel")
+        label.setToolTip(
+            "Part intensity envelope (0..1). Algorithms read "
+            "ctx.part_intensity, which lerps start → end across the part."
+        )
+
+        start = QDoubleSpinBox()
+        start.setRange(0.0, 1.0)
+        start.setSingleStep(0.05)
+        start.setDecimals(2)
+        start.setValue(float(self._part.intensity_start))
+        start.setPrefix("start ")
+
+        end = QDoubleSpinBox()
+        end.setRange(0.0, 1.0)
+        end.setSingleStep(0.05)
+        end.setDecimals(2)
+        end.setValue(float(self._part.intensity_end))
+        end.setPrefix("end ")
+
+        def emit_start(value: float) -> None:
+            if value != self._part.intensity_start:
+                self._part.intensity_start = float(value)
+                self._on_dirty()
+
+        def emit_end(value: float) -> None:
+            if value != self._part.intensity_end:
+                self._part.intensity_end = float(value)
+                self._on_dirty()
+
+        start.valueChanged.connect(emit_start)
+        end.valueChanged.connect(emit_end)
+
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        row.addWidget(label)
+        row.addWidget(start)
+        row.addWidget(end)
+        row.addStretch(1)
+        return row
 
     # ----- tempo override -------------------------------------------------
 
