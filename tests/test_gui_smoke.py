@@ -464,6 +464,32 @@ def test_setup_validation_rejects_mpe_block_overflowing_channel_16() -> None:
     assert any("MPE block" in e for e in errors)
 
 
+def test_setup_editor_target_helpers_round_trip_osc() -> None:
+    """_target_kind + _target_from_kind handle OscTarget end-to-end."""
+    from jtx.model import CCTarget, MPEPitchBendTarget, OscTarget
+    from jtx_gui.views.setup_editor import (
+        _KIND_LABELS,
+        _default_osc_address,
+        _target_from_kind,
+        _target_kind,
+    )
+
+    # The OSC kind appears in the picker.
+    assert any(kind == "osc" for kind, _label in _KIND_LABELS)
+
+    # _target_kind recognises every variant.
+    assert _target_kind(CCTarget(74)) == "cc"
+    assert _target_kind(MPEPitchBendTarget()) == "mpe_pitch_bend"
+    assert _target_kind(OscTarget("/jtx/x/cutoff")) == "osc"
+
+    # Round-trip a constructed OscTarget through _target_from_kind.
+    target = _target_from_kind("osc", address="/jtx/lead/cutoff")
+    assert target == OscTarget("/jtx/lead/cutoff")
+
+    # The default address helper matches the documented scheme.
+    assert _default_osc_address("lead", "cutoff") == "/jtx/lead/cutoff"
+
+
 @pytest.mark.skip(
     reason="Constructs the full SetupEditor; segfaults at process exit "
     "on macOS PySide6 under pytest. Editor works at runtime."

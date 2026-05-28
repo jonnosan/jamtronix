@@ -1,0 +1,48 @@
+{
+  "id": "ableton-osc",
+  "name": "Ableton OSC (IAC Bus 1 + OSC :11000)",
+  "default_midi_port": "IAC Driver Bus 1",
+  "daw_template_path": null,
+  "clock_mode": "internal_master",
+  "midi_clock_in_port": null,
+  "osc_host": "127.0.0.1",
+  "osc_port": 11000,
+  "voices": [
+    {
+      "name": "lead",
+      "type": "mono",
+      "default_role": "lead",
+      "midi_channel": 2,
+      "mpe_mode": true,
+      "mpe_channel_count": 6,
+      "parameter_map": {
+        "cutoff": {"kind": "osc", "address": "/jtx/lead/cutoff"},
+        "resonance": {"kind": "osc", "address": "/jtx/lead/resonance"},
+        "glide": {"kind": "osc", "address": "/jtx/lead/glide"},
+        "bend": {"kind": "mpe_pitch_bend"}
+      }
+    },
+    {"name": "filter",    "type": "modulator", "default_role": "modulator", "midi_channel": 8},
+    {"name": "kick",      "type": "drum",      "default_role": "drum",      "midi_channel": 9,  "kit_map": {"kick": 36}},
+    {"name": "snare",     "type": "drum",      "default_role": "drum",      "midi_channel": 10, "kit_map": {"snare": 38}},
+    {"name": "chh",       "type": "drum",      "default_role": "drum",      "midi_channel": 10, "kit_map": {"chh": 42}},
+    {"name": "ohh",       "type": "drum",      "default_role": "drum",      "midi_channel": 10, "kit_map": {"ohh": 46}},
+    {"name": "tom",       "type": "drum",      "default_role": "drum",      "midi_channel": 11, "kit_map": {"tom": 45}},
+    {"name": "clave",     "type": "drum",      "default_role": "drum",      "midi_channel": 11, "kit_map": {"clave": 75}},
+    {"name": "shaker",    "type": "drum",      "default_role": "drum",      "midi_channel": 11, "kit_map": {"shaker": 82}},
+    {
+      "name": "acid",
+      "type": "mono",
+      "default_role": "bass",
+      "midi_channel": 12,
+      "parameter_map": {
+        "cutoff": {"kind": "osc", "address": "/jtx/acid/cutoff"},
+        "resonance": {"kind": "osc", "address": "/jtx/acid/resonance"}
+      }
+    },
+    {"name": "stab",      "type": "poly",      "default_role": "stab",      "midi_channel": 13},
+    {"name": "chord_ref", "type": "mono",      "default_role": "lead",      "midi_channel": 15},
+    {"name": "root_ref",  "type": "mono",      "default_role": "lead",      "midi_channel": 16}
+  ],
+  "schema_version": 2
+}

@@ -250,39 +250,140 @@ class MidiClockSlaveClock(ClockSource):
                 self._cond.notify_all()
 
 
+LinkFactory = Callable[[float], Any]
+"""Construct a ``link.Link``-shaped object given an initial tempo (BPM).
+
+Default = ``link.Link`` from ``LinkPython-extern``. Tests inject a
+:class:`FakeLink`-style stub to avoid joining a real Link peer
+session.
+"""
+
+
+def _default_link_factory(tempo_bpm: float) -> Any:
+    # ``link`` is the optional LinkPython-extern dependency. When it's
+    # not installed we surface a clear install hint; when it is, mypy
+    # would otherwise flag the lack of type stubs — silence both with a
+    # broad ignore (also re-silenced when the import succeeds at type-
+    # check time, which would otherwise trigger an unused-ignore warning).
+    try:
+        import link  # type: ignore[import-not-found,import-untyped,unused-ignore]
+    except ImportError as exc:  # pragma: no cover — env-dependent
+        raise ImportError(
+            "Ableton Link clock requires the optional LinkPython-extern "
+            "package. Install with: pip install 'jamtronix[link]'."
+        ) from exc
+    return link.Link(tempo_bpm)
+
+
 class AbletonLinkClock(ClockSource):
-    """Ableton Link mode — placeholder; binding choice deferred.
+    """Ableton Link mode — backed by ``LinkPython-extern``.
 
-    The spec (``docs/SPEC.md`` §Open Items) flags the Link binding as
-    an open item: ``LinkPython-extern`` vs ``aalink`` vs a
-    ``ctypes``-wrapped ``libabletonlink``. None of these are validated
-    on the user's setup yet, so instantiating this class raises until
-    that decision is made and the binding is wired.
+    Wraps a single ``link.Link`` instance with a
+    :class:`MidiClockSlaveClock`-style threading layer so the
+    scheduler's blocking ``wait_until`` works against Link's pull-API.
 
-    The class exists so the ``ClockSource`` ABC has all three modes
-    discoverable — a future GUI clock-mode selector can list "Link
-    (coming soon)" without an additional sentinel.
+    Tempo + start-stop changes from the Link session are picked up via
+    ``setTempoCallback`` / ``setStartStopCallback``; ``wait_until``
+    polls the link clock with a short timeout so tempo changes from
+    other Link peers shorten / lengthen the remaining wait promptly.
+
+    The optional ``link_factory`` kwarg lets tests inject a
+    :class:`FakeLink`-style stub that drives time deterministically.
     """
 
-    ppq: int = 480
+    ppq: int
 
-    def __init__(self, *_args: object, **_kwargs: object) -> None:
-        raise NotImplementedError(
-            "Ableton Link clock is deferred — see jamtronix issue #6 "
-            "follow-up. Use InternalClock or MidiClockSlaveClock for v1."
-        )
+    def __init__(
+        self,
+        ppq: int = 480,
+        tempo_bpm: float = 120.0,
+        *,
+        quantum: float = 4.0,
+        link_factory: LinkFactory | None = None,
+    ) -> None:
+        if ppq <= 0:
+            raise ValueError(f"ppq must be > 0, got {ppq}")
+        if tempo_bpm <= 0:
+            raise ValueError(f"tempo_bpm must be > 0, got {tempo_bpm}")
+        self.ppq = ppq
+        self._quantum = float(quantum)
+        self._link: Any = (link_factory or _default_link_factory)(tempo_bpm)
+        self._lock = threading.Lock()
+        self._cond = threading.Condition(self._lock)
+        self._tempo_bpm = float(tempo_bpm)
+        # Beat offset of the moment :meth:`start` was called; ``None``
+        # until the clock is started, again after :meth:`stop`.
+        self._start_beat: float | None = None
+        self._is_playing: bool = False
+        self._link.setTempoCallback(self._on_tempo)
+        self._link.setStartStopCallback(self._on_start_stop)
 
     def tempo_bpm(self) -> float:
-        raise NotImplementedError
+        with self._lock:
+            return self._tempo_bpm
 
     def start(self) -> None:
-        raise NotImplementedError
+        # Joining the Link session is idempotent: setting ``enabled``
+        # multiple times is harmless. ``startStopSyncEnabled`` opts us
+        # into the shared transport so other Link peers see our
+        # start/stop events.
+        self._link.enabled = True
+        self._link.startStopSyncEnabled = True
+        state = self._link.captureSessionState()
+        clock = self._link.clock()
+        with self._cond:
+            self._start_beat = state.beatAtTime(clock.micros(), self._quantum)
+            self._tempo_bpm = state.tempo()
+            self._cond.notify_all()
 
     def stop(self) -> None:
-        raise NotImplementedError
+        with self._cond:
+            self._start_beat = None
+            self._cond.notify_all()
+        # We deliberately don't disable Link here — the user may want
+        # to remain in the Link session while transport is paused so
+        # other peers' tempo / start / stop events keep flowing.
 
     def now_tick(self) -> int:
-        raise NotImplementedError
+        with self._lock:
+            if self._start_beat is None:
+                return 0
+            start_beat = self._start_beat
+        state = self._link.captureSessionState()
+        clock = self._link.clock()
+        beat = state.beatAtTime(clock.micros(), self._quantum)
+        return max(0, int(round((beat - start_beat) * self.ppq)))
 
     def wait_until(self, target_tick: int) -> None:
-        raise NotImplementedError
+        if self._start_beat is None:
+            raise RuntimeError("AbletonLinkClock not started")
+        target_beat_offset = target_tick / self.ppq
+        with self._cond:
+            while True:
+                if self._start_beat is None:
+                    return  # stopped while waiting — bail cleanly
+                state = self._link.captureSessionState()
+                clock = self._link.clock()
+                current = state.beatAtTime(clock.micros(), self._quantum) - self._start_beat
+                if current >= target_beat_offset:
+                    return
+                # Sleep with a short cap so tempo callbacks shorten /
+                # lengthen the remaining wait promptly. 5ms matches
+                # the polling resolution InternalClock uses for its
+                # request_interrupt path.
+                tempo = self._tempo_bpm or 120.0
+                remaining_beats = target_beat_offset - current
+                remaining_seconds = remaining_beats * 60.0 / tempo
+                self._cond.wait(timeout=min(0.005, max(0.0, remaining_seconds)))
+
+    # ---------------------------------------------------- Link callbacks
+
+    def _on_tempo(self, new_tempo: float) -> None:
+        with self._cond:
+            self._tempo_bpm = float(new_tempo)
+            self._cond.notify_all()
+
+    def _on_start_stop(self, is_playing: bool) -> None:
+        with self._cond:
+            self._is_playing = bool(is_playing)
+            self._cond.notify_all()

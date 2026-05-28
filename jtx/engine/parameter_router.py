@@ -47,11 +47,13 @@ from jtx.engine.events import (
     NoteOn,
     PitchBend,
 )
+from jtx.engine.osc_client import OscClientProtocol
 from jtx.model.parameter_target import (
     CCTarget,
     MPEPitchBendTarget,
     MPEPressureTarget,
     MPETimbreTarget,
+    OscTarget,
     ParameterTarget,
 )
 from jtx.model.setup import VoiceSlot
@@ -85,9 +87,12 @@ class ParameterRouter:
         self,
         slot: VoiceSlot,
         default_param_map: dict[str, ParameterTarget] | None = None,
+        *,
+        osc_client: OscClientProtocol | None = None,
     ) -> None:
         self._slot = slot
         self._defaults: dict[str, ParameterTarget] = dict(default_param_map or {})
+        self._osc_client = osc_client
 
         if slot.mpe_mode:
             self._block: list[int] = list(
@@ -169,7 +174,12 @@ class ParameterRouter:
                     )
                 )
             elif isinstance(ev, ControlChange | PitchBend | ChannelPressure):
-                out.append(self._route_tagged(ev))
+                routed = self._route_tagged(ev)
+                # ``None`` means the source was OSC-routed — no MIDI
+                # event is emitted for it. The OSC client has already
+                # been called out-of-band inside ``_route_tagged``.
+                if routed is not None:
+                    out.append(routed)
             else:
                 out.append(ev)
 
@@ -264,7 +274,13 @@ class ParameterRouter:
 
     # --------------------------------------------------- tagged route
 
-    def _route_tagged(self, ev: ControlChange | PitchBend | ChannelPressure) -> Event:
+    def _route_tagged(self, ev: ControlChange | PitchBend | ChannelPressure) -> Event | None:
+        """Rewrite *ev* per the resolved target.
+
+        Returns the rewritten event, or ``None`` if the target is OSC
+        (the OSC client has been called out-of-band and no MIDI event
+        is emitted for this source).
+        """
         fn = ev.function
         if fn is None:
             return ev
@@ -278,6 +294,18 @@ class ParameterRouter:
             if self._slot.mpe_mode and channel != ev.channel:
                 return _rechannel(ev, channel)
             return ev
+
+        if isinstance(target, OscTarget):
+            if self._osc_client is None:
+                raise RuntimeError(
+                    f"voice {self._slot.name!r}: function {fn!r} maps to OscTarget "
+                    f"{target.address!r} but no OSC client was configured on the "
+                    "ParameterRouter. Configure setup.osc_host / osc_port and run "
+                    "via SongPlayer, or pass osc_client= to ParameterRouter()."
+                )
+            value = _to_osc_value(ev)
+            self._osc_client.send(target.address, value)
+            return None
 
         if isinstance(target, CCTarget):
             value = _to_cc_value(ev)
@@ -380,6 +408,19 @@ def _to_pb_value(ev: ControlChange | PitchBend | ChannelPressure) -> int:
     # CC / ChannelPressure 0..127 → pitchwheel.
     scaled = round(ev.value * 16383 / 127) - 8192
     return max(-8192, min(8191, scaled))
+
+
+def _to_osc_value(ev: ControlChange | PitchBend | ChannelPressure) -> float:
+    """Coerce an event's value to the OSC float range for its kind.
+
+    PitchBend (a ``"bend"``-like function) lands in ``[-1, 1]``; CC and
+    ChannelPressure (``"cutoff"`` / ``"resonance"`` / etc.) land in
+    ``[0, 1]``. Receivers can scale to whatever range suits the
+    destination param.
+    """
+    if isinstance(ev, PitchBend):
+        return max(-1.0, min(1.0, ev.value / 8192.0))
+    return max(0.0, min(1.0, ev.value / 127.0))
 
 
 def _rechannel(

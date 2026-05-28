@@ -262,3 +262,49 @@ def test_song_player_routes_mpe_lead_through_block() -> None:
     # And we should see at least 2 distinct channels — the block is
     # being exercised.
     assert len({c for c in channels}) >= 2
+
+
+def test_song_player_routes_osc_target_via_injected_client() -> None:
+    """A voice with an OscTarget produces no MIDI CC; the injected client sees it."""
+    from jtx.engine.osc_client import MemoryOscClient
+    from jtx.model.parameter_target import OscTarget
+
+    setup = Setup(
+        id="osc-test",
+        name="OSC test",
+        default_midi_port="IAC",
+        voices=[
+            VoiceSlot(
+                name="acid",
+                type="mono",
+                default_role="bass",
+                midi_channel=2,
+                parameter_map={"cutoff": OscTarget("/jtx/acid/cutoff")},
+            ),
+        ],
+    )
+    song = Song(
+        title="OSC Probe",
+        setup_ref="osc-test",
+        key=Key(tonic="A", scale="minor"),
+        tempo=120,
+        meter="4/4",
+        voices={
+            "acid": VoiceConfig(
+                algorithm="acid_bass",
+                pattern={"drop_prob": 0.0, "cycle": 2, "bend": 0},
+            ),
+        },
+        parts={"main": Part(bars=1)},
+        arrangement=["main"],
+    )
+    osc = MemoryOscClient()
+    player = SongPlayer(song, setup, "main", osc_client=osc)
+    events = player.events_for_bar(0)
+    # The cutoff LFO is OSC-routed, so no CC 74 events should land in MIDI.
+    assert all(not (isinstance(e, ControlChange) and e.function == "cutoff") for e in events)
+    # And the OSC client captured the messages.
+    assert any(addr == "/jtx/acid/cutoff" for addr, _ in osc.sent)
+    # Values stay in the 0..1 normalised range.
+    assert all(0.0 <= v <= 1.0 for _, v in osc.sent)
+    player.close()

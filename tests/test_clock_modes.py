@@ -158,27 +158,145 @@ def test_slave_ignores_unknown_messages() -> None:
     assert clock.now_tick() == 20
 
 
-def test_link_clock_construction_raises() -> None:
-    with pytest.raises(NotImplementedError, match="deferred"):
-        AbletonLinkClock()
+# ---------------------------------------------------- AbletonLinkClock
 
 
-def test_link_clock_methods_raise() -> None:
-    """Direct method calls on the unconstructed class also raise so a
-    future user of the type doesn't accidentally call into a no-op."""
+class _FakeSessionState:
+    """In-memory Link session state for tests.
 
-    class _Bypass(AbletonLinkClock):
-        def __init__(self) -> None:
-            pass  # skip the placeholder __init__
+    Beat advances at a deterministic rate dictated by ``tempo`` and a
+    ``time`` counter we control directly from the test.
+    """
 
-    c = _Bypass()
-    with pytest.raises(NotImplementedError):
-        c.tempo_bpm()
-    with pytest.raises(NotImplementedError):
-        c.start()
-    with pytest.raises(NotImplementedError):
-        c.stop()
-    with pytest.raises(NotImplementedError):
-        c.now_tick()
-    with pytest.raises(NotImplementedError):
-        c.wait_until(0)
+    def __init__(self, link: _FakeLink) -> None:
+        self._link = link
+
+    def tempo(self) -> float:
+        return self._link.tempo
+
+    def beatAtTime(self, micros: int, _quantum: float) -> float:
+        # beats = micros * tempo / 60_000_000
+        return micros * self._link.tempo / 60_000_000.0
+
+
+class _FakeClock:
+    def __init__(self, link: _FakeLink) -> None:
+        self._link = link
+
+    def micros(self) -> int:
+        return self._link.now_micros
+
+
+class _FakeLink:
+    """Minimal in-memory Link for tests — no real Link peer involved."""
+
+    def __init__(self, tempo: float = 120.0) -> None:
+        self.tempo = float(tempo)
+        self.now_micros = 0
+        self.enabled = False
+        self.startStopSyncEnabled = False
+        self._tempo_callback: Callable[[float], None] | None = None
+        self._start_stop_callback: Callable[[bool], None] | None = None
+
+    def captureSessionState(self) -> _FakeSessionState:
+        return _FakeSessionState(self)
+
+    def clock(self) -> _FakeClock:
+        return _FakeClock(self)
+
+    def setTempoCallback(self, fn: Callable[[float], None]) -> None:
+        self._tempo_callback = fn
+
+    def setStartStopCallback(self, fn: Callable[[bool], None]) -> None:
+        self._start_stop_callback = fn
+
+    # --- test helpers (not part of the real link.Link API) -----------
+
+    def advance_micros(self, micros: int) -> None:
+        self.now_micros += micros
+
+    def fire_tempo(self, new_tempo: float) -> None:
+        self.tempo = float(new_tempo)
+        if self._tempo_callback is not None:
+            self._tempo_callback(self.tempo)
+
+    def fire_start_stop(self, is_playing: bool) -> None:
+        if self._start_stop_callback is not None:
+            self._start_stop_callback(is_playing)
+
+
+def _make_link_clock(*, ppq: int = 480, tempo: float = 120.0) -> tuple[AbletonLinkClock, _FakeLink]:
+    holder: list[_FakeLink] = []
+
+    def factory(initial_tempo: float) -> _FakeLink:
+        link_obj = _FakeLink(initial_tempo)
+        holder.append(link_obj)
+        return link_obj
+
+    clock = AbletonLinkClock(ppq=ppq, tempo_bpm=tempo, link_factory=factory)
+    return clock, holder[0]
+
+
+def test_link_clock_reports_session_tempo() -> None:
+    clock, link = _make_link_clock(tempo=120.0)
+    assert clock.tempo_bpm() == 120.0
+    link.fire_tempo(140.0)
+    assert clock.tempo_bpm() == 140.0
+
+
+def test_link_clock_now_tick_is_zero_before_start() -> None:
+    clock, _link = _make_link_clock()
+    assert clock.now_tick() == 0
+
+
+def test_link_clock_now_tick_advances_with_link_time() -> None:
+    clock, link = _make_link_clock(ppq=480, tempo=120.0)
+    clock.start()
+    # At 120 BPM, 1 beat = 500_000 micros; 1 beat = 480 ticks.
+    link.advance_micros(500_000)
+    assert clock.now_tick() == 480
+
+
+def test_link_clock_stop_resets_now_tick_to_zero() -> None:
+    clock, link = _make_link_clock(tempo=120.0)
+    clock.start()
+    link.advance_micros(1_000_000)
+    assert clock.now_tick() > 0
+    clock.stop()
+    assert clock.now_tick() == 0
+
+
+def test_link_clock_wait_until_returns_when_already_past() -> None:
+    clock, link = _make_link_clock(ppq=480, tempo=120.0)
+    clock.start()
+    link.advance_micros(1_000_000)  # 2 beats = 960 ticks
+    # No real waiting; the loop should see we're past target and
+    # return on the first iteration.
+    clock.wait_until(100)
+
+
+def test_link_clock_wait_until_raises_when_not_started() -> None:
+    clock, _link = _make_link_clock()
+    with pytest.raises(RuntimeError, match="not started"):
+        clock.wait_until(100)
+
+
+def test_link_clock_responds_to_start_stop_callback() -> None:
+    """A start/stop event from the Link session updates is_playing state."""
+    clock, link = _make_link_clock()
+    # Initial: not playing.
+    assert clock._is_playing is False
+    link.fire_start_stop(True)
+    assert clock._is_playing is True
+    link.fire_start_stop(False)
+    assert clock._is_playing is False
+
+
+def test_link_clock_rejects_bad_ppq() -> None:
+    with pytest.raises(ValueError, match="ppq must be > 0"):
+        AbletonLinkClock(ppq=0, link_factory=_FakeLink)
+
+
+def test_link_clock_rejects_bad_tempo() -> None:
+    with pytest.raises(ValueError, match="tempo_bpm must be > 0"):
+        AbletonLinkClock(tempo_bpm=0, link_factory=_FakeLink)

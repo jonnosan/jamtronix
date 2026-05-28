@@ -175,3 +175,51 @@ def test_load_setup_ableton_mpe_validates() -> None:
     # Utility reference channels are preserved.
     assert setup.voice("chord_ref") is not None
     assert setup.voice("root_ref") is not None
+
+
+def test_load_setup_ableton_osc_validates() -> None:
+    """The bundled ableton-osc setup loads cleanly and exposes OSC + MPE coexistence."""
+    from jtx.model import MPEPitchBendTarget, OscTarget
+
+    setup = load_setup("setups/ableton-osc.jtx-setup")
+    assert setup.osc_host == "127.0.0.1"
+    assert setup.osc_port == 11000
+    lead = setup.voice("lead")
+    assert lead is not None
+    # Lead has OSC routing for cutoff/resonance/glide AND MPE pitch bend
+    # for bend — same voice, two transports.
+    assert isinstance(lead.parameter_map["cutoff"], OscTarget)
+    assert isinstance(lead.parameter_map["bend"], MPEPitchBendTarget)
+    assert lead.parameter_map["cutoff"].address == "/jtx/lead/cutoff"
+
+
+def test_setup_osc_host_port_round_trip(tmp_path: Path) -> None:
+    """osc_host + osc_port round-trip through save_setup / load_setup."""
+    setup = _sample_setup()
+    setup.osc_host = "192.168.1.50"
+    setup.osc_port = 9000
+    p = tmp_path / "osc.jtx-setup"
+    save_setup(setup, p)
+    reloaded = load_setup(p)
+    assert reloaded.osc_host == "192.168.1.50"
+    assert reloaded.osc_port == 9000
+
+
+def test_osc_target_round_trips_through_parameter_map(tmp_path: Path) -> None:
+    """OscTarget survives the dict-discriminated serializer."""
+    from jtx.model import OscTarget
+
+    setup = _sample_setup()
+    setup.voices[0].parameter_map["cutoff"] = OscTarget("/jtx/test/cutoff")
+    p = tmp_path / "osc-target.jtx-setup"
+    save_setup(setup, p)
+    reloaded = load_setup(p)
+    assert reloaded.voices[0].parameter_map["cutoff"] == OscTarget("/jtx/test/cutoff")
+
+
+def test_setup_validation_rejects_invalid_osc_port() -> None:
+    """osc_port outside 1..65535 is rejected at validate()."""
+    setup = _sample_setup()
+    setup.osc_port = 0
+    with pytest.raises(ValidationError, match="osc_port 0"):
+        save_setup(setup, "/tmp/should-never-write.jtx-setup")

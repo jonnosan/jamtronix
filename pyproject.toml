@@ -21,9 +21,16 @@ dependencies = [
     "mido>=1.3",
     "python-rtmidi>=1.5",
     "PySide6>=6.6",
+    "python-osc>=1.8",
 ]
 
 [project.optional-dependencies]
+# Ableton Link binding. Optional because not every user wants Link;
+# the rest of jtx (internal master + MIDI-clock slave) works without
+# it. Install with: pip install 'jamtronix[link]'.
+link = [
+    "LinkPython-extern>=1.0",
+]
 dev = [
     "pytest>=8",
     "ruff>=0.6",
