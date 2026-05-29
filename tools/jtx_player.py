@@ -22,8 +22,12 @@ Usage examples:
     python tools/jtx_player.py examples/phuture_test.jtx \
         --render /tmp/phuture.mid
 
-Setup resolution: if ``--setup`` isn't given, the CLI looks for
-``<song-dir>/<song.setup_ref>.jtx-setup`` next to the song file.
+Setup resolution: if ``--setup`` isn't given, the CLI tries in order:
+
+1. ``<song-dir>/<song.setup_ref>.jtx-setup`` next to the song file.
+2. ``./setups/<song.setup_ref>.jtx-setup`` relative to the cwd
+   (so songs in ``examples/`` referencing a bundled setup work
+   without ``--setup`` when run from the repo root).
 
 Stop playback with Ctrl-C — the all-notes-off CC fires on every
 channel as part of ``RealtimeMidiSink.stop`` so no stuck notes.
@@ -55,6 +59,39 @@ _CLOCK_CHOICES: tuple[ClockMode, ...] = (
     "midi_clock_slave",
     "ableton_link",
 )
+
+
+def _resolve_setup_path(
+    explicit: Path | None,
+    song_path: Path,
+    setup_ref: str,
+    parser: argparse.ArgumentParser,
+) -> Path:
+    """Resolve which ``.jtx-setup`` file to load.
+
+    Order: explicit ``--setup`` > co-located with the song >
+    ``./setups/<setup_ref>.jtx-setup`` (so songs in ``examples/``
+    referencing a bundled setup work without ``--setup`` when run
+    from the repo root). Errors with the candidate paths tried.
+    """
+    if explicit is not None:
+        if not explicit.exists():
+            parser.error(f"setup file not found: {explicit}")
+        return explicit
+
+    candidates = [
+        song_path.parent / f"{setup_ref}.jtx-setup",
+        Path.cwd() / "setups" / f"{setup_ref}.jtx-setup",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    tried = "\n    ".join(str(c) for c in candidates)
+    parser.error(
+        f"setup file not found for setup_ref {setup_ref!r}. Tried:\n    {tried}\n"
+        "  Pass --setup <path> to point at the .jtx-setup explicitly."
+    )
 
 
 def _preflight_midi_port(port_name: str, parser: argparse.ArgumentParser) -> None:
@@ -176,7 +213,10 @@ def main(argv: list[str] | None = None) -> int:
         "--setup",
         type=Path,
         default=None,
-        help=".jtx-setup file (default: '<song-dir>/<setup_ref>.jtx-setup')",
+        help=(
+            ".jtx-setup file (default: try '<song-dir>/<setup_ref>.jtx-setup' "
+            "then './setups/<setup_ref>.jtx-setup')"
+        ),
     )
     parser.add_argument(
         "--port",
@@ -257,9 +297,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("song is required (or pass --list-ports)")
 
     song = load_song(args.song)
-    setup_path = args.setup or args.song.parent / f"{song.setup_ref}.jtx-setup"
-    if not setup_path.exists():
-        parser.error(f"setup file not found: {setup_path}")
+    setup_path = _resolve_setup_path(args.setup, args.song, song.setup_ref, parser)
     setup = load_setup(setup_path)
 
     bpm = args.bpm if args.bpm is not None else float(song.tempo)
