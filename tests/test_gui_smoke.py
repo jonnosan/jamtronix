@@ -572,7 +572,7 @@ def test_composer_random_title_updates_only_title(qapp: QApplication) -> None:
 
 
 def test_composer_random_song_updates_pad_format_title_and_song(qapp: QApplication) -> None:
-    """'RANDOM SONG' rerolls mood + format + title + texture + motion and generates a fresh song."""
+    """'RANDOM SONG' rerolls mood + format + title + sonics and generates a fresh song."""
     import random as _random
 
     from jtx.composer import FIXED_PALETTE, MOOD_ANCHORS
@@ -585,8 +585,7 @@ def test_composer_random_song_updates_pad_format_title_and_song(qapp: QApplicati
     view._title.setText("Seed Title")
     fmt_song_idx = view._format_combo.findData("song")
     view._format_combo.setCurrentIndex(fmt_song_idx)
-    view._texture.set_value(0.5, emit=False)
-    view._motion.set_value(0.5, emit=False)
+    view._sonics_pad.set_mood(0.5, 0.5, emit=False)
     _random.seed(0)
     view._on_random_song_clicked()
     # Title should be replaced with a fresh draw.
@@ -601,36 +600,35 @@ def test_composer_random_song_updates_pad_format_title_and_song(qapp: QApplicati
     # (composer also wires the filter / root_ref / chord_ref utility cluster).
     assert state.song is not None
     assert set(FIXED_PALETTE).issubset(state.song.voices.keys())
-    # Texture + motion were re-rolled (both moved off the 0.5 seed).
-    assert view._texture.value() != 0.5
-    assert view._motion.value() != 0.5
+    # Texture + motion were re-rolled off the 0.5 / 0.5 seed.
+    sonics_texture, sonics_motion = view._sonics_pad.value()
+    assert sonics_texture != 0.5
+    assert sonics_motion != 0.5
     # The generated song persists the re-rolled axes.
-    assert state.song.texture == view._texture.value()
-    assert state.song.motion == view._motion.value()
+    assert state.song.texture == sonics_texture
+    assert state.song.motion == sonics_motion
     view.deleteLater()
 
 
-def test_composer_texture_motion_default_to_half(qapp: QApplication) -> None:
-    """Texture + motion knobs default to 0.5 / 0.5."""
+def test_composer_sonics_pad_defaults_to_centre(qapp: QApplication) -> None:
+    """Sonics pad starts at (0.5, 0.5) — the centre of [0, 1]²."""
     from jtx_gui.views.composer_view import ComposerView
 
     state = AppState()
     view = ComposerView(state)
-    assert view._texture.value() == 0.5
-    assert view._motion.value() == 0.5
+    assert view._sonics_pad.value() == (0.5, 0.5)
     view.deleteLater()
 
 
 def test_composer_generate_passes_texture_and_motion(qapp: QApplication) -> None:
-    """Generate forwards the texture + motion slider values into compose()."""
+    """Generate forwards the sonics pad values into compose()."""
     from jtx_gui.views.composer_view import ComposerView
 
     state = AppState()
     view = ComposerView(state)
     view._mood_pad.set_mood(0.0, 0.5, emit=False)
     view._title.setText("Slider Test")
-    view._texture.set_value(0.3, emit=False)
-    view._motion.set_value(0.8, emit=False)
+    view._sonics_pad.set_mood(0.3, 0.8, emit=False)
     view._on_generate_clicked()
     assert state.song is not None
     assert state.song.texture == 0.3
@@ -638,8 +636,8 @@ def test_composer_generate_passes_texture_and_motion(qapp: QApplication) -> None
     view.deleteLater()
 
 
-def test_composer_sync_from_state_populates_texture_and_motion(qapp: QApplication) -> None:
-    """Loading a song into AppState restores texture + motion slider positions."""
+def test_composer_sync_from_state_populates_sonics_pad(qapp: QApplication) -> None:
+    """Loading a song into AppState restores the sonics pad position."""
     from jtx.composer import compose
     from jtx.composer.mood import MoodSpec
     from jtx_gui.bundles import bundled_setups
@@ -661,12 +659,10 @@ def test_composer_sync_from_state_populates_texture_and_motion(qapp: QApplicatio
 
     state = AppState()
     view = ComposerView(state)
-    # Seed sliders to non-defaults so we can prove the sync overwrites them.
-    view._texture.set_value(0.5, emit=False)
-    view._motion.set_value(0.5, emit=False)
+    # Seed the pad to a non-default so we can prove the sync overwrites it.
+    view._sonics_pad.set_mood(0.5, 0.5, emit=False)
     state.adopt(song=song, setup=setup)
-    assert view._texture.value() == 0.2
-    assert view._motion.value() == 0.9
+    assert view._sonics_pad.value() == (0.2, 0.9)
     view.deleteLater()
 
 

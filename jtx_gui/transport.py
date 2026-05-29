@@ -195,6 +195,19 @@ class TransportService(QObject):
         self._queued_part = part_name
         self.queued_changed.emit(part_name)
 
+    def queue_song(self, song: Song) -> None:
+        """Queue a whole-song swap at the next bar boundary.
+
+        Lets the Composer view's live re-roll hand the worker a new
+        :class:`Song` without stopping playback — the worker picks it
+        up between bars. Preserves ``bar_index`` within a same-named
+        part so the swap is musically continuous (drop bar 5 → drop
+        bar 5 in the new roll).
+        """
+        if self._worker is None:
+            return
+        self._worker.queue_song(song)
+
     # ----- worker callbacks (cross-thread via signals) ---------------------
 
     def _on_bar_changed(self, tick: BarTick) -> None:
@@ -249,6 +262,7 @@ class _PlaybackWorker(QObject):
         self._setup = setup
         self._part = initial_part
         self._queued: str | None = None
+        self._queued_song: Song | None = None
         self._stop_requested = False
         self._sink = sink
         self._clock = clock
@@ -263,6 +277,9 @@ class _PlaybackWorker(QObject):
 
     def queue_part(self, part_name: str | None) -> None:
         self._queued = part_name
+
+    def queue_song(self, song: Song) -> None:
+        self._queued_song = song
 
     # ----- main loop ------------------------------------------------------
 
@@ -296,7 +313,20 @@ class _PlaybackWorker(QObject):
         bar_index = 0
         absolute_tick = 0
         while not self._stop_requested:
-            # Honour any queued part swap at the bar boundary first.
+            # Honour a whole-song swap (live re-roll from the Composer)
+            # first. Keep ``bar_index`` within the same part_name so the
+            # swap is musically continuous; reset only when the current
+            # part no longer exists in the new song.
+            if self._queued_song is not None:
+                self._song = self._queued_song
+                if self._part not in self._song.parts:
+                    self._part = next(iter(self._song.parts))
+                    bar_index = 0
+                player = self._build_player(self._part)
+                self._apply_part_tempo(self._song.parts[self._part])
+                self._queued_song = None
+
+            # Honour any queued part swap at the bar boundary.
             if self._queued is not None:
                 if self._queued in self._song.parts and self._queued != self._part:
                     self._part = self._queued
