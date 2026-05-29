@@ -151,6 +151,23 @@ class _ResolvedVoice:
     algorithm_name: str  # for follower-source lookup
 
 
+@dataclass
+class _BarSnapshot:
+    """Intermediate state produced by the algorithm phase of a bar.
+
+    Shared between :meth:`SongPlayer.events_for_bar` (which feeds it
+    into mix → feel → voicing → router) and
+    :meth:`SongPlayer.abstract_events_for_bar` (which returns just the
+    per-voice abstract events for evaluation).
+    """
+
+    abstract_voice_events: dict[str, list[AbstractEvent]]
+    contexts: dict[str, BarContext]
+    lfo_events: list[Event]
+    lfo_voice_params: dict[str, list[AbstractEvent]]
+    prev_voice_events: dict[str, list[AbstractEvent]]
+
+
 class SongPlayer:
     """Glue between a Song/Setup and a Scheduler's ``BarGenerator`` callable.
 
@@ -296,7 +313,14 @@ class SongPlayer:
             self._osc_client.close()
             self._osc_client = None
 
-    def events_for_bar(self, bar_idx: int) -> list[Event]:
+    def _compute_abstract_events(self, bar_idx: int) -> _BarSnapshot:
+        """Run algorithm phase: contexts → LFOs → per-voice abstract events.
+
+        Stops before mix / feel / voicing / router. Both
+        :meth:`events_for_bar` and :meth:`abstract_events_for_bar`
+        share this so the per-bar RNG seeding and LFO timing stay
+        identical between the two paths.
+        """
         chord_root = self.root_provider.root_semitones_for_bar(bar_idx)
 
         # Compute part-level progress + intensity (Tension-scaled).
@@ -409,6 +433,43 @@ class SongPlayer:
             if lfo_params:
                 algo_out.extend(lfo_params)
             abstract_voice_events[v.name] = algo_out
+
+        return _BarSnapshot(
+            abstract_voice_events=abstract_voice_events,
+            contexts=contexts,
+            lfo_events=lfo_events,
+            lfo_voice_params=lfo_voice_params,
+            prev_voice_events=prev_voice_events,
+        )
+
+    def abstract_events_for_bar(self, bar_idx: int) -> dict[str, list[AbstractEvent]]:
+        """Return per-voice abstract events for *bar_idx*, before mix/feel/voicing.
+
+        Intended for evaluation/scoring harnesses that want to read
+        the algorithm output directly — events still carry semantic
+        instrument names (``Hit.instrument="kick"``) and parameter
+        function names (``Param.name="cutoff"``), per-voice grouped.
+
+        Updates the prev-bar cache with the *pre-mix* abstract events,
+        so consecutive calls give followers a sensible (if slightly
+        un-ducked) lookback. Do not interleave with
+        :meth:`events_for_bar` on the same instance — the two cache
+        different shapes.
+        """
+        snapshot = self._compute_abstract_events(bar_idx)
+        self._last_bar = bar_idx
+        self._prev_voice_events = {
+            n: list(es) for n, es in snapshot.abstract_voice_events.items()
+        }
+        return snapshot.abstract_voice_events
+
+    def events_for_bar(self, bar_idx: int) -> list[Event]:
+        snapshot = self._compute_abstract_events(bar_idx)
+        abstract_voice_events = snapshot.abstract_voice_events
+        contexts = snapshot.contexts
+        lfo_events = snapshot.lfo_events
+        lfo_voice_params = snapshot.lfo_voice_params
+        prev_voice_events = snapshot.prev_voice_events
 
         # Mix pass — sidechain ducking (cross-voice, cross-bar) +
         # fade-in/out envelope per voice. Operates on abstract events;
