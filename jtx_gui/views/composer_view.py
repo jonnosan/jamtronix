@@ -3,15 +3,16 @@
 The Composer view is the front door for new songs after the mood +
 format composer rework (epic #118). It hosts the
 :class:`~jtx_gui.widgets.mood_pad.MoodPadWidget`, an anchor button
-row for quick mood snaps, a chaos knob, a format combo, a title
-input with a 'Random title' shortcut, a setup picker (bundled
-``.jtx-setup`` files), a 'Random song' shortcut, and a 'Generate'
-button that calls :func:`jtx.composer.compose` and hands the
-resulting :class:`~jtx.model.Song` to :class:`AppState.adopt`.
+row for quick mood snaps, chaos / texture / motion knobs, a format
+combo, a title input with a 'Random title' shortcut, a setup picker
+(bundled ``.jtx-setup`` files), a 'Random song' shortcut, and a
+'Generate' button that calls :func:`jtx.composer.compose` and hands
+the resulting :class:`~jtx.model.Song` to :class:`AppState.adopt`.
 
 If a song is already loaded into :class:`AppState`, the view reflects
-its mood / format / title / setup_ref so the user can see what the
-last generate produced and re-roll from the same starting point.
+its mood / format / title / setup_ref / texture / motion so the user
+can see what the last generate produced and re-roll from the same
+starting point.
 """
 
 from __future__ import annotations
@@ -106,6 +107,24 @@ class ComposerView(QWidget):
             decimals=2,
             parent=self,
         )
+        self._texture = KnobWidget(
+            label="texture",
+            minimum=0.0,
+            maximum=1.0,
+            value=0.5,
+            step=0.05,
+            decimals=2,
+            parent=self,
+        )
+        self._motion = KnobWidget(
+            label="motion",
+            minimum=0.0,
+            maximum=1.0,
+            value=0.5,
+            step=0.05,
+            decimals=2,
+            parent=self,
+        )
 
         self._format_combo = QComboBox(self)
         for fmt in FORMAT_SPECS:
@@ -138,7 +157,13 @@ class ComposerView(QWidget):
         form.addRow("TITLE", title_row)
         form.addRow("FORMAT", self._format_combo)
         form.addRow("SETUP", self._setup_combo)
-        form.addRow("CHAOS", self._chaos)
+
+        knob_row = QHBoxLayout()
+        knob_row.setSpacing(8)
+        knob_row.addWidget(self._chaos)
+        knob_row.addWidget(self._texture)
+        knob_row.addWidget(self._motion)
+        knob_row.addStretch(1)
 
         actions = QGridLayout()
         actions.addWidget(random_song_btn, 0, 0)
@@ -148,6 +173,7 @@ class ComposerView(QWidget):
         right.setSpacing(10)
         right.addWidget(heading)
         right.addLayout(form)
+        right.addLayout(knob_row)
         right.addStretch(1)
         right.addLayout(actions)
 
@@ -221,6 +247,8 @@ class ComposerView(QWidget):
         self._title.setText(song.title)
         self._mood_pad.set_mood(song.mood.valence, song.mood.energy, emit=False)
         self._chaos.set_value(song.mood.chaos, emit=False)
+        self._texture.set_value(song.texture, emit=False)
+        self._motion.set_value(song.motion, emit=False)
         idx = self._format_combo.findData(song.format)
         if idx >= 0:
             self._format_combo.setCurrentIndex(idx)
@@ -294,6 +322,8 @@ class ComposerView(QWidget):
 
         chaos = round(random.uniform(0.0, 0.7), 3)
         self._chaos.set_value(chaos, emit=False)
+        self._texture.set_value(round(random.uniform(0.0, 1.0), 3), emit=False)
+        self._motion.set_value(round(random.uniform(0.0, 1.0), 3), emit=False)
 
         self._title.setText(random_title(self.current_mood(), fmt))
         self._on_generate_clicked()
@@ -324,6 +354,8 @@ class ComposerView(QWidget):
                 mood=mood,
                 fmt=fmt,
                 chaos=mood.chaos,
+                texture=self._texture.value(),
+                motion=self._motion.value(),
             )
         except Exception as exc:  # noqa: BLE001 — surface verbatim to the user
             QMessageBox.critical(self, "Generate", f"Compose failed:\n{exc}")
