@@ -24,11 +24,25 @@ from jtx.composer.recipe import (
 )
 from jtx.composer.sonics import SONICS_REGIONS
 from jtx.composer.titles import format_suffix, random_title
+from jtx.composer.tuning import (
+    FeelCentreCoefs,
+    FeelTuning,
+    FilterTuning,
+    TempoTuning,
+    Tuning,
+    WindowOverride,
+    default_tuning,
+    load_tuning,
+    reset_default_tuning_cache,
+)
 from jtx.composer.voices import FIXED_PALETTE, validate_palette
 
 __all__ = [
     "FIXED_PALETTE",
     "FORMAT_SPECS",
+    "FeelCentreCoefs",
+    "FeelTuning",
+    "FilterTuning",
     "FormatBlueprint",
     "FormatSpec",
     "FormatType",
@@ -37,10 +51,16 @@ __all__ = [
     "MoodSpec",
     "Recipe",
     "SONICS_REGIONS",
+    "TempoTuning",
+    "Tuning",
     "VoiceRecipe",
+    "WindowOverride",
     "build_recipe",
     "compose",
+    "default_tuning",
     "format_suffix",
+    "load_tuning",
     "random_title",
+    "reset_default_tuning_cache",
     "validate_palette",
 ]

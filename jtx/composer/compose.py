@@ -17,6 +17,7 @@ import random
 from jtx.composer.format import FormatType
 from jtx.composer.mood import MoodSpec
 from jtx.composer.recipe import Recipe, VoiceRecipe, build_recipe
+from jtx.composer.tuning import FilterTuning, Tuning, _cached_default_tuning
 from jtx.composer.voices import FIXED_PALETTE
 from jtx.model import (
     Key,
@@ -75,24 +76,26 @@ def _sample_pattern(
     return out
 
 
-_FILTER_SUBDIVISIONS = ("4", "16", "16t")
-
-
-def _filter_pattern(motion: float) -> dict[str, object]:
+def _filter_pattern(motion: float, tuning: FilterTuning) -> dict[str, object]:
     """Motion-driven filter utility voice knobs.
 
     Low motion → narrow cutoff window, slow subdivision, shallow
     depth (the filter barely breathes). High motion → wide window,
-    fast subdivision, near-full depth (the filter swirls).
+    fast subdivision, near-full depth (the filter swirls). Coefficients
+    live on :class:`FilterTuning` so Phase 2's optimizer can tune them
+    without source edits.
     """
     motion = max(0.0, min(1.0, motion))
-    band = 0 if motion < 0.34 else (1 if motion < 0.67 else 2)
-    subdivision = _FILTER_SUBDIVISIONS[band]
-    # Depth scales 0.0 → 0.95 with motion.
-    depth = round(motion * 0.95, 3)
-    # Range widens with motion: low motion = 55..75, high motion = 20..120.
-    centre = 70
-    half_range = 8 + int(round(motion * 52))
+    if motion < tuning.motion_band_low:
+        band = 0
+    elif motion < tuning.motion_band_high:
+        band = 1
+    else:
+        band = 2
+    subdivision = tuning.subdivisions[band]
+    depth = round(motion * tuning.depth_scale, 3)
+    centre = tuning.centre_cc
+    half_range = tuning.half_range_base + int(round(motion * tuning.half_range_motion_scale))
     value_min = max(0, centre - half_range)
     value_max = min(127, centre + half_range)
     return {
@@ -106,14 +109,14 @@ def _filter_pattern(motion: float) -> dict[str, object]:
 
 
 def _build_voices(
-    rng: random.Random, recipe: Recipe, motion: float
+    rng: random.Random, recipe: Recipe, motion: float, tuning: Tuning
 ) -> dict[str, VoiceConfig]:
     """Walk the recipe's per-voice plans and emit concrete VoiceConfigs.
 
     Always returns the 9 palette voices plus the utility cluster
     (filter / root_ref / chord_ref) so every composer song carries the
     same voice set. ``motion`` shapes the filter utility voice's LFO
-    depth + subdivision.
+    depth + subdivision (via *tuning*'s :class:`FilterTuning` section).
     """
     voices: dict[str, VoiceConfig] = {}
     for voice_name in FIXED_PALETTE:
@@ -126,7 +129,7 @@ def _build_voices(
     # Utility cluster — wired identically across every composer song.
     voices["filter"] = VoiceConfig(
         algorithm="step_cc",
-        pattern=_filter_pattern(motion),
+        pattern=_filter_pattern(motion, tuning.filter),
     )
     voices["root_ref"] = VoiceConfig(
         algorithm="voice_follower",
@@ -186,6 +189,8 @@ def compose(
     chaos: float = 0.0,
     texture: float = 0.5,
     motion: float = 0.5,
+    *,
+    tuning: Tuning | None = None,
 ) -> Song:
     """Generate a :class:`Song` for ``(title, mood, fmt, chaos, texture, motion)``.
 
@@ -196,16 +201,24 @@ def compose(
     ``texture`` controls how thick the arrangement is (which palette
     voices come in at all + their density); ``motion`` controls how
     animated things feel (algorithm shortlists + filter LFO depth/speed).
+
+    *tuning* applies the Tier-A override layer. If ``None``, loads
+    from ``<repo>/tuning.toml`` if it exists (cached), otherwise uses
+    :func:`jtx.composer.tuning.default_tuning` — production callers
+    don't need to ship the override file. The default :class:`Tuning`
+    reproduces pre-Phase-2a output byte-for-byte.
     """
     chaos = _clamp(chaos, 0.0, 1.0)
     texture = _clamp(texture, 0.0, 1.0)
     motion = _clamp(motion, 0.0, 1.0)
+    if tuning is None:
+        tuning = _cached_default_tuning()
     rng = random.Random(_seed_for(title, mood, fmt, chaos, texture, motion))
-    recipe = build_recipe(mood, fmt, chaos, texture, motion)
+    recipe = build_recipe(mood, fmt, chaos, texture, motion, tuning=tuning)
 
     tempo = rng.randint(*recipe.mood.tempo_range)
     tonic = rng.choice(recipe.mood.tonic_choices)
-    voices = _build_voices(rng, recipe, motion)
+    voices = _build_voices(rng, recipe, motion, tuning)
     parts, arrangement = _build_parts(rng, recipe)
     feel = _sample_feel(rng, recipe)
 

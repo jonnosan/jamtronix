@@ -1,0 +1,99 @@
+# tuning.example.toml — Phase 2a Tier-A override schema reference.
+#
+# Copy to `tuning.toml` at the repo root to make composer pick up your
+# overrides. Every section + key below is optional; omitted entries
+# keep the defaults baked into `jtx.composer.tuning`. Unknown sections
+# / keys fail loudly when loaded (typo protection for the optimizer).
+#
+# This file is documentation only — it ships in the repo to record the
+# schema. Production callers do not need a tuning.toml; missing file =
+# default behavior (byte-identical to pre-Phase-2a output).
+
+# ---------- voice activation thresholds (τ) ----------------------------
+# Per-voice palette-activation threshold. Below τ, the voice runs the
+# `rest` algorithm. Range [0, 1]. Source: _DEFAULT_VOICE_TAU.
+[voice_tau]
+drumkit = 0.00
+bass    = 0.00
+stabs   = 0.05
+lead    = 0.20
+arp     = 0.30
+sub     = 0.40
+pad     = 0.50
+chord   = 0.60
+fx      = 0.70
+
+# Motion bias magnitude — arp/lead get bias - bias_mag/2 at high motion;
+# pad/sub get bias + bias_mag/2. Default 0.15.
+tau_bias_magnitude = 0.15
+
+# ---------- filter utility voice (compose._filter_pattern) ------------
+[filter]
+subdivisions             = ["4", "16", "16t"]  # low / mid / high motion bands
+depth_scale              = 0.95   # depth = motion * depth_scale
+centre_cc                = 70     # cutoff window centre (CC value)
+half_range_base          = 8      # min half-width of the window
+half_range_motion_scale  = 52     # added × motion to the half-width
+motion_band_low          = 0.34   # motion < this → band 0
+motion_band_high         = 0.67   # motion < this → band 1; else band 2
+
+# ---------- tempo (mood blueprint) ------------------------------------
+[tempo]
+centre_base        = 80
+centre_energy_coef = 72
+spread_base        = 6
+spread_chaos_coef  = 8
+bpm_floor          = 60
+bpm_ceiling        = 180
+
+# ---------- feel-knob centres + window width --------------------------
+[feel]
+window_half_base       = 0.05
+window_half_chaos_coef = 0.12
+
+# Each centre is base + energy*ec + texture*tc + motion*mc +
+# (1-abs(valence))*vac + (1-valence_norm)*vic + chaos*cc.
+# Unused terms default to 0.
+
+[feel.centres.pump]
+base    = 0.25
+energy  = 0.35
+texture = 0.20
+motion  = -0.20
+
+[feel.centres.groove]
+base            = 0.20
+valence_abs_inv = 0.30
+motion          = 0.10
+
+[feel.centres.drive]
+base   = 0.20
+energy = 0.45
+motion = 0.20
+
+[feel.centres.tension]
+base        = 0.20
+valence_inv = 0.45
+chaos       = 0.15
+
+[feel.centres.wander]
+base   = 0.10
+chaos  = 0.35
+motion = 0.20
+
+# ---------- per-(voice, algorithm, knob) pattern overrides ------------
+# Each entry overrides a window produced by recipe._voice_pattern_ranges.
+# Application order: replace → shift → clip → swap-if-inverted.
+# Keys: lo, hi, lo_shift, hi_shift, lo_clip, hi_clip.
+# Speculative overrides on knobs the algorithm didn't emit are no-ops.
+
+# Example: widen acid_bass slide probability + cap the upper end.
+# [pattern_overrides.bass.acid_bass.slide_prob]
+# lo_shift = -0.05
+# hi       = 0.55
+# hi_clip  = 1.0
+
+# Example: pin arp gate window narrow at high density.
+# [pattern_overrides.arp.arp.gate]
+# lo = 0.7
+# hi = 0.75

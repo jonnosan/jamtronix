@@ -33,6 +33,12 @@ from dataclasses import dataclass, field
 
 from jtx.composer.format import FORMAT_SPECS, FormatType
 from jtx.composer.mood import MoodSpec
+from jtx.composer.tuning import (
+    FeelCentreCoefs,
+    Tuning,
+    apply_pattern_overrides,
+    default_tuning,
+)
 from jtx.composer.voices import FIXED_PALETTE
 
 
@@ -105,18 +111,24 @@ class Recipe:
 
 
 def _mood_blueprint(
-    mood: MoodSpec, chaos: float, texture: float, motion: float
+    mood: MoodSpec, chaos: float, texture: float, motion: float, tuning: Tuning
 ) -> MoodBlueprint:
-    """Translate mood + texture + motion into tempo / key / feel windows."""
+    """Translate mood + texture + motion into tempo / key / feel windows.
+
+    Tempo / feel-centre constants come from *tuning* — the Tier-A
+    override surface. The default :class:`Tuning` reproduces the
+    historical hardcoded coefficients exactly.
+    """
     energy = _norm_axis(mood.energy)
     valence = _norm_axis(mood.valence)
 
-    # Energy drives tempo. Calm 80 -> intense 152 BPM (rough club range).
-    tempo_centre = int(80 + energy * 72)
-    spread = int(6 + chaos * 8)
+    # Energy drives tempo (default: calm 80 → intense 152 BPM).
+    tempo_t = tuning.tempo
+    tempo_centre = int(tempo_t.centre_base + energy * tempo_t.centre_energy_coef)
+    spread = int(tempo_t.spread_base + chaos * tempo_t.spread_chaos_coef)
     tempo_range = (
-        max(60, tempo_centre - spread),
-        min(180, tempo_centre + spread),
+        max(tempo_t.bpm_floor, tempo_centre - spread),
+        min(tempo_t.bpm_ceiling, tempo_centre + spread),
     )
 
     scale = "major" if valence > 0.55 else "minor"
@@ -128,29 +140,28 @@ def _mood_blueprint(
     else:
         tonic_choices = ("A", "C", "D", "E", "G")
 
-    # Five global feel knobs; each window centred on a mood-driven point.
-    # Texture + motion now nudge each centre:
-    # - pump rises with texture (lush mixes need sidechain breathing room)
-    #   and drops with motion (psytrance = high motion + low pump).
-    # - groove gains a small lift from motion.
-    # - drive rises with motion.
-    # - wander gains from motion in addition to chaos.
-    pump = 0.25 + energy * 0.35 + texture * 0.20 - motion * 0.20
-    groove = 0.20 + (1.0 - abs(mood.valence)) * 0.30 + motion * 0.10
-    drive = 0.20 + energy * 0.45 + motion * 0.20
-    tension = 0.20 + (1.0 - valence) * 0.45 + chaos * 0.15
-    wander = 0.10 + chaos * 0.35 + motion * 0.20
+    feel_t = tuning.feel
+    valence_abs_inv = 1.0 - abs(mood.valence)
+    valence_inv = 1.0 - valence
+
+    def _centre(coefs: FeelCentreCoefs) -> float:
+        return (
+            coefs.base
+            + energy * coefs.energy
+            + texture * coefs.texture
+            + motion * coefs.motion
+            + valence_abs_inv * coefs.valence_abs_inv
+            + valence_inv * coefs.valence_inv
+            + chaos * coefs.chaos
+        )
+
+    half = feel_t.window_half_base + chaos * feel_t.window_half_chaos_coef
 
     def _window(centre: float) -> tuple[float, float]:
-        half = 0.05 + chaos * 0.12
         return (_clamp(centre - half, 0.0, 1.0), _clamp(centre + half, 0.0, 1.0))
 
     feel_targets = {
-        "pump": _window(pump),
-        "groove": _window(groove),
-        "drive": _window(drive),
-        "tension": _window(tension),
-        "wander": _window(wander),
+        name: _window(_centre(coefs)) for name, coefs in feel_t.centres.items()
     }
 
     return MoodBlueprint(
@@ -220,25 +231,16 @@ def _format_blueprint(
 
 # ---------- voice activation: τ + motion shortlists --------------------
 
-# Texture activation thresholds (τ_v) per palette voice. Below τ the
-# voice is forced to ``rest``; at or above τ the voice's density-like
-# knob ramps from 0 → 1 across the remaining texture range (slope =
-# 1 - τ_v so every voice reaches full density at texture=1.0).
-_VOICE_TAU: dict[str, float] = {
-    "drumkit": 0.00,
-    "bass": 0.00,
-    "stabs": 0.05,
-    "lead": 0.20,
-    "arp": 0.30,
-    "sub": 0.40,
-    "pad": 0.50,
-    "chord": 0.60,
-    "fx": 0.70,
-}
+# Texture activation thresholds (τ_v) per palette voice live in
+# :data:`jtx.composer.tuning._DEFAULT_VOICE_TAU` so they're addressable
+# by the Phase 2 override layer. Below τ the voice is forced to
+# ``rest``; at or above τ the voice's density-like knob ramps from
+# 0 → 1 across the remaining texture range (slope = 1 - τ_v so every
+# voice reaches full density at texture=1.0).
 
 # Algorithm choice per (voice, motion-band). Index 0 = low motion,
 # 1 = mid, 2 = high. ``rest`` lives outside this table — picked by the
-# texture-activation check.
+# texture-activation check. Tier B (PR after 2a) will expose this map.
 _VOICE_MOTION_SHORTLISTS: dict[str, tuple[str, str, str]] = {
     "drumkit": ("drum_kit", "drum_kit", "drum_kit"),
     "bass": ("reese_bass", "acid_bass", "acid_bass"),
@@ -251,26 +253,27 @@ _VOICE_MOTION_SHORTLISTS: dict[str, tuple[str, str, str]] = {
     "fx": ("step_cc", "step_cc", "noise_riser"),
 }
 
-# Motion biases τ by ±0.075 for voices that have a clear "movement
-# preference". High motion → animated voices (arp, lead) activate
-# sooner; low motion → sustained voices (pad, sub) activate sooner.
+# Motion biases τ by ±_TAU_BIAS_MAGNITUDE/2 for voices that have a
+# clear "movement preference". High motion → animated voices (arp,
+# lead) activate sooner; low motion → sustained voices (pad, sub)
+# activate sooner. Per-voice direction is fixed; the magnitude lives
+# in :class:`jtx.composer.tuning.Tuning.tau_bias_magnitude`.
 _TAU_BIAS_DIRECTION: dict[str, int] = {
     "arp": -1,
     "lead": -1,
     "pad": +1,
     "sub": +1,
 }
-_TAU_BIAS_MAGNITUDE = 0.15
 
 
-def _effective_tau(voice: str, motion: float) -> float:
-    """τ_v after motion bias."""
-    base = _VOICE_TAU[voice]
+def _effective_tau(voice: str, motion: float, tuning: Tuning) -> float:
+    """τ_v after motion bias. Base τ + bias magnitude come from *tuning*."""
+    base = tuning.tau_for(voice)
     direction = _TAU_BIAS_DIRECTION.get(voice, 0)
     if direction == 0:
         return base
-    # motion - 0.5 maps to [-0.5, +0.5]; bias is ±_TAU_BIAS_MAGNITUDE / 2.
-    bias = direction * (motion - 0.5) * _TAU_BIAS_MAGNITUDE
+    # motion - 0.5 maps to [-0.5, +0.5]; bias scales by tau_bias_magnitude.
+    bias = direction * (motion - 0.5) * tuning.tau_bias_magnitude
     return _clamp(base + bias, 0.0, 1.0)
 
 
@@ -290,19 +293,20 @@ def _pick_voice(
     texture: float,
     motion: float,
     chaos: float,
+    tuning: Tuning,
 ) -> tuple[str, float]:
     """Return ``(algorithm, density_norm)`` for *voice*.
 
     ``density_norm`` is in ``[0, 1]`` — 0 = barely on, 1 = full
     density. It's 0.0 when the voice is ``rest`` (below threshold).
     """
-    tau_eff = _effective_tau(voice, motion)
+    tau_eff = _effective_tau(voice, motion, tuning)
     if texture < tau_eff:
         return "rest", 0.0
 
-    # Slope = 1 - τ_v (the original, pre-bias τ) so each voice reaches
-    # density=1.0 at texture=1.0 regardless of motion bias.
-    slope = max(1e-6, 1.0 - _VOICE_TAU[voice])
+    # Slope = 1 - τ_v (the pre-bias τ from *tuning*) so each voice
+    # reaches density=1.0 at texture=1.0 regardless of motion bias.
+    slope = max(1e-6, 1.0 - tuning.tau_for(voice))
     density_norm = _clamp((texture - tau_eff) / slope, 0.0, 1.0)
 
     shortlist = _VOICE_MOTION_SHORTLISTS[voice]
@@ -343,6 +347,7 @@ def _voice_pattern_ranges(
     valence_norm: float,
     motion: float,
     chaos: float,
+    tuning: Tuning,
 ) -> tuple[
     dict[str, tuple[float, float]],
     dict[str, tuple[int, int]],
@@ -359,6 +364,7 @@ def _voice_pattern_ranges(
     fixed: dict[str, object] = {}
 
     if algorithm == "rest":
+        # No knobs to tune; skip override pass too.
         return floats, ints, fixed
 
     if algorithm == "drum_kit":
@@ -377,9 +383,7 @@ def _voice_pattern_ranges(
         floats["density"] = _density_blend(0.4, 0.85, density_norm)
         floats["variation"] = (0.15 + chaos * 0.2, 0.3 + chaos * 0.3)
         floats["perc_complexity"] = (0.2 + chaos * 0.15, 0.4 + chaos * 0.35)
-        return floats, ints, fixed
-
-    if algorithm == "acid_bass":
+    elif algorithm == "acid_bass":
         # Density inversely drives drop_prob (more density = fewer drops).
         max_drop = 0.55 - density_norm * 0.4
         min_drop = max(0.05, max_drop - 0.2)
@@ -396,23 +400,17 @@ def _voice_pattern_ranges(
         # filter rolls instead of settling.
         if energy_norm > 0.65 and motion > 0.65:
             ints["cycle"] = (3, 6)
-        return floats, ints, fixed
-
-    if algorithm == "reese_bass":
+    elif algorithm == "reese_bass":
         floats["wobble_depth"] = (
             0.3 + motion * 0.2,
             0.6 + motion * 0.3,
         )
         floats["detune_depth"] = (0.2, 0.5 + chaos * 0.3)
         ints["base_vel"] = (90, 110)
-        return floats, ints, fixed
-
-    if algorithm == "sub_drone":
+    elif algorithm == "sub_drone":
         floats["fifth_prob"] = _density_blend(0.0, 0.4, density_norm)
         ints["bars_per_chord"] = (2, 4)
-        return floats, ints, fixed
-
-    if algorithm == "melodic_line":
+    elif algorithm == "melodic_line":
         max_drop = 0.7 - density_norm * 0.25
         min_drop = max(0.2, max_drop - 0.25)
         floats["drop_prob"] = (min_drop, max_drop + chaos * 0.1)
@@ -421,18 +419,14 @@ def _voice_pattern_ranges(
             0.2 + chaos * 0.2 + motion * 0.15,
         )
         floats["intensity"] = (0.9, 1.2)
-        return floats, ints, fixed
-
-    if algorithm == "motif_phrase":
+    elif algorithm == "motif_phrase":
         floats["motif_complexity"] = (
             0.3 + energy_norm * 0.2,
             0.6 + energy_norm * 0.2,
         )
         floats["variation_depth"] = (0.3, 0.6 + chaos * 0.3)
         floats["density"] = _density_blend(0.4, 0.85, density_norm)
-        return floats, ints, fixed
-
-    if algorithm == "arp":
+    elif algorithm == "arp":
         floats["gate"] = _density_blend(0.4, 0.8, density_norm)
         # Motion drives subdivision rate.
         subdivision = ("8", "16", "16t")[_motion_band(motion)]
@@ -443,15 +437,11 @@ def _voice_pattern_ranges(
         else:
             ints["octaves"] = (1, 1)
         ints["base_vel"] = (85, 105)
-        return floats, ints, fixed
-
-    if algorithm == "sustained_chord":
+    elif algorithm == "sustained_chord":
         floats["gate"] = (0.85, 0.98)
         floats["drift_prob"] = _density_blend(0.0, 0.4 + chaos * 0.2, density_norm)
         ints["base_vel"] = (65, 90)
-        return floats, ints, fixed
-
-    if algorithm == "chord_stab":
+    elif algorithm == "chord_stab":
         # Density bumps pulses (more hits per bar at high texture).
         max_pulses = 3 + int(round(density_norm * 4))
         ints["pulses"] = (3, max(3, max_pulses))
@@ -461,9 +451,7 @@ def _voice_pattern_ranges(
         floats["drop_prob"] = (0.0, 0.15 + chaos * 0.15)
         ints["offset"] = (1, 3)
         ints["base_vel"] = (80, 100)
-        return floats, ints, fixed
-
-    if algorithm == "step_cc":
+    elif algorithm == "step_cc":
         # Used as an FX voice here; motion drives sweep depth.
         floats["depth"] = (
             0.3 + motion * 0.5,
@@ -472,16 +460,16 @@ def _voice_pattern_ranges(
         ints["value_min"] = (20, 45)
         ints["value_max"] = (95, 120)
         fixed["function"] = "cutoff"
-        return floats, ints, fixed
-
-    if algorithm == "noise_riser":
+    elif algorithm == "noise_riser":
         ints["duration_bars"] = (2, 4)
         ints["cutoff_start"] = (20, 40)
         ints["cutoff_end"] = (100, 124)
         ints["vel_start"] = (35, 55)
         ints["vel_end"] = (100, 122)
-        return floats, ints, fixed
 
+    overrides = tuning.pattern_overrides_for(voice, algorithm)
+    if overrides:
+        floats, ints = apply_pattern_overrides(floats, ints, overrides)
     return floats, ints, fixed
 
 
@@ -491,6 +479,8 @@ def build_recipe(
     chaos: float,
     texture: float = 0.5,
     motion: float = 0.5,
+    *,
+    tuning: Tuning | None = None,
 ) -> Recipe:
     """Collapse (mood, format, chaos, texture, motion) into a :class:`Recipe`.
 
@@ -501,20 +491,28 @@ def build_recipe(
     ``texture`` and ``motion`` are clamped to ``[0, 1]``. Defaults of
     0.5 give a "centre" arrangement — most voices on at mid density,
     mid-motion algorithms, mid filter sweep.
+
+    *tuning* applies the Tier-A override layer (τ table, feel /
+    tempo coefficients, pattern-window overrides). ``None`` uses
+    :func:`jtx.composer.tuning.default_tuning`, which exactly
+    reproduces pre-Phase-2a behavior — existing callers don't need
+    to change anything.
     """
     chaos = _clamp(chaos, 0.0, 1.0)
     texture = _clamp(texture, 0.0, 1.0)
     motion = _clamp(motion, 0.0, 1.0)
     energy_norm = _norm_axis(mood.energy)
     valence_norm = _norm_axis(mood.valence)
+    if tuning is None:
+        tuning = default_tuning()
 
-    mood_bp = _mood_blueprint(mood, chaos, texture, motion)
+    mood_bp = _mood_blueprint(mood, chaos, texture, motion, tuning)
     fmt_bp = _format_blueprint(fmt, energy_norm, chaos)
 
     voices: dict[str, VoiceRecipe] = {}
     for voice in FIXED_PALETTE:
         algorithm, density_norm = _pick_voice(
-            voice, energy_norm, valence_norm, texture, motion, chaos
+            voice, energy_norm, valence_norm, texture, motion, chaos, tuning
         )
         floats, ints, fixed = _voice_pattern_ranges(
             voice,
@@ -524,6 +522,7 @@ def build_recipe(
             valence_norm,
             motion,
             chaos,
+            tuning,
         )
         voices[voice] = VoiceRecipe(
             algorithm=algorithm,
