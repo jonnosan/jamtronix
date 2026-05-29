@@ -17,7 +17,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QSettings, Qt, QTimer
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -40,6 +40,8 @@ _CLOCK_MODES: tuple[tuple[ClockMode, str], ...] = (
     ("midi_clock_slave", "MIDI CLOCK SLAVE"),
     ("ableton_link", "ABLETON LINK"),
 )
+_VALID_CLOCK_MODES: frozenset[ClockMode] = frozenset(mode for mode, _label in _CLOCK_MODES)
+_DEFAULT_CLOCK_MODE: ClockMode = "internal_master"
 
 
 class TopToolbar(QFrame):
@@ -60,12 +62,15 @@ class TopToolbar(QFrame):
         self._transport = transport
         self._port_factory = port_factory or _detect_midi_outputs
         self._port_override: str | None = None
-        self._clock_mode: ClockMode = "internal_master"
+        self._clock_mode: ClockMode = _load_persisted_clock_mode()
 
         # ----- clock + port -----
         self._clock_combo = QComboBox()
         for mode, label in _CLOCK_MODES:
             self._clock_combo.addItem(label, mode)
+        idx = self._clock_combo.findData(self._clock_mode)
+        if idx >= 0:
+            self._clock_combo.setCurrentIndex(idx)
         self._clock_combo.currentIndexChanged.connect(self._on_clock_change)
 
         self._port_combo = QComboBox()
@@ -190,10 +195,32 @@ class TopToolbar(QFrame):
 
     # ----- selector callbacks --------------------------------------------
 
+    def set_clock_mode(self, mode: ClockMode) -> None:
+        """Programmatically apply a clock mode (used by bootstrap / load).
+
+        Sets the combo to ``mode`` if it's a known option; the combo's
+        ``currentIndexChanged`` signal then runs ``_on_clock_change``
+        which updates ``self._clock_mode`` + persists to QSettings.
+        """
+        if mode not in _VALID_CLOCK_MODES:
+            return
+        idx = self._clock_combo.findData(mode)
+        if idx < 0:
+            return
+        if self._clock_combo.currentIndex() == idx:
+            # No signal will fire — still ensure the internal field +
+            # persisted value reflect the requested mode.
+            self._clock_mode = mode
+            _persist_clock_mode(mode)
+            return
+        self._clock_combo.setCurrentIndex(idx)
+
     def _on_clock_change(self) -> None:
         value = self._clock_combo.currentData()
-        if isinstance(value, str):
-            self._clock_mode = value  # type: ignore[assignment]
+        if not isinstance(value, str) or value not in _VALID_CLOCK_MODES:
+            return
+        self._clock_mode = value
+        _persist_clock_mode(value)
 
     def _on_port_change(self) -> None:
         value = self._port_combo.currentData()
@@ -363,3 +390,29 @@ def _detect_midi_outputs() -> list[str]:
         return list(names)
     except Exception:  # noqa: BLE001 — port enumeration shouldn't crash the UI
         return []
+
+
+def _settings() -> QSettings:
+    # Imported lazily to avoid a circular import — main_window itself
+    # imports TopToolbar via jtx_gui.views.toolbar.
+    from jtx_gui.main_window import SETTINGS_APP, SETTINGS_ORG
+
+    return QSettings(SETTINGS_ORG, SETTINGS_APP)
+
+
+def _setting_key() -> str:
+    from jtx_gui.main_window import SETTING_LAST_CLOCK_MODE
+
+    return SETTING_LAST_CLOCK_MODE
+
+
+def _load_persisted_clock_mode() -> ClockMode:
+    stored = _settings().value(_setting_key(), _DEFAULT_CLOCK_MODE, type=str)
+    raw = str(stored or _DEFAULT_CLOCK_MODE)
+    if raw in _VALID_CLOCK_MODES:
+        return raw
+    return _DEFAULT_CLOCK_MODE
+
+
+def _persist_clock_mode(mode: ClockMode) -> None:
+    _settings().setValue(_setting_key(), mode)

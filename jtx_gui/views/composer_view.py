@@ -21,7 +21,7 @@ import random
 from pathlib import Path
 from typing import cast
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSettings, Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QFormLayout,
@@ -137,6 +137,7 @@ class ComposerView(QWidget):
         for path in bundled_setups():
             self._setup_combo.addItem(path.stem, path)
             self._setup_paths[path.stem] = path
+        self._setup_combo.currentIndexChanged.connect(self._persist_setup_choice)
 
         random_song_btn = QPushButton("RANDOM SONG", self)
         random_song_btn.clicked.connect(self._on_random_song_clicked)
@@ -294,6 +295,18 @@ class ComposerView(QWidget):
         )
 
     # ----- callbacks -------------------------------------------------------
+
+    def _persist_setup_choice(self) -> None:
+        from jtx_gui.main_window import (
+            SETTING_LAST_SETUP_ID,
+            SETTINGS_APP,
+            SETTINGS_ORG,
+        )
+
+        path = self._setup_combo.currentData()
+        if not isinstance(path, Path):
+            return
+        QSettings(SETTINGS_ORG, SETTINGS_APP).setValue(SETTING_LAST_SETUP_ID, path.stem)
 
     def _on_mood_changed(self, _v: float, _e: float) -> None:
         # The mood is read off the pad at generate time; no immediate

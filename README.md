@@ -51,8 +51,8 @@ mypy jtx jtx_gui
 ## Launching the GUI
 
 ```sh
-jtx-gui                  # splash dialog → open a .jtx
-jtx-gui examples/acid-demo.jtx   # skip splash, open immediately
+jtx-gui                  # auto-generates a random song using the last-used setup + clock mode
+jtx-gui examples/acid-demo.jtx   # open the given .jtx instead of generating one
 python -m jtx_gui        # equivalent to `jtx-gui`
 ```
 
