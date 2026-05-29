@@ -57,7 +57,10 @@ def main(argv: list[str] | None = None) -> int:
         # workspace — they can still pick New or Open from the menu.
         window.open_song_dialog()
     elif choice == SplashDialog.RESULT_NEW:
-        window.new_song_wizard()
+        # Composer is the default sidebar view; this just ensures the
+        # window lands on it (in case future state ever changes the
+        # default).
+        window.show_composer()
 
     window.show()
     return app.exec()

@@ -27,7 +27,7 @@ from jtx.model import ValidationError
 from jtx_gui import theme
 from jtx_gui.state import AppState
 from jtx_gui.transport import TransportService
-from jtx_gui.views.new_song_wizard import NewSongWizard
+from jtx_gui.views.composer_view import ComposerView
 from jtx_gui.views.parts_view import PartsView
 from jtx_gui.views.setup_editor import SetupEditor
 from jtx_gui.views.song_view import SongView
@@ -56,8 +56,10 @@ class MainWindow(QMainWindow):
         self._transport = TransportService(parent=self)
 
         self._stack = QStackedWidget(self)
+        self._composer_view = ComposerView(self._state, parent=self)
         self._song_view = SongView(self._state, self)
         self._parts_view = PartsView(self._state, transport=self._transport, parent=self)
+        self._stack.addWidget(self._composer_view)
         self._stack.addWidget(self._song_view)
         self._stack.addWidget(self._parts_view)
 
@@ -101,7 +103,7 @@ class MainWindow(QMainWindow):
         )
         layout.addWidget(brand)
 
-        labels = ("SONG", "PARTS")
+        labels = ("COMPOSER", "SONG", "PARTS")
         self._nav_buttons: list[QPushButton] = []
         for index, text in enumerate(labels):
             btn = QPushButton(text, sidebar)
@@ -134,7 +136,7 @@ class MainWindow(QMainWindow):
 
         new_action = QAction("&New…", self)
         new_action.setShortcut(QKeySequence.StandardKey.New)
-        new_action.triggered.connect(self.new_song_wizard)
+        new_action.triggered.connect(self.show_composer)
         file_menu.addAction(new_action)
 
         open_action = QAction("&Open…", self)
@@ -160,17 +162,15 @@ class MainWindow(QMainWindow):
 
     # ----- file actions ----------------------------------------------------
 
-    def new_song_wizard(self) -> bool:
-        """Show the new-song wizard; if it produces a song, adopt it in-memory."""
-        wizard = NewSongWizard(self)
-        if wizard.exec() != NewSongWizard.DialogCode.Accepted:
-            return False
-        result = wizard.result_song()
-        if result is None:
-            return False
-        song, setup = result
-        self._state.adopt(song=song, setup=setup)
-        return True
+    def show_composer(self) -> None:
+        """Switch the stacked view to the Composer and check its nav button.
+
+        Replaces the old new-song wizard; the Composer view is the
+        in-place new-song flow (epic #118 PR 4 / #123).
+        """
+        self._stack.setCurrentIndex(0)
+        if self._nav_buttons:
+            self._nav_buttons[0].setChecked(True)
 
     def open_song_dialog(self) -> bool:
         settings = QSettings(SETTINGS_ORG, SETTINGS_APP)

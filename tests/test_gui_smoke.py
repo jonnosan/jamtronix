@@ -562,8 +562,8 @@ def test_setup_editor_voice_add(tmp_path: Path, qapp: QApplication) -> None:
     assert editor._voice_list.count() == 2  # type: ignore[attr-defined]
 
 
-def test_wizard_offers_blank_style() -> None:
-    """The wizard should expose 'blank' as the first style choice."""
+def test_blank_template_still_builds() -> None:
+    """The blank template (last surviving starter) still constructs a Song."""
     from templates import STYLES
 
     assert "blank" in STYLES
@@ -572,10 +572,23 @@ def test_wizard_offers_blank_style() -> None:
     assert blank_song.parts  # at least one part
 
 
-def test_wizard_constructs(qapp: QApplication) -> None:
-    """The wizard is a single-page QDialog now; just verify it builds."""
-    from jtx_gui.views.new_song_wizard import NewSongWizard
+def test_composer_view_renders(qapp: QApplication) -> None:
+    """Composer view instantiates + shows without raising."""
+    from jtx_gui.views.composer_view import ComposerView
 
-    wiz = NewSongWizard()
-    assert wiz.windowTitle()
-    wiz.deleteLater()
+    state = AppState()
+    view = ComposerView(state)
+    view.show()
+    assert view.isVisible()
+    view.deleteLater()
+
+
+def test_main_window_sidebar_shows_composer(qapp: QApplication) -> None:
+    """COMPOSER is the first sidebar entry + the default selected view."""
+    state = AppState()
+    window = MainWindow(state)
+    labels = [btn.text() for btn in window._nav_buttons]  # type: ignore[attr-defined]
+    assert labels[0] == "COMPOSER"
+    assert window._nav_buttons[0].isChecked()  # type: ignore[attr-defined]
+    assert window._stack.currentIndex() == 0  # type: ignore[attr-defined]
+    window.deleteLater()
