@@ -77,6 +77,17 @@ class AppState(QObject):
         self.path_changed.emit(self._path)
         self.dirty_changed.emit(False)
 
+    def replace_song_in_place(self, song: Song) -> None:
+        """Swap the song without marking dirty or changing the path.
+
+        Intended for settings-driven re-rolls (mood/sonics/chaos slider
+        moves on the Composer view) where the user hasn't manually
+        edited anything — the rolled song replaces the previous roll
+        and views just rebuild from the new structure.
+        """
+        self._song = song
+        self.song_changed.emit()
+
     def adopt(self, *, song: Song, setup: Setup | None) -> None:
         """Take ownership of a fresh in-memory song (e.g. from the wizard).
 
