@@ -583,6 +583,57 @@ def test_composer_view_renders(qapp: QApplication) -> None:
     view.deleteLater()
 
 
+def test_composer_random_title_updates_only_title(qapp: QApplication) -> None:
+    """'RANDOM TITLE' refreshes the title input without touching mood/format."""
+    import random as _random
+
+    from jtx_gui.views.composer_view import ComposerView
+
+    state = AppState()
+    view = ComposerView(state)
+    view._title.setText("Initial Title")
+    before_mood = view._mood_pad.mood()
+    before_fmt = view._format_combo.currentData()
+    _random.seed(0)
+    view._on_random_title_clicked()
+    after_title = view._title.text()
+    assert after_title and after_title != "Initial Title"
+    assert view._mood_pad.mood() == before_mood
+    assert view._format_combo.currentData() == before_fmt
+    view.deleteLater()
+
+
+def test_composer_random_song_updates_pad_format_title_and_song(qapp: QApplication) -> None:
+    """'RANDOM SONG' rerolls mood + format + title and generates a fresh song."""
+    import random as _random
+
+    from jtx.composer import FIXED_PALETTE, MOOD_ANCHORS
+    from jtx_gui.views.composer_view import ComposerView
+
+    state = AppState()
+    view = ComposerView(state)
+    # Pick a known starting point so we can detect changes.
+    view._mood_pad.set_mood(0.0, 0.0)
+    view._title.setText("Seed Title")
+    fmt_song_idx = view._format_combo.findData("song")
+    view._format_combo.setCurrentIndex(fmt_song_idx)
+    _random.seed(0)
+    view._on_random_song_clicked()
+    # Title should be replaced with a fresh draw.
+    assert view._title.text() != "Seed Title"
+    # Mood pad snaps to one of the 7 named anchors.
+    pad_mood = view._mood_pad.mood()
+    assert any(
+        (abs(pad_mood[0] - a.valence) < 1e-6 and abs(pad_mood[1] - a.energy) < 1e-6)
+        for a in MOOD_ANCHORS.values()
+    )
+    # Generate produced a song adopted into AppState containing the fixed palette
+    # (composer also wires the filter / root_ref / chord_ref utility cluster).
+    assert state.song is not None
+    assert set(FIXED_PALETTE).issubset(state.song.voices.keys())
+    view.deleteLater()
+
+
 def test_rest_voice_renders_silent_header_and_label(qapp: QApplication) -> None:
     """A voice with algorithm='rest' shows '(rest)' in its header and a
     'no pattern knobs (silent)' label instead of empty knob rows."""

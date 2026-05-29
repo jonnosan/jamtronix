@@ -53,3 +53,35 @@ def test_off_axis_mood_picks_nearest_anchor() -> None:
     title = random_title(mood, "song", rng=random.Random(7))
     first = title.split(" ", 1)[0]
     assert first in _MOOD_FIRST["euphoric"]
+
+
+@pytest.mark.parametrize("anchor_name", sorted(MOOD_ANCHORS.keys()))
+def test_random_title_distribution_stays_in_anchor_pool(anchor_name: str) -> None:
+    """Across many seeds, every title drawn for *anchor_name* stays within that
+    anchor's first/second word pools. Guards against silent regressions where a
+    pool change leaks across anchors."""
+    mood = MOOD_ANCHORS[anchor_name]
+    rng = random.Random(0)
+    first_pool = set(_MOOD_FIRST[anchor_name])
+    second_pool = set(_MOOD_SECOND[anchor_name])
+    seen_firsts: set[str] = set()
+    seen_seconds: set[str] = set()
+    for _ in range(200):
+        first, second = random_title(mood, "song", rng=rng).split(" ", 1)
+        assert first in first_pool, f"{anchor_name}: '{first}' leaked across pools"
+        assert second in second_pool, f"{anchor_name}: '{second}' leaked across pools"
+        seen_firsts.add(first)
+        seen_seconds.add(second)
+    # Confirm the draw isn't degenerate (uses most of the pool over 200 samples).
+    assert len(seen_firsts) >= min(len(first_pool), 4)
+    assert len(seen_seconds) >= min(len(second_pool), 4)
+
+
+def test_distinct_anchors_have_distinguishable_pools() -> None:
+    """'happy' and 'scared' draws shouldn't pull from the same first-word pool —
+    confirms the anchor-routing actually picks different word sets."""
+    happy_pool = set(_MOOD_FIRST["happy"])
+    scared_pool = set(_MOOD_FIRST["scared"])
+    overlap = happy_pool & scared_pool
+    # Some accidental overlap is fine; the pools should be mostly distinct.
+    assert len(overlap) <= 1, f"unexpected overlap: {overlap}"
