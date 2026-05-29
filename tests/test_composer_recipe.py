@@ -60,11 +60,32 @@ def test_mood_drives_tempo_and_key() -> None:
     assert brooding.mood.scale == "minor"
 
 
-def test_low_energy_voices_default_to_rest() -> None:
-    """Low-energy songs run lead / arp / fx as rest by default."""
-    recipe = build_recipe(MoodSpec(valence=-0.5, energy=-0.8), "sting", chaos=0.0)
+def test_low_texture_voices_default_to_rest() -> None:
+    """At texture=0 every voice above τ=0 runs as rest.
+
+    Only drumkit + bass (τ=0) and stabs (τ=0.05 — also rests at 0) are
+    expected to fire. Texture is the gate, not energy.
+    """
+    recipe = build_recipe(
+        MoodSpec(valence=-0.5, energy=-0.8), "sting", chaos=0.0,
+        texture=0.0, motion=0.5,
+    )
     assert recipe.voices["lead"].algorithm == "rest"
     assert recipe.voices["arp"].algorithm == "rest"
     assert recipe.voices["fx"].algorithm == "rest"
-    # drumkit always runs the drum_kit algorithm.
+    assert recipe.voices["pad"].algorithm == "rest"
+    assert recipe.voices["sub"].algorithm == "rest"
+    assert recipe.voices["chord"].algorithm == "rest"
+    # drumkit + bass are τ=0; they're always on regardless of texture.
     assert recipe.voices["drumkit"].algorithm == "drum_kit"
+    assert recipe.voices["bass"].algorithm != "rest"
+
+
+def test_full_texture_activates_every_palette_voice() -> None:
+    """At texture=1 every voice is above its τ and so runs a real algo."""
+    recipe = build_recipe(
+        MoodSpec(valence=0.0, energy=0.0), "song", chaos=0.0,
+        texture=1.0, motion=0.5,
+    )
+    for voice_name, voice_recipe in recipe.voices.items():
+        assert voice_recipe.algorithm != "rest", voice_name
