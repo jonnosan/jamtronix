@@ -8,6 +8,7 @@ the :class:`SetupEditor` modal rather than a third view.
 
 from __future__ import annotations
 
+import random
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, Qt
@@ -25,8 +26,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from jtx.model import ValidationError
+from jtx.composer import FORMAT_SPECS, MOOD_ANCHORS, compose, random_title
+from jtx.model import ClockMode, ValidationError
+from jtx.persist import load_setup
 from jtx_gui import theme
+from jtx_gui.bundles import bundled_setups
 from jtx_gui.state import AppState
 from jtx_gui.transport import TransportService
 from jtx_gui.views.composer_view import ComposerView
@@ -37,6 +41,14 @@ from jtx_gui.views.toolbar import TopToolbar
 SETTINGS_ORG = "Jamtronix"
 SETTINGS_APP = "Jamtronix"
 SETTING_LAST_PATH = "last_song_path"
+SETTING_LAST_SETUP_ID = "last_setup_id"
+SETTING_LAST_CLOCK_MODE = "last_clock_mode"
+
+_DEFAULT_SETUP_ID = "ableton"
+_DEFAULT_CLOCK_MODE: ClockMode = "internal_master"
+_VALID_CLOCK_MODES: frozenset[ClockMode] = frozenset(
+    {"internal_master", "midi_clock_slave", "ableton_link"}
+)
 
 
 class MainWindow(QMainWindow):
@@ -185,6 +197,56 @@ class MainWindow(QMainWindow):
         if not path:
             return False
         return self.open_song(Path(path))
+
+    def bootstrap_random_song(self) -> None:
+        """Auto-generate a random song using the last-used setup + clock mode.
+
+        Replaces the old splash dialog: at launch with no song arg, the
+        app lands directly on a fresh composition so the user can hit
+        Play immediately. Setup + clock mode persist across launches
+        via QSettings; everything else (mood, format, chaos, texture,
+        motion, title) is freshly randomised every launch.
+        """
+        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+        setup_id = str(
+            settings.value(SETTING_LAST_SETUP_ID, _DEFAULT_SETUP_ID, type=str)
+            or _DEFAULT_SETUP_ID
+        )
+        clock_raw = str(
+            settings.value(SETTING_LAST_CLOCK_MODE, _DEFAULT_CLOCK_MODE, type=str)
+            or _DEFAULT_CLOCK_MODE
+        )
+        clock_mode: ClockMode = (
+            clock_raw if clock_raw in _VALID_CLOCK_MODES else _DEFAULT_CLOCK_MODE
+        )
+
+        bundles = {path.stem: path for path in bundled_setups()}
+        setup_path = bundles.get(setup_id) or bundles.get(_DEFAULT_SETUP_ID)
+        if setup_path is None:
+            # No bundled setups at all — nothing we can do but bail out
+            # without crashing. The Composer view will stay empty.
+            return
+        setup = load_setup(setup_path)
+
+        fmt = random.choice(list(FORMAT_SPECS.keys()))
+        anchor_name = random.choice(list(MOOD_ANCHORS.keys()))
+        mood = MOOD_ANCHORS[anchor_name]
+        chaos = random.uniform(0.0, 1.0)
+        texture = random.uniform(0.0, 1.0)
+        motion = random.uniform(0.0, 1.0)
+        title = random_title(mood, fmt)
+
+        song = compose(
+            title=title,
+            setup_ref=setup.id,
+            mood=mood,
+            fmt=fmt,
+            chaos=chaos,
+            texture=texture,
+            motion=motion,
+        )
+        self._state.adopt(song=song, setup=setup)
+        self._toolbar.set_clock_mode(clock_mode)
 
     def open_song(self, path: Path) -> bool:
         try:

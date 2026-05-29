@@ -1,7 +1,8 @@
 """Entry point — ``python -m jtx_gui`` or the ``jtx-gui`` console script.
 
-Bootstraps QApplication, applies the theme, shows the splash dialog,
-and either launches the main window with an opened song or exits.
+Bootstraps QApplication, applies the theme, and either opens the song
+passed on the CLI or auto-generates a random one using the last-used
+setup + clock mode (persisted via QSettings).
 """
 
 from __future__ import annotations
@@ -15,7 +16,6 @@ from PySide6.QtWidgets import QApplication
 from jtx_gui import theme
 from jtx_gui.main_window import SETTINGS_APP, SETTINGS_ORG, MainWindow
 from jtx_gui.state import AppState
-from jtx_gui.views.splash import SplashDialog
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
@@ -24,7 +24,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         "song",
         nargs="?",
         type=Path,
-        help="Optional .jtx song to open immediately (skips the splash dialog).",
+        help="Optional .jtx song to open immediately (otherwise a random song is generated).",
     )
     return parser.parse_args(argv)
 
@@ -43,24 +43,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.song is not None:
         if not window.open_song(args.song):
             return 1
-        window.show()
-        return app.exec()
-
-    # Splash flow.
-    splash = SplashDialog(parent=window)
-    if splash.exec() != SplashDialog.DialogCode.Accepted:
-        return 0
-
-    choice = splash.picked()
-    if choice == SplashDialog.RESULT_OPEN:
-        # If the user cancels the file dialog, fall through to an empty
-        # workspace — they can still pick New or Open from the menu.
-        window.open_song_dialog()
-    elif choice == SplashDialog.RESULT_NEW:
-        # Composer is the default sidebar view; this just ensures the
-        # window lands on it (in case future state ever changes the
-        # default).
-        window.show_composer()
+    else:
+        window.bootstrap_random_song()
 
     window.show()
     return app.exec()
