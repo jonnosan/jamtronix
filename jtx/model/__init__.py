@@ -5,6 +5,12 @@ GUI both read from these dataclasses; persistence (JSON load/save) lives
 in :mod:`jtx.persist`.
 """
 
+from jtx.model.composer_types import (
+    FIXED_PALETTE,
+    UTILITY_VOICES,
+    FormatType,
+    MoodSpec,
+)
 from jtx.model.lfo import LFO, LFOApplication
 from jtx.model.parameter_target import (
     CCTarget,
@@ -35,12 +41,19 @@ from jtx.model.types import (
     Role,
     VoiceType,
 )
-from jtx.model.validate import ValidationError, cross_validate, validate_song
+from jtx.model.validate import (
+    ValidationError,
+    cross_validate,
+    validate_fixed_palette,
+    validate_song,
+)
 
 __all__ = [
     "CCTarget",
     "ChordProgression",
     "ClockMode",
+    "FIXED_PALETTE",
+    "FormatType",
     "Key",
     "KnobDict",
     "KnobValue",
@@ -50,6 +63,7 @@ __all__ = [
     "MPEPitchBendTarget",
     "MPEPressureTarget",
     "MPETimbreTarget",
+    "MoodSpec",
     "OscTarget",
     "ParameterTarget",
     "Part",
@@ -58,6 +72,7 @@ __all__ = [
     "SCHEMA_VERSION",
     "Setup",
     "Song",
+    "UTILITY_VOICES",
     "ValidationError",
     "VoiceConfig",
     "VoiceOverride",
@@ -66,5 +81,6 @@ __all__ = [
     "cross_validate",
     "parameter_target_from_dict",
     "parameter_target_to_dict",
+    "validate_fixed_palette",
     "validate_song",
 ]

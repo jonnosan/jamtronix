@@ -173,6 +173,8 @@ def compose(
         setup_ref=setup_ref,
         key=Key(tonic=tonic, scale=recipe.mood.scale),
         meter="4/4",
+        mood=MoodSpec(valence=mood.valence, energy=mood.energy, chaos=chaos),
+        format=fmt,
         tempo=tempo,
         voices=voices,
         parts=parts,

@@ -7,6 +7,12 @@
   },
   "seed_override": null,
   "meter": "4/4",
+  "mood": {
+    "valence": 0.0,
+    "energy": 0.0,
+    "chaos": 0.0
+  },
+  "format": "song",
   "tempo": 120,
   "chord_progression": {
     "degrees": [
@@ -101,5 +107,5 @@
     "tension": 0.5,
     "wander": 0.1
   },
-  "schema_version": 3
+  "schema_version": 4
 }

@@ -13,9 +13,11 @@ import pytest
 
 from jtx.model import (
     LFO,
+    SCHEMA_VERSION,
     ChordProgression,
     Key,
     LFOApplication,
+    MoodSpec,
     Part,
     Setup,
     Song,
@@ -26,6 +28,7 @@ from jtx.model import (
 )
 from jtx.model.setup import KitPiece
 from jtx.persist import load_setup, load_song, save_setup, save_song
+from jtx.persist.json_io import song_from_dict
 
 
 def _sample_setup() -> Setup:
@@ -113,6 +116,59 @@ def test_song_roundtrip(tmp_path: Path) -> None:
     save_song(song, path)
     loaded = load_song(path)
     assert loaded == song
+
+
+def test_song_mood_format_round_trip(tmp_path: Path) -> None:
+    """Mood (MoodSpec) and format (Literal) survive save → load."""
+    song = _sample_song()
+    song.mood = MoodSpec(valence=0.42, energy=-0.31, chaos=0.7)
+    song.format = "anthem"
+    path = tmp_path / "moody.jtx"
+    save_song(song, path)
+    loaded = load_song(path)
+    assert loaded.mood == MoodSpec(valence=0.42, energy=-0.31, chaos=0.7)
+    assert loaded.format == "anthem"
+    assert loaded == song
+
+
+def test_song_default_mood_format_round_trip(tmp_path: Path) -> None:
+    """A song without explicit mood/format round-trips with defaults."""
+    song = _sample_song()
+    path = tmp_path / "default.jtx"
+    save_song(song, path)
+    loaded = load_song(path)
+    assert loaded.mood == MoodSpec(valence=0.0, energy=0.0, chaos=0.0)
+    assert loaded.format == "song"
+
+
+def test_song_load_rejects_pre_v4_schema_version() -> None:
+    """A pre-v4 song dict is rejected (no migration path)."""
+    payload = {
+        "title": "Old",
+        "setup_ref": "iac",
+        "key": {"tonic": "A", "scale": "minor"},
+        "voices": {},
+        "parts": {},
+        "arrangement": [],
+        "schema_version": SCHEMA_VERSION - 1,
+    }
+    with pytest.raises(ValidationError, match="schema_version"):
+        song_from_dict(payload)
+
+
+def test_song_load_rejects_unknown_format() -> None:
+    payload = {
+        "title": "Bogus",
+        "setup_ref": "iac",
+        "key": {"tonic": "A", "scale": "minor"},
+        "voices": {},
+        "parts": {},
+        "arrangement": [],
+        "format": "epic_jam",
+        "schema_version": SCHEMA_VERSION,
+    }
+    with pytest.raises(ValidationError, match="format 'epic_jam'"):
+        song_from_dict(payload)
 
 
 def test_song_validation_rejects_unknown_arrangement_part() -> None:

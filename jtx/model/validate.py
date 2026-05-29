@@ -8,6 +8,7 @@ parts, LFO application targets, song↔setup voice agreement.
 
 from __future__ import annotations
 
+from jtx.model.composer_types import FIXED_PALETTE, UTILITY_VOICES
 from jtx.model.setup import Setup
 from jtx.model.song import Song
 from jtx.model.types import SCHEMA_VERSION
@@ -114,6 +115,36 @@ def validate_song(song: Song) -> list[str]:
             if app.part not in song.parts:
                 errors.append(f"lfo {lfo.name!r}: application in unknown part {app.part!r}")
 
+    return errors
+
+
+def validate_fixed_palette(song: Song) -> list[str]:
+    """Return errors if *song* doesn't conform to :data:`FIXED_PALETTE`.
+
+    Every name in the palette must appear in ``song.voices``; voices
+    beyond palette + :data:`UTILITY_VOICES` (filter / root_ref /
+    chord_ref) are flagged so composer-built songs don't silently leak
+    experimental voices. Utility voices themselves are optional at this
+    layer — PR 7 makes them mandatory.
+    """
+    errors: list[str] = []
+    palette_set = set(FIXED_PALETTE)
+    voice_names = set(song.voices.keys())
+
+    missing = palette_set - voice_names
+    if missing:
+        errors.append(
+            f"song {song.title!r}: fixed palette missing voices "
+            f"{sorted(missing)!r}"
+        )
+
+    allowed = palette_set | set(UTILITY_VOICES)
+    extra = voice_names - allowed
+    if extra:
+        errors.append(
+            f"song {song.title!r}: unexpected voice names {sorted(extra)!r} "
+            f"(allowed: {sorted(allowed)!r})"
+        )
     return errors
 
 
