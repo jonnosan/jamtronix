@@ -11,6 +11,7 @@ references these helpers directly.
 from __future__ import annotations
 
 import subprocess
+import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -158,12 +159,15 @@ def run_pytest(
 ) -> PytestResult:
     """Run ``pytest`` with *args* in *repo_root* and capture the outcome.
 
-    The loop calls this before scoring each iteration; a non-zero
-    return code aborts the iteration. ``timeout`` defaults to 10
+    Invoked as ``<sys.executable> -m pytest`` so the gate always uses
+    the same Python interpreter (and therefore the same pytest)
+    that's running the driver — a bare ``pytest`` would miss when
+    the venv isn't on PATH (the script entry-point case). A non-zero
+    return code aborts the iteration; ``timeout`` defaults to 10
     minutes so a hung test process doesn't strand the loop.
     """
     proc = subprocess.run(
-        ["pytest", *args],
+        [sys.executable, "-m", "pytest", *args],
         cwd=str(repo_root),
         capture_output=True,
         text=True,
