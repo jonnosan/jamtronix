@@ -1,0 +1,166 @@
+{
+  "title": "Engine Stress Test",
+  "setup_ref": "ableton",
+  "key": {
+    "tonic": "A",
+    "scale": "minor"
+  },
+  "seed_override": null,
+  "meter": "4/4",
+  "mood": {
+    "valence": 0.0,
+    "energy": 0.4,
+    "chaos": 0.0
+  },
+  "format": "loop",
+  "texture": 1.0,
+  "motion": 0.7,
+  "tempo": 132,
+  "chord_progression": null,
+  "voices": {
+    "drumkit": {
+      "algorithm": "drum_kit",
+      "pattern": {
+        "punch": 0.74,
+        "mech": 0.534,
+        "density": 0.78,
+        "variation": 0.15,
+        "perc_complexity": 0.227
+      },
+      "mix": {}
+    },
+    "bass": {
+      "algorithm": "acid_bass",
+      "pattern": {
+        "drop_prob": 0.137,
+        "slide_prob": 0.317,
+        "gate": 0.542,
+        "intensity": 1.034,
+        "base_vel": 96,
+        "resonance": 109,
+        "cycle": 3
+      },
+      "mix": {}
+    },
+    "sub": {
+      "algorithm": "sub_drone",
+      "pattern": {
+        "fifth_prob": 0.372,
+        "bars_per_chord": 4
+      },
+      "mix": {}
+    },
+    "lead": {
+      "algorithm": "melodic_line",
+      "pattern": {
+        "drop_prob": 0.338,
+        "passing_prob": 0.296,
+        "intensity": 1.045
+      },
+      "mix": {}
+    },
+    "pad": {
+      "algorithm": "sustained_chord",
+      "pattern": {
+        "gate": 0.899,
+        "drift_prob": 0.131,
+        "base_vel": 65
+      },
+      "mix": {}
+    },
+    "chord": {
+      "algorithm": "chord_stab",
+      "pattern": {
+        "gate": 0.386,
+        "drop_prob": 0.004,
+        "pulses": 7,
+        "offset": 2,
+        "base_vel": 97
+      },
+      "mix": {}
+    },
+    "arp": {
+      "algorithm": "arp",
+      "pattern": {
+        "gate": 0.546,
+        "octaves": 1,
+        "base_vel": 101,
+        "subdivision": "16t"
+      },
+      "mix": {}
+    },
+    "stabs": {
+      "algorithm": "chord_stab",
+      "pattern": {
+        "gate": 0.277,
+        "drop_prob": 0.108,
+        "pulses": 6,
+        "offset": 2,
+        "base_vel": 84
+      },
+      "mix": {}
+    },
+    "fx": {
+      "algorithm": "noise_riser",
+      "pattern": {
+        "duration_bars": 4,
+        "cutoff_start": 39,
+        "cutoff_end": 122,
+        "vel_start": 40,
+        "vel_end": 101
+      },
+      "mix": {}
+    },
+    "filter": {
+      "algorithm": "step_cc",
+      "pattern": {
+        "function": "cutoff",
+        "subdivision": "16t",
+        "value_curve": "arc",
+        "value_min": 26,
+        "value_max": 114,
+        "depth": 0.665
+      },
+      "mix": {}
+    },
+    "root_ref": {
+      "algorithm": "voice_follower",
+      "pattern": {
+        "source": "bass",
+        "latch": "first_per_bar"
+      },
+      "mix": {}
+    },
+    "chord_ref": {
+      "algorithm": "voice_follower",
+      "pattern": {
+        "source": "chord",
+        "latch": "first_per_bar"
+      },
+      "mix": {}
+    }
+  },
+  "parts": {
+    "intro": {
+      "bars": 27,
+      "intensity_start": 0.355,
+      "intensity_end": 0.845,
+      "voice_overrides": {},
+      "loop": true,
+      "tempo": null,
+      "meter": null
+    }
+  },
+  "arrangement": [
+    "intro"
+  ],
+  "lfos": [],
+  "feel": {
+    "pump": 0.584,
+    "groove": 0.603,
+    "drive": 0.68,
+    "tension": 0.438,
+    "wander": 0.255
+  },
+  "schema_version": 5
+}
