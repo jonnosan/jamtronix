@@ -1,7 +1,9 @@
 """MainWindow — sidebar nav + central stack + File menu.
 
-The Song view is the only populated view in #17; Parts (#18) and Live
-(#19) get placeholder panels so the nav already shows the three slots.
+Two stacked views — :class:`ComposerView` (front door, mood + format)
+and :class:`PatcherView` (consolidated song / parts editor). The
+SETUP button at the bottom of the sidebar is an action that opens
+the :class:`SetupEditor` modal rather than a third view.
 """
 
 from __future__ import annotations
@@ -28,9 +30,8 @@ from jtx_gui import theme
 from jtx_gui.state import AppState
 from jtx_gui.transport import TransportService
 from jtx_gui.views.composer_view import ComposerView
-from jtx_gui.views.parts_view import PartsView
+from jtx_gui.views.patcher_view import PatcherView
 from jtx_gui.views.setup_editor import SetupEditor
-from jtx_gui.views.song_view import SongView
 from jtx_gui.views.toolbar import TopToolbar
 
 SETTINGS_ORG = "Jamtronix"
@@ -57,11 +58,9 @@ class MainWindow(QMainWindow):
 
         self._stack = QStackedWidget(self)
         self._composer_view = ComposerView(self._state, parent=self)
-        self._song_view = SongView(self._state, self)
-        self._parts_view = PartsView(self._state, transport=self._transport, parent=self)
+        self._patcher_view = PatcherView(self._state, transport=self._transport, parent=self)
         self._stack.addWidget(self._composer_view)
-        self._stack.addWidget(self._song_view)
-        self._stack.addWidget(self._parts_view)
+        self._stack.addWidget(self._patcher_view)
 
         sidebar = self._build_sidebar()
         self._toolbar = TopToolbar(state=self._state, transport=self._transport, parent=self)
@@ -103,7 +102,7 @@ class MainWindow(QMainWindow):
         )
         layout.addWidget(brand)
 
-        labels = ("COMPOSER", "SONG", "PARTS")
+        labels = ("COMPOSER", "PATCHER")
         self._nav_buttons: list[QPushButton] = []
         for index, text in enumerate(labels):
             btn = QPushButton(text, sidebar)
