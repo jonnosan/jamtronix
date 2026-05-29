@@ -425,11 +425,9 @@ class _HeaderPanel(QFrame):
         self._meter.setMaximumWidth(72)
         self._meter.textChanged.connect(self._on_meter)
 
-        self._tempo = QSpinBox()
-        self._tempo.setRange(30, 300)
-        self._tempo.setValue(song.tempo)
-        self._tempo.setSuffix(" BPM")
-        self._tempo.valueChanged.connect(self._on_tempo)
+        # Tempo lives in the top transport toolbar — it's reachable while
+        # jamming without leaving the composer pane. See
+        # :class:`~jtx_gui.views.toolbar.TopToolbar`.
 
         prog = song.chord_progression or ChordProgression(degrees=[], bars_per_chord=4)
         # Detect which named family + rotation produces the current
@@ -499,7 +497,6 @@ class _HeaderPanel(QFrame):
         _add_labeled(grid, 2, 1, "TONIC", self._tonic, span=1)
         _add_labeled(grid, 2, 2, "SCALE", self._scale, span=1)
         _add_labeled(grid, 3, 0, "METER", self._meter, span=1)
-        _add_labeled(grid, 3, 1, "TEMPO", self._tempo, span=1)
         prog_row = QHBoxLayout()
         prog_row.setSpacing(8)
         prog_row.addWidget(self._prog_family)
@@ -542,10 +539,6 @@ class _HeaderPanel(QFrame):
 
     def _on_meter(self, text: str) -> None:
         self._song.meter = text
-        self._on_dirty()
-
-    def _on_tempo(self, bpm: int) -> None:
-        self._song.tempo = bpm
         self._on_dirty()
 
     def _on_family_changed(self, family: str) -> None:

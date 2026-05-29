@@ -2,10 +2,10 @@
 
 The Composer view is the front door for new songs after the GUI rework
 in epic #151. It hosts two :class:`~jtx_gui.widgets.mood_pad.MoodPadWidget`
-instances (mood on top, sonics on the bottom), a chaos knob, a format
-combo, a title input with a 'Random title' shortcut, a setup picker
-(bundled ``.jtx-setup`` files), a 'Random song' shortcut, and a
-'Generate' button.
+instances (mood + sonics, displayed side-by-side), a chaos knob, a
+format combo, a title input with a 'Random title' shortcut, a setup
+picker (bundled ``.jtx-setup`` files), a 'Random song' shortcut, and
+a 'Generate' button.
 
 Any change to mood / sonics / chaos kicks a 200ms debounced re-roll:
 :func:`jtx.composer.compose` is called and the result lands in
@@ -78,7 +78,7 @@ class ComposerView(QWidget):
         self._state.song_changed.connect(self._sync_from_state)
         self._setup_paths: dict[str, Path] = {}
 
-        # ----- left column: mood pad on top, sonics pad below ---------------
+        # ----- left column: mood + sonics pads, side by side ----------------
         self._mood_pad = MoodPadWidget(self)
         self._sonics_pad = MoodPadWidget(
             self,
@@ -93,8 +93,8 @@ class ComposerView(QWidget):
         # re-roll has a sensible (texture, motion) baseline.
         self._sonics_pad.set_mood(0.5, 0.5, emit=False)
 
-        left = QVBoxLayout()
-        left.setSpacing(8)
+        left = QHBoxLayout()
+        left.setSpacing(12)
         left.addWidget(self._mood_pad, 1)
         left.addWidget(self._sonics_pad, 1)
 
