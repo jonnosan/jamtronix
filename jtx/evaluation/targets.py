@@ -275,7 +275,10 @@ ACID = Target(
     name="acid",
     intent_predicates=(
         IntentCheck("bass uses acid_bass", _algorithm_eq("bass", "acid_bass")),
-        IntentCheck("lead is active", _algorithm_not_rest("lead")),
+        # Lead is *optional* — pure acid is bass + drums + stabs; a small
+        # texture bump brings the lead in. Pinning "lead is active" forced
+        # the anchor to a coord where six voices fired, which auditioned
+        # as "not acidy" (too thick).
         IntentCheck("filter depth ≥ 0.6", _pattern_min("filter", "depth", 0.6)),
     ),
     delivery_descriptors=(
