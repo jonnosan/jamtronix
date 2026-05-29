@@ -58,6 +58,10 @@ class KnobWidget(QWidget):
     """Rotary knob + numeric readout for one float (or int) knob value."""
 
     value_changed = Signal(float)
+    """Emitted on every value change (drag, click, set_value, wheel)."""
+
+    value_committed = Signal(float)
+    """Emitted on mouse release after a drag or on ``set_value(..., emit_commit=True)``."""
 
     def __init__(
         self,
@@ -101,16 +105,20 @@ class KnobWidget(QWidget):
     def value(self) -> float:
         return self._value
 
-    def set_value(self, v: float, *, emit: bool = True) -> None:
+    def set_value(
+        self, v: float, *, emit: bool = True, emit_commit: bool = False
+    ) -> None:
         clamped = self._clamp(v)
         if self._integer:
             clamped = float(round(clamped))
-        if clamped == self._value:
-            return
-        self._value = clamped
-        self.update()
-        if emit:
-            self.value_changed.emit(self._value)
+        changed = clamped != self._value
+        if changed:
+            self._value = clamped
+            self.update()
+            if emit:
+                self.value_changed.emit(self._value)
+        if emit_commit:
+            self.value_committed.emit(self._value)
 
     def set_modulated(self, on: bool) -> None:
         if on != self._modulated:
@@ -170,6 +178,7 @@ class KnobWidget(QWidget):
         if event.button() == Qt.MouseButton.LeftButton and self._drag_anchor is not None:
             self._drag_anchor = None
             self.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.value_committed.emit(self._value)
             event.accept()
             return
         super().mouseReleaseEvent(event)

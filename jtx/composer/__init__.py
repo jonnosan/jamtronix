@@ -22,6 +22,7 @@ from jtx.composer.recipe import (
     VoiceRecipe,
     build_recipe,
 )
+from jtx.composer.sonics import SONICS_REGIONS
 from jtx.composer.titles import format_suffix, random_title
 from jtx.composer.voices import FIXED_PALETTE, validate_palette
 
@@ -35,6 +36,7 @@ __all__ = [
     "MoodBlueprint",
     "MoodSpec",
     "Recipe",
+    "SONICS_REGIONS",
     "VoiceRecipe",
     "build_recipe",
     "compose",
