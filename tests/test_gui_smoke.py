@@ -592,3 +592,47 @@ def test_main_window_sidebar_shows_composer(qapp: QApplication) -> None:
     assert window._nav_buttons[0].isChecked()  # type: ignore[attr-defined]
     assert window._stack.currentIndex() == 0  # type: ignore[attr-defined]
     window.deleteLater()
+
+
+def test_main_window_sidebar_after_patcher_consolidation(qapp: QApplication) -> None:
+    """Sidebar reads COMPOSER + PATCHER (checkable nav) + SETUP (anchored action)."""
+    from PySide6.QtWidgets import QPushButton
+
+    state = AppState()
+    window = MainWindow(state)
+    nav_labels = [btn.text() for btn in window._nav_buttons]  # type: ignore[attr-defined]
+    assert nav_labels == ["COMPOSER", "PATCHER"]
+    # SETUP lives as a separate action button below the stretch.
+    all_btn_texts = {b.text() for b in window.findChildren(QPushButton)}
+    assert "SETUP" in all_btn_texts
+    window.deleteLater()
+
+
+def test_main_window_switching_to_patcher_shows_patcher_view(qapp: QApplication) -> None:
+    """Clicking PATCHER swaps the stacked widget to the PatcherView."""
+    from jtx_gui.views.patcher_view import PatcherView
+
+    state = AppState()
+    window = MainWindow(state)
+    window._nav_buttons[1].click()  # type: ignore[attr-defined]
+    assert window._stack.currentIndex() == 1  # type: ignore[attr-defined]
+    current = window._stack.currentWidget()  # type: ignore[attr-defined]
+    assert isinstance(current, PatcherView)
+    window.deleteLater()
+
+
+def test_patcher_view_holds_song_and_parts_views(qapp: QApplication) -> None:
+    """PatcherView wires SongView + PartsView in a splitter."""
+    from jtx_gui.transport import TransportService
+    from jtx_gui.views.parts_view import PartsView
+    from jtx_gui.views.patcher_view import PatcherView
+    from jtx_gui.views.song_view import SongView
+
+    state = AppState()
+    transport = TransportService()
+    view = PatcherView(state, transport=transport)
+    assert isinstance(view.song_view(), SongView)
+    assert isinstance(view.parts_view(), PartsView)
+    # Both widgets are mounted inside the splitter.
+    assert view.splitter().count() == 2
+    view.deleteLater()
