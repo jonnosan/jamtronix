@@ -66,7 +66,6 @@ Drag the file in Finder, then restart Live (or refresh the browser).
 1. Set **IAC Driver Bus 1**'s **Track** column to **On** so tracks can
    listen on it. (Remote and Sync stay off unless a specific track
    needs them.)
-2. (For an MPE lead) enable **MPE** on the same row.
 
 ## Track layout
 
@@ -166,8 +165,6 @@ running melodic line. Either way the instrument should have:
 * A comfortable range from mid-register to upper.
 
 Think "the synth you'd notice if it dropped out" — that's the lead.
-This is also the track you'd most often switch to MPE for per-note
-bend on solos (see [MPE leads](#mpe-leads)).
 
 ### `pad` — channel 4
 
@@ -327,26 +324,6 @@ When you decide a different instrument fits a voice better:
 
 Done. The jtx side is untouched, no MIDI Learn, no audition. The
 CC → Macro mappings inside the Rack persist across all such swaps.
-
-## MPE leads
-
-For per-note pitch bend on the `lead` voice (psytrance-style melodic
-leads, expressive solos):
-
-1. Set the lead track's **MIDI From** input row's **Channel**
-   dropdown to `All Ch`.
-2. Enable the **MPE** toggle that appears next to the channel
-   dropdown.
-3. Pick an MPE-aware instrument inside the Rack — Wavetable, Drift,
-   Sampler, Meld all support MPE.
-
-jtx's MPE-mode voices emit per-note pitch bend on each note's
-allocated channel directly (no Rack involvement). The Rack still
-handles cutoff / resonance / etc. via its CCs.
-
-The bundled `setups/ableton-mpe.jtx-setup` is a copy of the standard
-`ableton` setup with the lead voice pre-configured for MPE — use it
-if you want MPE on by default.
 
 ## Ableton Link
 
