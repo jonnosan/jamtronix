@@ -9,6 +9,19 @@ into:
 * :class:`VoiceRecipe` per palette voice — algorithm pick + pattern
   knob *ranges*. Concrete knob values are sampled by ``compose``.
 
+Texture and motion shape what gets played, in two independent ways:
+
+* **Texture** in ``[0, 1]`` is arrangement thickness. Each palette voice
+  has an activation threshold ``τ_v``; below it the voice runs
+  ``rest``. At or above ``τ_v`` the voice's per-algorithm "density"
+  knob ramps from 0 → 1 as texture rises further.
+* **Motion** in ``[0, 1]`` shifts the algorithm shortlist toward
+  animated variants (bass → rolling acid; arp subdivision ↑;
+  chord stab vs sustained) and drives the filter LFO depth + speed.
+  Motion also nudges τ — high motion lowers τ for ``arp`` / ``lead``
+  and raises τ for ``pad`` / ``sub``, so the same texture fills the
+  palette with different voices depending on motion.
+
 Chaos perturbs every range (widens windows + bumps the chance of
 weird-pick algorithms) so the same anchor + format combination still
 produces varied songs.
@@ -91,8 +104,10 @@ class Recipe:
 # ---------- mood → musical defaults ------------------------------------
 
 
-def _mood_blueprint(mood: MoodSpec, chaos: float) -> MoodBlueprint:
-    """Translate mood-pad position into tempo / key / feel windows."""
+def _mood_blueprint(
+    mood: MoodSpec, chaos: float, texture: float, motion: float
+) -> MoodBlueprint:
+    """Translate mood + texture + motion into tempo / key / feel windows."""
     energy = _norm_axis(mood.energy)
     valence = _norm_axis(mood.valence)
 
@@ -114,11 +129,17 @@ def _mood_blueprint(mood: MoodSpec, chaos: float) -> MoodBlueprint:
         tonic_choices = ("A", "C", "D", "E", "G")
 
     # Five global feel knobs; each window centred on a mood-driven point.
-    pump = 0.25 + energy * 0.45
-    groove = 0.20 + (1.0 - abs(mood.valence)) * 0.35
-    drive = 0.20 + energy * 0.55
+    # Texture + motion now nudge each centre:
+    # - pump rises with texture (lush mixes need sidechain breathing room)
+    #   and drops with motion (psytrance = high motion + low pump).
+    # - groove gains a small lift from motion.
+    # - drive rises with motion.
+    # - wander gains from motion in addition to chaos.
+    pump = 0.25 + energy * 0.35 + texture * 0.20 - motion * 0.20
+    groove = 0.20 + (1.0 - abs(mood.valence)) * 0.30 + motion * 0.10
+    drive = 0.20 + energy * 0.45 + motion * 0.20
     tension = 0.20 + (1.0 - valence) * 0.45 + chaos * 0.15
-    wander = 0.10 + chaos * 0.45
+    wander = 0.10 + chaos * 0.35 + motion * 0.20
 
     def _window(centre: float) -> tuple[float, float]:
         half = 0.05 + chaos * 0.12
@@ -151,10 +172,8 @@ def _intensity_envelope(
     floor = _clamp(0.15 + energy_norm * 0.15, 0.1, 0.5)
 
     if archetype == "single":
-        # A single part — small ramp toward peak, no full arc.
         return ((floor + 0.1, peak),)
     if archetype == "build":
-        # Monotonic ascent from floor to peak across all parts.
         envs: list[tuple[float, float]] = []
         for i in range(part_count):
             start = floor + (peak - floor) * (i / max(1, part_count))
@@ -162,7 +181,6 @@ def _intensity_envelope(
             envs.append((start, end))
         return tuple(envs)
     if archetype == "arc":
-        # intro / build / drop / break / drop2 / outro shape.
         shape = (
             (floor, floor + 0.15),
             (floor + 0.15, peak - 0.1),
@@ -172,7 +190,6 @@ def _intensity_envelope(
             (peak * 0.6, floor + 0.05),
         )
         return shape[:part_count]
-    # extended_arc: intro / build / drop / break / build2 / drop2 / break2 / outro
     shape = (
         (floor, floor + 0.1),
         (floor + 0.1, peak - 0.15),
@@ -190,7 +207,6 @@ def _format_blueprint(
     fmt: FormatType, energy_norm: float, chaos: float
 ) -> FormatBlueprint:
     spec = FORMAT_SPECS[fmt]
-    # Part count: anchor to the upper end of the range as chaos rises.
     pc_lo, pc_hi = spec.part_count_range
     part_count = pc_lo + round(chaos * (pc_hi - pc_lo))
     envelope = _intensity_envelope(spec.intensity_archetype, part_count, energy_norm)
@@ -202,65 +218,131 @@ def _format_blueprint(
     )
 
 
-# ---------- voice recipes ----------------------------------------------
+# ---------- voice activation: τ + motion shortlists --------------------
 
-# Algorithm shortlists per palette voice. The first entry is the
-# "default" pick the sampler chooses without chaos; the rest become
-# eligible as chaos rises.
-_VOICE_ALGO_SHORTLISTS: dict[str, tuple[str, ...]] = {
-    "drumkit": ("drum_kit",),
-    "bass": ("acid_bass", "reese_bass"),
-    "sub": ("sub_drone", "rest"),
-    "lead": ("melodic_line", "motif_phrase", "arp", "rest"),
-    "pad": ("sustained_chord", "rest"),
-    "chord": ("chord_stab", "sustained_chord"),
-    "arp": ("arp", "rest"),
-    "stabs": ("chord_stab", "rest"),
-    "fx": ("step_cc", "noise_riser", "rest"),
+# Texture activation thresholds (τ_v) per palette voice. Below τ the
+# voice is forced to ``rest``; at or above τ the voice's density-like
+# knob ramps from 0 → 1 across the remaining texture range (slope =
+# 1 - τ_v so every voice reaches full density at texture=1.0).
+_VOICE_TAU: dict[str, float] = {
+    "drumkit": 0.00,
+    "bass": 0.00,
+    "stabs": 0.05,
+    "lead": 0.20,
+    "arp": 0.30,
+    "sub": 0.40,
+    "pad": 0.50,
+    "chord": 0.60,
+    "fx": 0.70,
 }
 
+# Algorithm choice per (voice, motion-band). Index 0 = low motion,
+# 1 = mid, 2 = high. ``rest`` lives outside this table — picked by the
+# texture-activation check.
+_VOICE_MOTION_SHORTLISTS: dict[str, tuple[str, str, str]] = {
+    "drumkit": ("drum_kit", "drum_kit", "drum_kit"),
+    "bass": ("reese_bass", "acid_bass", "acid_bass"),
+    "sub": ("sub_drone", "sub_drone", "sub_drone"),
+    "lead": ("motif_phrase", "melodic_line", "melodic_line"),
+    "pad": ("sustained_chord", "sustained_chord", "sustained_chord"),
+    "chord": ("sustained_chord", "chord_stab", "chord_stab"),
+    "arp": ("arp", "arp", "arp"),
+    "stabs": ("chord_stab", "chord_stab", "chord_stab"),
+    "fx": ("step_cc", "step_cc", "noise_riser"),
+}
 
-def _pick_voice_algorithm(
-    voice: str, energy_norm: float, valence_norm: float, chaos: float
-) -> str:
-    """Pick an algorithm for *voice* using mood + chaos as bias.
+# Motion biases τ by ±0.075 for voices that have a clear "movement
+# preference". High motion → animated voices (arp, lead) activate
+# sooner; low motion → sustained voices (pad, sub) activate sooner.
+_TAU_BIAS_DIRECTION: dict[str, int] = {
+    "arp": -1,
+    "lead": -1,
+    "pad": +1,
+    "sub": +1,
+}
+_TAU_BIAS_MAGNITUDE = 0.15
 
-    Low-energy songs favour ``rest`` for energy-heavy voices (lead,
-    arp, fx); low-valence songs favour darker basses (reese over acid).
-    Chaos broadens the shortlist of eligible algorithms.
+
+def _effective_tau(voice: str, motion: float) -> float:
+    """τ_v after motion bias."""
+    base = _VOICE_TAU[voice]
+    direction = _TAU_BIAS_DIRECTION.get(voice, 0)
+    if direction == 0:
+        return base
+    # motion - 0.5 maps to [-0.5, +0.5]; bias is ±_TAU_BIAS_MAGNITUDE / 2.
+    bias = direction * (motion - 0.5) * _TAU_BIAS_MAGNITUDE
+    return _clamp(base + bias, 0.0, 1.0)
+
+
+def _motion_band(motion: float) -> int:
+    """Bucket motion into 0 (low) / 1 (mid) / 2 (high)."""
+    if motion < 0.34:
+        return 0
+    if motion < 0.67:
+        return 1
+    return 2
+
+
+def _pick_voice(
+    voice: str,
+    energy_norm: float,
+    valence_norm: float,
+    texture: float,
+    motion: float,
+    chaos: float,
+) -> tuple[str, float]:
+    """Return ``(algorithm, density_norm)`` for *voice*.
+
+    ``density_norm`` is in ``[0, 1]`` — 0 = barely on, 1 = full
+    density. It's 0.0 when the voice is ``rest`` (below threshold).
     """
-    shortlist = _VOICE_ALGO_SHORTLISTS[voice]
+    tau_eff = _effective_tau(voice, motion)
+    if texture < tau_eff:
+        return "rest", 0.0
 
-    if voice == "bass":
-        return shortlist[0] if valence_norm > 0.45 else shortlist[1]
-    if voice == "sub":
-        # Sub joins as energy rises; chaos lets it sneak in earlier.
-        return "sub_drone" if (energy_norm + chaos * 0.3) > 0.4 else "rest"
-    if voice == "lead":
-        if energy_norm + chaos * 0.2 < 0.35:
-            return "rest"
-        if valence_norm > 0.6:
-            return "motif_phrase"
-        if energy_norm > 0.7:
-            return "melodic_line"
-        return "arp" if chaos > 0.4 else shortlist[0]
-    if voice == "pad":
-        return "sustained_chord" if valence_norm > 0.3 or chaos > 0.3 else "rest"
-    if voice == "chord":
-        return "chord_stab" if energy_norm > 0.45 else "sustained_chord"
-    if voice == "arp":
-        return "arp" if (energy_norm > 0.55 or chaos > 0.5) else "rest"
-    if voice == "stabs":
-        return "chord_stab" if energy_norm > 0.4 else "rest"
-    if voice == "fx":
-        if energy_norm > 0.7:
-            return "noise_riser"
-        return "step_cc" if chaos > 0.25 else "rest"
-    return shortlist[0]
+    # Slope = 1 - τ_v (the original, pre-bias τ) so each voice reaches
+    # density=1.0 at texture=1.0 regardless of motion bias.
+    slope = max(1e-6, 1.0 - _VOICE_TAU[voice])
+    density_norm = _clamp((texture - tau_eff) / slope, 0.0, 1.0)
+
+    shortlist = _VOICE_MOTION_SHORTLISTS[voice]
+    algo = shortlist[_motion_band(motion)]
+
+    # Valence bias on bass: dark valence prefers reese (woolly), bright
+    # valence prefers acid. Motion shortlist still wins at high motion.
+    if voice == "bass" and _motion_band(motion) >= 1 and valence_norm < 0.35:
+        algo = "reese_bass"
+
+    # Chaos can promote arp into the lead slot.
+    if voice == "lead" and chaos > 0.55 and _motion_band(motion) >= 1:
+        algo = "arp"
+
+    return algo, density_norm
+
+
+# ---------- per-(voice, algorithm) knob ranges -------------------------
+
+
+def _density_blend(
+    base_lo: float, base_hi: float, density: float
+) -> tuple[float, float]:
+    """Scale ``(base_lo, base_hi)`` window by *density* in ``[0, 1]``.
+
+    At density=0 the window collapses toward base_lo; at density=1 it
+    sits at the full ``(base_lo, base_hi)``.
+    """
+    span = base_hi - base_lo
+    return (base_lo, _clamp(base_lo + span * density, base_lo, base_hi))
 
 
 def _voice_pattern_ranges(
-    voice: str, algorithm: str, energy_norm: float, valence_norm: float, chaos: float
+    voice: str,
+    algorithm: str,
+    density_norm: float,
+    energy_norm: float,
+    valence_norm: float,
+    motion: float,
+    chaos: float,
 ) -> tuple[
     dict[str, tuple[float, float]],
     dict[str, tuple[int, int]],
@@ -268,9 +350,9 @@ def _voice_pattern_ranges(
 ]:
     """Per-(voice, algorithm) knob ranges + fixed knobs.
 
-    Kept compact: only knobs the composer actively shapes appear here;
-    every other knob inherits its algorithm default. This is enough for
-    PR 2 (the GUI layer in PR 4+ can over-tune).
+    Density (texture above τ) scales the "active-ness" of each voice;
+    motion shapes the rhythmic / animated character (arp subdivision,
+    bass cycle for psy rolling bass, chord stab pulses).
     """
     floats: dict[str, tuple[float, float]] = {}
     ints: dict[str, tuple[int, int]] = {}
@@ -280,7 +362,6 @@ def _voice_pattern_ranges(
         return floats, ints, fixed
 
     if algorithm == "drum_kit":
-        # Punch follows energy; mech is biased mid with chaos spread.
         punch_centre = 0.4 + energy_norm * 0.45
         mech_centre = 0.5
         spread = 0.05 + chaos * 0.2
@@ -292,65 +373,102 @@ def _voice_pattern_ranges(
             _clamp(mech_centre - spread, 0.0, 1.0),
             _clamp(mech_centre + spread, 0.0, 1.0),
         )
-        floats["density"] = (0.4 + energy_norm * 0.2, 0.55 + energy_norm * 0.25)
+        # Drum density tracks texture-density directly.
+        floats["density"] = _density_blend(0.4, 0.85, density_norm)
         floats["variation"] = (0.15 + chaos * 0.2, 0.3 + chaos * 0.3)
         floats["perc_complexity"] = (0.2 + chaos * 0.15, 0.4 + chaos * 0.35)
         return floats, ints, fixed
 
     if algorithm == "acid_bass":
-        floats["drop_prob"] = (0.15 + chaos * 0.1, 0.4 + chaos * 0.15)
-        floats["slide_prob"] = (0.1, 0.45 + chaos * 0.2)
+        # Density inversely drives drop_prob (more density = fewer drops).
+        max_drop = 0.55 - density_norm * 0.4
+        min_drop = max(0.05, max_drop - 0.2)
+        floats["drop_prob"] = (min_drop, max_drop + chaos * 0.1)
+        floats["slide_prob"] = (0.1 + motion * 0.1, 0.45 + chaos * 0.2)
         floats["gate"] = (0.4, 0.9)
         floats["intensity"] = (0.9, 1.2 + chaos * 0.2)
         ints["base_vel"] = (85, 105)
-        ints["resonance"] = (70 + int(energy_norm * 30), 110 + int(chaos * 17))
+        ints["resonance"] = (
+            70 + int(energy_norm * 30),
+            110 + int(chaos * 17),
+        )
+        # Psy rolling: high energy + high motion bumps LFO cycle so the
+        # filter rolls instead of settling.
+        if energy_norm > 0.65 and motion > 0.65:
+            ints["cycle"] = (3, 6)
         return floats, ints, fixed
 
     if algorithm == "reese_bass":
-        floats["wobble_depth"] = (0.4 + energy_norm * 0.2, 0.7 + energy_norm * 0.2)
+        floats["wobble_depth"] = (
+            0.3 + motion * 0.2,
+            0.6 + motion * 0.3,
+        )
         floats["detune_depth"] = (0.2, 0.5 + chaos * 0.3)
         ints["base_vel"] = (90, 110)
         return floats, ints, fixed
 
     if algorithm == "sub_drone":
-        floats["fifth_prob"] = (0.0, 0.25 + chaos * 0.25)
+        floats["fifth_prob"] = _density_blend(0.0, 0.4, density_norm)
         ints["bars_per_chord"] = (2, 4)
         return floats, ints, fixed
 
     if algorithm == "melodic_line":
-        floats["drop_prob"] = (0.4, 0.7 + chaos * 0.1)
-        floats["passing_prob"] = (0.05, 0.2 + chaos * 0.2)
+        max_drop = 0.7 - density_norm * 0.25
+        min_drop = max(0.2, max_drop - 0.25)
+        floats["drop_prob"] = (min_drop, max_drop + chaos * 0.1)
+        floats["passing_prob"] = (
+            0.05 + motion * 0.1,
+            0.2 + chaos * 0.2 + motion * 0.15,
+        )
         floats["intensity"] = (0.9, 1.2)
         return floats, ints, fixed
 
     if algorithm == "motif_phrase":
-        floats["motif_complexity"] = (0.3 + energy_norm * 0.2, 0.6 + energy_norm * 0.2)
+        floats["motif_complexity"] = (
+            0.3 + energy_norm * 0.2,
+            0.6 + energy_norm * 0.2,
+        )
         floats["variation_depth"] = (0.3, 0.6 + chaos * 0.3)
-        floats["density"] = (0.5 + energy_norm * 0.2, 0.85)
+        floats["density"] = _density_blend(0.4, 0.85, density_norm)
         return floats, ints, fixed
 
     if algorithm == "arp":
-        floats["gate"] = (0.4, 0.8)
-        ints["octaves"] = (1, 2 if chaos > 0.4 else 1)
+        floats["gate"] = _density_blend(0.4, 0.8, density_norm)
+        # Motion drives subdivision rate.
+        subdivision = ("8", "16", "16t")[_motion_band(motion)]
+        fixed["subdivision"] = subdivision
+        # High density opens up a second octave.
+        if density_norm > 0.55:
+            ints["octaves"] = (1, 2)
+        else:
+            ints["octaves"] = (1, 1)
         ints["base_vel"] = (85, 105)
         return floats, ints, fixed
 
     if algorithm == "sustained_chord":
         floats["gate"] = (0.85, 0.98)
-        floats["drift_prob"] = (0.0, 0.15 + chaos * 0.25)
+        floats["drift_prob"] = _density_blend(0.0, 0.4 + chaos * 0.2, density_norm)
         ints["base_vel"] = (65, 90)
         return floats, ints, fixed
 
     if algorithm == "chord_stab":
-        floats["gate"] = (0.25, 0.5)
+        # Density bumps pulses (more hits per bar at high texture).
+        max_pulses = 3 + int(round(density_norm * 4))
+        ints["pulses"] = (3, max(3, max_pulses))
+        # Motion punches the stab — shorter gate at high motion.
+        gate_hi = 0.5 - motion * 0.15
+        floats["gate"] = (max(0.15, gate_hi - 0.2), max(0.2, gate_hi))
         floats["drop_prob"] = (0.0, 0.15 + chaos * 0.15)
-        ints["pulses"] = (3, 6)
         ints["offset"] = (1, 3)
         ints["base_vel"] = (80, 100)
         return floats, ints, fixed
 
     if algorithm == "step_cc":
-        floats["depth"] = (0.4 + energy_norm * 0.3, 0.8)
+        # Used as an FX voice here; motion drives sweep depth.
+        floats["depth"] = (
+            0.3 + motion * 0.5,
+            0.5 + motion * 0.45,
+        )
         ints["value_min"] = (20, 45)
         ints["value_max"] = (95, 120)
         fixed["function"] = "cutoff"
@@ -367,25 +485,45 @@ def _voice_pattern_ranges(
     return floats, ints, fixed
 
 
-def build_recipe(mood: MoodSpec, fmt: FormatType, chaos: float) -> Recipe:
-    """Collapse (mood, format, chaos) into a deterministic :class:`Recipe`.
+def build_recipe(
+    mood: MoodSpec,
+    fmt: FormatType,
+    chaos: float,
+    texture: float = 0.5,
+    motion: float = 0.5,
+) -> Recipe:
+    """Collapse (mood, format, chaos, texture, motion) into a :class:`Recipe`.
 
     The recipe carries ranges, not concrete values — :func:`compose`
     is the consumer that samples from them with a seeded RNG. Pure
     function: same inputs always return the same Recipe.
+
+    ``texture`` and ``motion`` are clamped to ``[0, 1]``. Defaults of
+    0.5 give a "centre" arrangement — most voices on at mid density,
+    mid-motion algorithms, mid filter sweep.
     """
     chaos = _clamp(chaos, 0.0, 1.0)
+    texture = _clamp(texture, 0.0, 1.0)
+    motion = _clamp(motion, 0.0, 1.0)
     energy_norm = _norm_axis(mood.energy)
     valence_norm = _norm_axis(mood.valence)
 
-    mood_bp = _mood_blueprint(mood, chaos)
+    mood_bp = _mood_blueprint(mood, chaos, texture, motion)
     fmt_bp = _format_blueprint(fmt, energy_norm, chaos)
 
     voices: dict[str, VoiceRecipe] = {}
     for voice in FIXED_PALETTE:
-        algorithm = _pick_voice_algorithm(voice, energy_norm, valence_norm, chaos)
+        algorithm, density_norm = _pick_voice(
+            voice, energy_norm, valence_norm, texture, motion, chaos
+        )
         floats, ints, fixed = _voice_pattern_ranges(
-            voice, algorithm, energy_norm, valence_norm, chaos
+            voice,
+            algorithm,
+            density_norm,
+            energy_norm,
+            valence_norm,
+            motion,
+            chaos,
         )
         voices[voice] = VoiceRecipe(
             algorithm=algorithm,

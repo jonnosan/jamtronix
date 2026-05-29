@@ -44,11 +44,19 @@ def _clamp(value: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, value))
 
 
-def _seed_for(title: str, mood: MoodSpec, fmt: FormatType, chaos: float) -> int:
-    """Mix the four inputs into a single deterministic seed."""
+def _seed_for(
+    title: str,
+    mood: MoodSpec,
+    fmt: FormatType,
+    chaos: float,
+    texture: float,
+    motion: float,
+) -> int:
+    """Mix the six inputs into a single deterministic seed."""
     key = (
         f"{title}|v={mood.valence:.4f}|e={mood.energy:.4f}"
         f"|c={chaos:.4f}|f={fmt}"
+        f"|t={texture:.4f}|m={motion:.4f}"
     )
     return seed_from_title(key)
 
@@ -67,14 +75,45 @@ def _sample_pattern(
     return out
 
 
+_FILTER_SUBDIVISIONS = ("4", "16", "16t")
+
+
+def _filter_pattern(motion: float) -> dict[str, object]:
+    """Motion-driven filter utility voice knobs.
+
+    Low motion → narrow cutoff window, slow subdivision, shallow
+    depth (the filter barely breathes). High motion → wide window,
+    fast subdivision, near-full depth (the filter swirls).
+    """
+    motion = max(0.0, min(1.0, motion))
+    band = 0 if motion < 0.34 else (1 if motion < 0.67 else 2)
+    subdivision = _FILTER_SUBDIVISIONS[band]
+    # Depth scales 0.0 → 0.95 with motion.
+    depth = round(motion * 0.95, 3)
+    # Range widens with motion: low motion = 55..75, high motion = 20..120.
+    centre = 70
+    half_range = 8 + int(round(motion * 52))
+    value_min = max(0, centre - half_range)
+    value_max = min(127, centre + half_range)
+    return {
+        "function": "cutoff",
+        "subdivision": subdivision,
+        "value_curve": "arc",
+        "value_min": value_min,
+        "value_max": value_max,
+        "depth": depth,
+    }
+
+
 def _build_voices(
-    rng: random.Random, recipe: Recipe
+    rng: random.Random, recipe: Recipe, motion: float
 ) -> dict[str, VoiceConfig]:
     """Walk the recipe's per-voice plans and emit concrete VoiceConfigs.
 
     Always returns the 9 palette voices plus the utility cluster
     (filter / root_ref / chord_ref) so every composer song carries the
-    same voice set.
+    same voice set. ``motion`` shapes the filter utility voice's LFO
+    depth + subdivision.
     """
     voices: dict[str, VoiceConfig] = {}
     for voice_name in FIXED_PALETTE:
@@ -87,13 +126,7 @@ def _build_voices(
     # Utility cluster — wired identically across every composer song.
     voices["filter"] = VoiceConfig(
         algorithm="step_cc",
-        pattern={
-            "function": "cutoff",
-            "subdivision": "16",
-            "value_curve": "arc",
-            "value_min": 30,
-            "value_max": 110,
-        },
+        pattern=_filter_pattern(motion),
     )
     voices["root_ref"] = VoiceConfig(
         algorithm="voice_follower",
@@ -151,20 +184,28 @@ def compose(
     mood: MoodSpec,
     fmt: FormatType,
     chaos: float = 0.0,
+    texture: float = 0.5,
+    motion: float = 0.5,
 ) -> Song:
-    """Generate a :class:`Song` for ``(title, mood, fmt, chaos)``.
+    """Generate a :class:`Song` for ``(title, mood, fmt, chaos, texture, motion)``.
 
-    The seed mixes all four inputs so changing any axis re-rolls the
-    song without forcing the user to also change the title. ``chaos``
-    is clamped to ``[0, 1]``.
+    The seed mixes all six inputs so changing any axis re-rolls the
+    song without forcing the user to also change the title.
+    ``chaos`` / ``texture`` / ``motion`` are clamped to ``[0, 1]``.
+
+    ``texture`` controls how thick the arrangement is (which palette
+    voices come in at all + their density); ``motion`` controls how
+    animated things feel (algorithm shortlists + filter LFO depth/speed).
     """
     chaos = _clamp(chaos, 0.0, 1.0)
-    rng = random.Random(_seed_for(title, mood, fmt, chaos))
-    recipe = build_recipe(mood, fmt, chaos)
+    texture = _clamp(texture, 0.0, 1.0)
+    motion = _clamp(motion, 0.0, 1.0)
+    rng = random.Random(_seed_for(title, mood, fmt, chaos, texture, motion))
+    recipe = build_recipe(mood, fmt, chaos, texture, motion)
 
     tempo = rng.randint(*recipe.mood.tempo_range)
     tonic = rng.choice(recipe.mood.tonic_choices)
-    voices = _build_voices(rng, recipe)
+    voices = _build_voices(rng, recipe, motion)
     parts, arrangement = _build_parts(rng, recipe)
     feel = _sample_feel(rng, recipe)
 

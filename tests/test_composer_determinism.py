@@ -40,3 +40,15 @@ def test_different_mood_changes_song() -> None:
     a = compose("Same", "iac", MOOD_ANCHORS["happy"], "song", chaos=0.0)
     b = compose("Same", "iac", MOOD_ANCHORS["brooding"], "song", chaos=0.0)
     assert _song_to_json(a) != _song_to_json(b)
+
+
+def test_different_texture_changes_song() -> None:
+    a = compose("Same", "iac", MOOD_ANCHORS["happy"], "song", chaos=0.0, texture=0.2)
+    b = compose("Same", "iac", MOOD_ANCHORS["happy"], "song", chaos=0.0, texture=0.8)
+    assert _song_to_json(a) != _song_to_json(b)
+
+
+def test_different_motion_changes_song() -> None:
+    a = compose("Same", "iac", MOOD_ANCHORS["happy"], "song", chaos=0.0, motion=0.1)
+    b = compose("Same", "iac", MOOD_ANCHORS["happy"], "song", chaos=0.0, motion=0.9)
+    assert _song_to_json(a) != _song_to_json(b)
