@@ -20,6 +20,7 @@ from typing import Literal
 
 from jtx.composer import compose
 from jtx.composer.mood import MoodSpec
+from jtx.composer.tuning import Tuning
 from jtx.evaluation.discriminability import (
     FEATURE_SCHEMA,
     feature_keys,
@@ -130,6 +131,7 @@ def sweep(
     seed: int = 0,
     parts: tuple[str, ...] = ("drop",),
     bars: int = 4,
+    tuning: Tuning | None = None,
 ) -> SensitivityResult:
     """Sweep *axis* across *steps* values; regress each feature on input.
 
@@ -138,7 +140,9 @@ def sweep(
     averaged or compared without all picking identical RNG streams.
     *parts* / *bars* are forwarded to :func:`render_sample`; the
     ``drop`` part is the default because that's where style lives per
-    the plan.
+    the plan. *tuning* forwards to :func:`jtx.composer.compose`; if
+    ``None``, the composer's cached default applies — the existing
+    Phase 1c CLI + tests rely on that fallback.
     """
     fx = fixed or SensitivityFixed()
     values = _axis_values(axis, steps)
@@ -168,6 +172,7 @@ def sweep(
             chaos=fx.chaos,
             texture=texture,
             motion=motion,
+            tuning=tuning,
         )
         # Some formats (sting/loop) only produce "intro"; the caller
         # passes a parts tuple that lines up. Missing parts skip

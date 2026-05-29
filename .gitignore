@@ -15,3 +15,9 @@ build/
 # User songs / setups go in ~/jtx/ by default; ignore any local stash here.
 /songs/
 /local/
+
+# jtx-improve session output + per-session tuning override. tuning.toml
+# itself is meant to be committed when the loop accepts an improvement.
+/tuning.toml.tmp
+/STOP
+/eval_runs/
