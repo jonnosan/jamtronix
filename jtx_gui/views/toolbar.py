@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSlider,
+    QSpinBox,
     QWidget,
 )
 
@@ -109,6 +110,16 @@ class TopToolbar(QFrame):
             f"color: {theme.INK_HOT.name()}; font-size: 11pt; font-weight: bold;"
         )
 
+        # ----- tempo -----
+        # Song-level tempo lives here (moved up from the patcher pane) so
+        # it's reachable while jamming without leaving the composer.
+        self._tempo = QSpinBox()
+        self._tempo.setRange(30, 300)
+        self._tempo.setSuffix(" BPM")
+        self._tempo.setFixedWidth(108)
+        self._tempo.setEnabled(False)
+        self._tempo.valueChanged.connect(self._on_tempo_change)
+
         # ----- DAW + render -----
         self._daw_btn = QPushButton("LAUNCH DAW TEMPLATE")
         self._daw_btn.setMinimumWidth(200)
@@ -122,6 +133,8 @@ class TopToolbar(QFrame):
         clock_lbl.setObjectName("FieldLabel")
         port_lbl = QLabel("PORT")
         port_lbl.setObjectName("FieldLabel")
+        tempo_lbl = QLabel("TEMPO")
+        tempo_lbl.setObjectName("FieldLabel")
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(14, 8, 14, 8)
@@ -137,6 +150,9 @@ class TopToolbar(QFrame):
         layout.addWidget(self._bar_label)
         layout.addWidget(self._position, 1)
         layout.addWidget(self._part_label)
+        layout.addSpacing(10)
+        layout.addWidget(tempo_lbl)
+        layout.addWidget(self._tempo)
         layout.addWidget(self._daw_btn)
         layout.addWidget(self._render_btn)
 
@@ -292,6 +308,39 @@ class TopToolbar(QFrame):
                 self._clock_mode = setup.clock_mode
         self._render_btn.setEnabled(self._state.song is not None)
         self._play_btn.setEnabled(self._state.song is not None and self._state.setup is not None)
+
+        # Sync the tempo spinbox to the loaded song. Block signals during
+        # the programmatic set so the spinbox->song writer doesn't fire
+        # (which would also mark the song dirty on every load / re-roll).
+        song = self._state.song
+        self._tempo.blockSignals(True)
+        if song is None:
+            self._tempo.setEnabled(False)
+        else:
+            self._tempo.setEnabled(True)
+            if self._tempo.value() != song.tempo:
+                self._tempo.setValue(song.tempo)
+        self._tempo.blockSignals(False)
+
+    # ----- tempo --------------------------------------------------------
+
+    def _on_tempo_change(self, bpm: int) -> None:
+        """Spinbox edit → write song.tempo + mark dirty + push to clock if running."""
+        song = self._state.song
+        if song is None:
+            return
+        if song.tempo == bpm:
+            return
+        song.tempo = bpm
+        self._state.mark_dirty()
+        # If the InternalClock is currently driving playback, push the
+        # new tempo live so the user hears the change without having to
+        # stop / restart. Other clock modes (slave / Link) ignore set_tempo.
+        if self._transport.is_running:
+            clock = getattr(self._transport, "_clock", None)
+            setter = getattr(clock, "set_tempo", None)
+            if callable(setter):
+                setter(float(bpm))
 
     # ----- beat-readout visual tick --------------------------------------
 
