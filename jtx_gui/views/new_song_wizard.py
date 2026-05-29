@@ -5,8 +5,9 @@ caller a (Song, Setup) pair in memory — no save dialog at this point,
 so the user can audition the new song before deciding where to write
 it. ``MainWindow`` adopts the result via :meth:`AppState.adopt`.
 
-The 'blank' style is a no-voice / one-part starter for users who want
-to compose entirely from scratch in the Song view.
+Transient state: with the style templates removed (PR 2 of the mood +
+format composer rework), the only style left is ``blank``. The full
+Composer view replaces this wizard in PR 4.
 """
 
 from __future__ import annotations
@@ -78,25 +79,17 @@ def random_title() -> str:
     return f"{random.choice(_TITLE_FIRST)} {random.choice(_TITLE_SECOND)}"
 
 
-_last_picked_style: str | None = None
-
-
 def random_non_blank_style() -> str:
-    """Pick a random style excluding 'blank' and the previous pick.
+    """Pick a random style excluding 'blank' where possible.
 
-    Avoiding immediate repeats keeps the wizard feeling fresh — three
-    options is small enough that pure random will visibly clump
-    otherwise.
+    With the style templates removed (PR 2 of the mood + format composer
+    rework), the only style left is ``blank`` — so this falls through
+    to that. Preserved as a no-op shim until PR 4 deletes the wizard.
     """
-    global _last_picked_style
     non_blank = [s for s in STYLES.keys() if s != "blank"]
-    if not non_blank:
-        return next(iter(STYLES.keys()))
-    if _last_picked_style is not None and len(non_blank) > 1:
-        non_blank = [s for s in non_blank if s != _last_picked_style]
-    pick = random.choice(non_blank)
-    _last_picked_style = pick
-    return pick
+    if non_blank:
+        return random.choice(non_blank)
+    return next(iter(STYLES.keys()))
 
 
 class NewSongWizard(QDialog):
@@ -104,13 +97,6 @@ class NewSongWizard(QDialog):
 
     _STYLE_BLURBS = {
         "blank": "Empty song — no voices, one intro part. Compose from scratch.",
-        "acid": "Four-on-floor, 303 lead bass, chord stab, filter LFO. Minor scale, 122–130 BPM.",
-        "deep_techno": "Sub drone, dub stab, sparse top-end. Minor scale, 118–124 BPM.",
-        "psytrance": "Rolling offbeat bass, fast arp leads. Minor scale, 140–148 BPM.",
-        "wildcard": (
-            "Everything randomised — key, scale, tempo, progression, algorithms, knobs. "
-            "Kick stays four-on-the-floor; everything else is up for grabs."
-        ),
     }
 
     def __init__(self, parent: QWidget | None = None) -> None:
