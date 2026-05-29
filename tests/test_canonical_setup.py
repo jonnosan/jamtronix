@@ -17,7 +17,7 @@ from jtx.model.composer_types import FIXED_PALETTE, UTILITY_VOICES
 from jtx.persist import load_setup
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SETUPS = ("jamtronix", "iac", "ableton", "ableton-mpe")
+SETUPS = ("jamtronix", "iac", "ableton")
 
 _REQUIRED_KIT_PIECES = ("kick", "snare", "chh", "ohh", "clap", "perc")
 

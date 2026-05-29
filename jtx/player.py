@@ -222,9 +222,7 @@ class SongPlayer:
         else:
             self._osc_client = None
 
-        # Per-voice parameter routers. Stateful across bars so MPE
-        # channel allocations + most-recently-allocated tracking
-        # survive bar boundaries (notes can sustain across bars).
+        # Per-voice parameter routers.
         self._routers: dict[str, ParameterRouter] = {
             v.name: ParameterRouter(
                 v.slot,

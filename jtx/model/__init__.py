@@ -14,9 +14,6 @@ from jtx.model.composer_types import (
 from jtx.model.lfo import LFO, LFOApplication
 from jtx.model.parameter_target import (
     CCTarget,
-    MPEPitchBendTarget,
-    MPEPressureTarget,
-    MPETimbreTarget,
     OscTarget,
     ParameterTarget,
     parameter_target_from_dict,
@@ -60,9 +57,6 @@ __all__ = [
     "LFO",
     "LFOApplication",
     "LFOShape",
-    "MPEPitchBendTarget",
-    "MPEPressureTarget",
-    "MPETimbreTarget",
     "MoodSpec",
     "OscTarget",
     "ParameterTarget",

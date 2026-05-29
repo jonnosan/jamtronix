@@ -277,32 +277,10 @@ def test_setup_validation_rejects_bad_midi_channel() -> None:
         save_setup(setup, "/tmp/should-never-write.jtx-setup")
 
 
-def test_load_setup_ableton_mpe_validates() -> None:
-    """The bundled ableton-mpe setup loads cleanly with MPE on the poly voices.
-
-    PR 7 (canonical setup consolidation) moved MPE off ``lead`` (mono)
-    onto ``pad`` + ``stabs`` (the two poly palette voices) — those are
-    the ones that benefit from per-note pitch/timbre control.
-    """
-    setup = load_setup("setups/ableton-mpe.jtx-setup")
-    pad = setup.voice("pad")
-    assert pad is not None
-    assert pad.mpe_mode is True
-    assert pad.midi_channel >= 2  # MPE block can't start on the reserved master ch1
-    stabs = setup.voice("stabs")
-    assert stabs is not None
-    assert stabs.mpe_mode is True
-    # Utility reference channels are preserved.
-    assert setup.voice("chord_ref") is not None
-    assert setup.voice("root_ref") is not None
-
-
 def test_load_setup_iac_validates() -> None:
     """The bundled IAC setup loads cleanly."""
     setup = load_setup("setups/iac.jtx-setup")
     assert setup.voices
-    # No MPE-mode voice may sit on channel 1 (MPE master).
-    assert all(not v.mpe_mode or v.midi_channel != 1 for v in setup.voices)
 
 
 def test_setup_osc_host_port_round_trip(tmp_path: Path) -> None:

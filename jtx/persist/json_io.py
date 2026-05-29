@@ -92,8 +92,6 @@ def _voice_slot_from_dict(d: dict[str, Any], *, schema_version: int) -> VoiceSlo
         note=int(d.get("note", 36)),
         kit_map=_kit_map_from_dict(d.get("kit_map") or {}),
         parameter_map=_parameter_map_from_dict(d, schema_version=schema_version),
-        mpe_mode=bool(d.get("mpe_mode", False)),
-        mpe_channel_count=int(d.get("mpe_channel_count", 8)),
     )
 
 
@@ -140,8 +138,6 @@ def _voice_slot_to_dict(slot: VoiceSlot) -> dict[str, Any]:
         "parameter_map": {
             fn: parameter_target_to_dict(target) for fn, target in slot.parameter_map.items()
         },
-        "mpe_mode": slot.mpe_mode,
-        "mpe_channel_count": slot.mpe_channel_count,
     }
 
 

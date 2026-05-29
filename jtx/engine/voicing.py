@@ -7,14 +7,13 @@ together with the voice's :class:`VoiceSlot` and produces the concrete
 MIDI events (``NoteOn`` / ``NoteOff`` / ``ControlChange`` /
 ``PitchBend`` / ``ChannelPressure``) downstream.
 
-This is **pure translation** — no MPE channel allocation, no parameter
+This is **pure translation** — no parameter
 routing. The translated MIDI events still need to pass through the
 mix pass (sidechain / fade / evolution), feel pass (groove / drive /
-wander), and the :class:`ParameterRouter` (CC remap, MPE allocation,
-OSC dispatch) before reaching the sink. Keeping translation pure lets
-the mix + feel passes operate on the same MIDI representation
-regardless of whether the algorithm emitted abstract or concrete
-events.
+wander), and the :class:`ParameterRouter` (CC remap, OSC dispatch)
+before reaching the sink. Keeping translation pure lets the mix +
+feel passes operate on the same MIDI representation regardless of
+whether the algorithm emitted abstract or concrete events.
 
 Resolutions per event kind:
 
@@ -26,13 +25,12 @@ Resolutions per event kind:
     instrument name matches the voice's name — both map to
     ``(slot.midi_channel, slot.note)``.
 * :class:`Note` → ``NoteOn`` + ``NoteOff`` pair at
-  ``slot.midi_channel``. MPE allocation happens later in the parameter
-  router using the source channel.
+  ``slot.midi_channel``.
 * :class:`Param` → ``ControlChange`` or ``PitchBend`` with the
   ``function`` tag set. The parameter router resolves the function to
   the final target downstream.
 * :class:`PolyAftertouch` → ``ChannelPressure`` tagged
-  ``function="aftertouch"`` for the router to rebind under MPE.
+  ``function="aftertouch"``.
 
 Output ticks are bar-relative; the scheduler offsets to absolute
 ticks further down the pipeline.
@@ -148,12 +146,7 @@ def _resolve_hit_target(hit: Hit, slot: VoiceSlot) -> tuple[int, int] | None:
 
 
 def _note_to_midi(note: Note, slot: VoiceSlot) -> list[Event]:
-    """Resolve a Note to NoteOn+NoteOff at the slot's channel.
-
-    For MPE voices, channel allocation is handled by the parameter
-    router downstream; we emit on ``slot.midi_channel`` as the source
-    channel.
-    """
+    """Resolve a Note to NoteOn+NoteOff at the slot's channel."""
     velocity = max(1, min(127, int(note.velocity)))
     pitch = max(0, min(127, int(note.pitch)))
     return [
@@ -166,12 +159,11 @@ def _param_to_midi(param: Param, slot: VoiceSlot) -> Event | None:
     """Convert an abstract Param into a function-tagged MIDI event.
 
     The parameter router resolves the function name to the actual
-    target (CC#, OSC, MPE pitch-bend) using the slot's parameter_map.
-    Here we just choose a wire representation suitable for the
-    router's existing logic:
+    target (CC# / OSC) using the slot's parameter_map. Here we just
+    choose a wire representation suitable for the router's logic:
 
     * Bend-style functions emit a :class:`PitchBend` (the router will
-      re-route to CC or OSC if the slot's parameter_map says so).
+      re-route to OSC if the slot's parameter_map says so).
     * Everything else emits a :class:`ControlChange` with placeholder
       ``cc=0``; the router replaces ``cc`` based on the resolved
       target. An unmapped function passes through with cc=0 — the
@@ -199,11 +191,7 @@ def _param_to_midi(param: Param, slot: VoiceSlot) -> Event | None:
 
 
 def _polyaftertouch_to_midi(pa: PolyAftertouch, slot: VoiceSlot) -> Event:
-    """Convert a PolyAftertouch to a function-tagged ChannelPressure.
-
-    Under MPE, the parameter router rebinds this onto the per-note
-    channel so the receiving instrument hears it as polyphonic.
-    """
+    """Convert a PolyAftertouch to a function-tagged ChannelPressure."""
     value = max(0, min(127, int(round(pa.pressure * 127))))
     return ChannelPressure(
         tick=pa.tick,

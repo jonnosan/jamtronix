@@ -31,7 +31,7 @@ Target string grammar (see ``docs/SPEC.md`` §LFOs):
   ``"resonance"`` / ``"bend"`` / …). The parameter_router resolves
   the function via ``slot.parameter_map`` / algorithm
   ``DEFAULT_PARAM_MAP`` — so a single LFO config drives the right
-  CC / MPE / OSC destination regardless of voice routing. Sub-bar
+  CC / OSC destination regardless of voice routing. Sub-bar
   sampled per ``lfo.samples_per_bar``.
 * ``midi:ch<N>:cc<M>`` — emit a CC event on channel N, controller M,
   at value ``int(lfo_value * 127)``. Sub-bar sampled per

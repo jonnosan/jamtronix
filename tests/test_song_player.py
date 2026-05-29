@@ -218,52 +218,6 @@ def test_song_player_chained_followers_order() -> None:
     assert acid_ticks == echo2_ticks
 
 
-def test_song_player_routes_mpe_lead_through_block() -> None:
-    """MPE-enabled voice's NoteOns rotate through its channel block."""
-    setup = Setup(
-        id="mpe-test",
-        name="MPE test",
-        default_midi_port="IAC",
-        voices=[
-            VoiceSlot(
-                name="acid",
-                type="mono",
-                default_role="bass",
-                midi_channel=2,
-                mpe_mode=True,
-                mpe_channel_count=8,
-            ),
-        ],
-    )
-    song = Song(
-        title="MPE Probe",
-        setup_ref="mpe-test",
-        key=Key(tonic="A", scale="minor"),
-        tempo=120,
-        meter="4/4",
-        voices={
-            "acid": VoiceConfig(
-                algorithm="acid_bass",
-                pattern={"drop_prob": 0.0, "cycle": 0, "bend": 0},
-            ),
-        },
-        parts={"main": Part(bars=2)},
-        arrangement=["main"],
-    )
-    player = SongPlayer(song, setup, "main")
-    bar0 = [e for e in player.events_for_bar(0) if isinstance(e, NoteOn)]
-    bar1 = [e for e in player.events_for_bar(1) if isinstance(e, NoteOn)]
-    channels = [e.channel for e in bar0 + bar1]
-    # acid_bass at drop_prob=0 fires every step (16 per bar); the
-    # router should rotate through ch 2..9 within the MPE block. We
-    # don't pin to an exact order (notes overlap when gate > 1 step),
-    # but every NoteOn must land inside the block.
-    assert all(2 <= c <= 9 for c in channels), channels
-    # And we should see at least 2 distinct channels — the block is
-    # being exercised.
-    assert len({c for c in channels}) >= 2
-
-
 def test_song_player_routes_osc_target_via_injected_client() -> None:
     """A voice with an OscTarget produces no MIDI CC; the injected client sees it."""
     from jtx.engine.osc_client import MemoryOscClient

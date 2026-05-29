@@ -57,7 +57,7 @@ WANDER_OCTAVE_PROB = 0.15  # chance per Note at wander=1.0
 
 # Param function names that Drive's cutoff-push targets. ``"cutoff"``
 # is the v1 vocab; algorithms use it for filter cutoff regardless of
-# the concrete CC / OSC / MPE target. Extend cautiously — anything
+# the concrete CC / OSC target. Extend cautiously — anything
 # in here gets bias-shifted on every event, which is musical for a
 # filter sweep but probably wrong for, e.g., glide or detune.
 _DRIVE_PUSH_FUNCTIONS = frozenset({"cutoff"})

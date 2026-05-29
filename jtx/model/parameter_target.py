@@ -8,12 +8,6 @@ function-tagged event according to the resolved target:
 
 * :class:`CCTarget` — emit MIDI CC on the voice's channel, possibly
   with an overridden CC number.
-* :class:`MPEPitchBendTarget` — emit per-note pitch bend on the
-  MPE-allocated channel (instead of CC).
-* :class:`MPEPressureTarget` — emit channel pressure on the
-  MPE-allocated channel.
-* :class:`MPETimbreTarget` — emit CC 74 on the MPE-allocated channel
-  (the MPE-standard timbre slot).
 * :class:`OscTarget` — send an OSC message at the given address
   instead of MIDI. The router calls the configured OSC client
   out-of-band and produces no MIDI event for this source.
@@ -36,21 +30,6 @@ class CCTarget:
 
 
 @dataclass(frozen=True)
-class MPEPitchBendTarget:
-    """Per-note pitch bend on the MPE-allocated note channel."""
-
-
-@dataclass(frozen=True)
-class MPEPressureTarget:
-    """Per-note channel pressure on the MPE-allocated note channel."""
-
-
-@dataclass(frozen=True)
-class MPETimbreTarget:
-    """CC 74 on the MPE-allocated note channel (MPE timbre slot)."""
-
-
-@dataclass(frozen=True)
 class OscTarget:
     """Send the parameter as an OSC message at ``address``.
 
@@ -65,20 +44,14 @@ class OscTarget:
     address: str
 
 
-ParameterTarget = CCTarget | MPEPitchBendTarget | MPEPressureTarget | MPETimbreTarget | OscTarget
-"""Discriminated union of all parameter targets (Phases A + B)."""
+ParameterTarget = CCTarget | OscTarget
+"""Discriminated union of all parameter targets."""
 
 
 def parameter_target_to_dict(target: ParameterTarget) -> dict[str, Any]:
     """Serialise a target to its on-disk dict form."""
     if isinstance(target, CCTarget):
         return {"kind": "cc", "cc": int(target.cc)}
-    if isinstance(target, MPEPitchBendTarget):
-        return {"kind": "mpe_pitch_bend"}
-    if isinstance(target, MPEPressureTarget):
-        return {"kind": "mpe_pressure"}
-    if isinstance(target, MPETimbreTarget):
-        return {"kind": "mpe_timbre"}
     if isinstance(target, OscTarget):
         return {"kind": "osc", "address": target.address}
     raise TypeError(f"unsupported parameter target: {type(target).__name__}")
@@ -93,12 +66,6 @@ def parameter_target_from_dict(d: dict[str, Any]) -> ParameterTarget:
     kind = d.get("kind")
     if kind == "cc":
         return CCTarget(cc=int(d["cc"]))
-    if kind == "mpe_pitch_bend":
-        return MPEPitchBendTarget()
-    if kind == "mpe_pressure":
-        return MPEPressureTarget()
-    if kind == "mpe_timbre":
-        return MPETimbreTarget()
     if kind == "osc":
         return OscTarget(address=str(d["address"]))
     raise ValueError(f"unknown parameter target kind: {kind!r}")

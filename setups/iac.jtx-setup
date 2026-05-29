@@ -49,9 +49,7 @@
           "channel": 10
         }
       },
-      "parameter_map": {},
-      "mpe_mode": false,
-      "mpe_channel_count": 8
+      "parameter_map": {}
     },
     {
       "name": "bass",
@@ -61,9 +59,7 @@
       "midi_port": null,
       "note": 36,
       "kit_map": {},
-      "parameter_map": {},
-      "mpe_mode": false,
-      "mpe_channel_count": 8
+      "parameter_map": {}
     },
     {
       "name": "sub",
@@ -73,9 +69,7 @@
       "midi_port": null,
       "note": 36,
       "kit_map": {},
-      "parameter_map": {},
-      "mpe_mode": false,
-      "mpe_channel_count": 8
+      "parameter_map": {}
     },
     {
       "name": "lead",
@@ -85,9 +79,7 @@
       "midi_port": null,
       "note": 36,
       "kit_map": {},
-      "parameter_map": {},
-      "mpe_mode": false,
-      "mpe_channel_count": 8
+      "parameter_map": {}
     },
     {
       "name": "pad",
@@ -97,9 +89,7 @@
       "midi_port": null,
       "note": 36,
       "kit_map": {},
-      "parameter_map": {},
-      "mpe_mode": false,
-      "mpe_channel_count": 8
+      "parameter_map": {}
     },
     {
       "name": "chord",
@@ -109,9 +99,7 @@
       "midi_port": null,
       "note": 36,
       "kit_map": {},
-      "parameter_map": {},
-      "mpe_mode": false,
-      "mpe_channel_count": 8
+      "parameter_map": {}
     },
     {
       "name": "arp",
@@ -121,9 +109,7 @@
       "midi_port": null,
       "note": 36,
       "kit_map": {},
-      "parameter_map": {},
-      "mpe_mode": false,
-      "mpe_channel_count": 8
+      "parameter_map": {}
     },
     {
       "name": "stabs",
@@ -133,9 +119,7 @@
       "midi_port": null,
       "note": 36,
       "kit_map": {},
-      "parameter_map": {},
-      "mpe_mode": false,
-      "mpe_channel_count": 8
+      "parameter_map": {}
     },
     {
       "name": "fx",
@@ -150,9 +134,7 @@
           "kind": "cc",
           "cc": 1
         }
-      },
-      "mpe_mode": false,
-      "mpe_channel_count": 8
+      }
     },
     {
       "name": "filter",
@@ -167,9 +149,7 @@
           "kind": "cc",
           "cc": 74
         }
-      },
-      "mpe_mode": false,
-      "mpe_channel_count": 8
+      }
     },
     {
       "name": "root_ref",
@@ -179,9 +159,7 @@
       "midi_port": null,
       "note": 36,
       "kit_map": {},
-      "parameter_map": {},
-      "mpe_mode": false,
-      "mpe_channel_count": 8
+      "parameter_map": {}
     },
     {
       "name": "chord_ref",
@@ -191,14 +169,12 @@
       "midi_port": null,
       "note": 36,
       "kit_map": {},
-      "parameter_map": {},
-      "mpe_mode": false,
-      "mpe_channel_count": 8
+      "parameter_map": {}
     }
   ],
   "clock_mode": "internal_master",
   "midi_clock_in_port": null,
   "osc_host": "127.0.0.1",
   "osc_port": 11000,
-  "schema_version": 4
+  "schema_version": 5
 }
