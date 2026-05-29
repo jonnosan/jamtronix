@@ -167,12 +167,6 @@ def _step(state: SessionState) -> bool:
         state.termination = "STOP file present"
         return False
 
-    if not state.config.skip_pytest:
-        result = run_pytest(state.config.pytest_args)
-        if not result.passed:
-            state.termination = f"pytest red (rc={result.returncode})"
-            return False
-
     try:
         assert_schema_unchanged()
     except RuntimeError as exc:
@@ -348,6 +342,18 @@ def run_session(
     cfg = config or SessionConfig()
     w = weights or RewardWeights()
     setup = load_setup(corpus.setup_path)
+
+    # Session-start pytest gate. Per-iteration pytest is pointless because
+    # the only mid-session edit is tuning.toml (allow-listed); the gate
+    # exists to refuse "improving on broken code", which is a one-shot
+    # check at session start.
+    if not cfg.skip_pytest:
+        result = run_pytest(cfg.pytest_args)
+        if not result.passed:
+            raise RuntimeError(
+                f"pytest red at session start (rc={result.returncode}); "
+                f"refusing to optimize a broken tree.\n{result.stdout[-2000:]}"
+            )
 
     initial = initial_tuning if initial_tuning is not None else Tuning()
     _apply_tuning(initial)
