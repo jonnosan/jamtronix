@@ -583,6 +583,24 @@ def test_composer_view_renders(qapp: QApplication) -> None:
     view.deleteLater()
 
 
+def test_rest_voice_renders_silent_header_and_label(qapp: QApplication) -> None:
+    """A voice with algorithm='rest' shows '(rest)' in its header and a
+    'no pattern knobs (silent)' label instead of empty knob rows."""
+    from jtx.model import VoiceConfig
+    from jtx_gui.views.song_view import VoicePanel
+
+    panel = VoicePanel(
+        voice_name="pad",
+        voice_type="poly",
+        config=VoiceConfig(algorithm="rest"),
+    )
+    header_text = panel._outer_section._toggle.text()
+    assert "(rest)" in header_text
+    labels = panel.findChildren(PySide6.QtWidgets.QLabel)
+    assert any("silent" in lbl.text() for lbl in labels)
+    panel.deleteLater()
+
+
 def test_main_window_sidebar_shows_composer(qapp: QApplication) -> None:
     """COMPOSER is the first sidebar entry + the default selected view."""
     state = AppState()

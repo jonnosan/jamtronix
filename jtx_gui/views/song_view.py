@@ -139,16 +139,27 @@ class VoicePanel(QFrame):
         self._rebuild_knob_panels()
 
     def _header_title(self, algorithm: str) -> str:
-        return f"{self._voice_name.upper()}  ·  {self._voice_type}  ·  {algorithm}"
+        suffix = "  (rest)" if algorithm == "rest" else ""
+        return f"{self._voice_name.upper()}  ·  {self._voice_type}  ·  {algorithm}{suffix}"
 
     def _rebuild_knob_panels(self) -> None:
         _clear_layout(self._pattern_section.body_layout())
         _clear_layout(self._feel_section.body_layout())
 
+        algo = self._algo_combo.currentText()
+        if algo == "rest":
+            silent_label = QLabel("no pattern knobs (silent)")
+            silent_label.setStyleSheet(
+                f"color: {theme.INK_DIM.name()}; font-style: italic; padding: 6px 4px;"
+            )
+            self._pattern_section.add_widget(silent_label)
+            self._pattern_section.set_header_hint("silent")
+            self._feel_section.set_header_hint("silent")
+            return
+
         # Pattern knobs come from the algorithm's schema, plus any
         # extra keys present in the saved song (so unknown knobs stay
         # editable as raw text rather than getting silently dropped).
-        algo = self._algo_combo.currentText()
         algo_schema = SCHEMAS.pattern_by_algo.get(algo, {})
         seen: set[str] = set()
         row_widget, row_layout = _new_knob_row()
