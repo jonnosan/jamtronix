@@ -20,6 +20,7 @@ import random
 from pathlib import Path
 from typing import cast
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QFormLayout,
@@ -29,6 +30,8 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QScrollArea,
+    QSplitter,
     QVBoxLayout,
     QWidget,
 )
@@ -46,8 +49,11 @@ from jtx.persist import load_setup
 from jtx_gui import theme
 from jtx_gui.bundles import bundled_setups
 from jtx_gui.state import AppState
+from jtx_gui.widgets.arrangement_timeline import ArrangementTimeline
+from jtx_gui.widgets.global_feel_panel import GlobalFeelPanel
 from jtx_gui.widgets.knob import KnobWidget
 from jtx_gui.widgets.mood_pad import MoodPadWidget
+from jtx_gui.widgets.part_editor_panel import PartEditorPanel
 
 
 class ComposerView(QWidget):
@@ -145,11 +151,49 @@ class ComposerView(QWidget):
         right.addStretch(1)
         right.addLayout(actions)
 
-        body = QHBoxLayout(self)
+        # Top row — mood pad on the left, composer params on the right.
+        top_row = QHBoxLayout()
+        top_row.setSpacing(16)
+        top_row.addLayout(left, 1)
+        top_row.addLayout(right, 0)
+        top_widget = QWidget(self)
+        top_widget.setLayout(top_row)
+
+        # Lower section — global feel + arrangement timeline + part editor.
+        # Built lazily on song_changed; the container starts hidden.
+        self._global_feel_holder = QVBoxLayout()
+        self._global_feel_holder.setContentsMargins(0, 0, 0, 0)
+        self._global_feel_panel: GlobalFeelPanel | None = None
+
+        self._timeline = ArrangementTimeline(self)
+        self._timeline.part_selected.connect(self._on_part_selected)
+
+        self._part_editor = PartEditorPanel(self)
+
+        song_panels = QWidget(self)
+        song_panels_layout = QVBoxLayout(song_panels)
+        song_panels_layout.setContentsMargins(0, 0, 0, 0)
+        song_panels_layout.setSpacing(10)
+        song_panels_layout.addLayout(self._global_feel_holder)
+        song_panels_layout.addWidget(self._timeline)
+        song_panels_layout.addWidget(self._part_editor)
+        song_panels_layout.addStretch(1)
+
+        self._song_panels_scroll = QScrollArea(self)
+        self._song_panels_scroll.setWidgetResizable(True)
+        self._song_panels_scroll.setWidget(song_panels)
+        self._song_panels_scroll.setVisible(False)
+
+        splitter = QSplitter(Qt.Orientation.Vertical, self)
+        splitter.addWidget(top_widget)
+        splitter.addWidget(self._song_panels_scroll)
+        splitter.setStretchFactor(0, 2)
+        splitter.setStretchFactor(1, 3)
+
+        body = QVBoxLayout(self)
         body.setContentsMargins(16, 16, 16, 16)
-        body.setSpacing(16)
-        body.addLayout(left, 1)
-        body.addLayout(right, 0)
+        body.setSpacing(12)
+        body.addWidget(splitter, 1)
 
         # If the state already holds a song (e.g. opened from CLI), sync once.
         self._sync_from_state()
@@ -168,6 +212,10 @@ class ComposerView(QWidget):
     def _sync_from_state(self) -> None:
         song = self._state.song
         if song is None:
+            self._song_panels_scroll.setVisible(False)
+            self._clear_global_feel_panel()
+            self._timeline.set_song(None)
+            self._part_editor.clear()
             return
         # Reflect the loaded song's mood / format / title in the controls.
         self._title.setText(song.title)
@@ -179,6 +227,43 @@ class ComposerView(QWidget):
         setup_idx = self._setup_combo.findText(song.setup_ref)
         if setup_idx >= 0:
             self._setup_combo.setCurrentIndex(setup_idx)
+
+        # Rebuild the song-level panels for the new song.
+        self._clear_global_feel_panel()
+        self._global_feel_panel = GlobalFeelPanel(
+            song=song, on_dirty=self._state.mark_dirty,
+        )
+        self._global_feel_holder.addWidget(self._global_feel_panel)
+
+        self._timeline.set_song(song)
+        first_part = next(iter(song.parts), None)
+        if first_part is not None:
+            self._timeline.set_selected_part(first_part)
+            self._part_editor.set_part(
+                song=song,
+                part_name=first_part,
+                on_dirty=self._state.mark_dirty,
+            )
+        else:
+            self._part_editor.clear()
+
+        self._song_panels_scroll.setVisible(True)
+
+    def _clear_global_feel_panel(self) -> None:
+        if self._global_feel_panel is not None:
+            self._global_feel_panel.setParent(None)
+            self._global_feel_panel.deleteLater()
+            self._global_feel_panel = None
+
+    def _on_part_selected(self, part_name: str) -> None:
+        song = self._state.song
+        if song is None or part_name not in song.parts:
+            return
+        self._part_editor.set_part(
+            song=song,
+            part_name=part_name,
+            on_dirty=self._state.mark_dirty,
+        )
 
     # ----- callbacks -------------------------------------------------------
 
