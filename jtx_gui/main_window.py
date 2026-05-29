@@ -69,7 +69,9 @@ class MainWindow(QMainWindow):
         self._transport = TransportService(parent=self)
 
         self._stack = QStackedWidget(self)
-        self._composer_view = ComposerView(self._state, parent=self)
+        self._composer_view = ComposerView(
+            self._state, transport=self._transport, parent=self,
+        )
         self._patcher_view = PatcherView(self._state, transport=self._transport, parent=self)
         self._stack.addWidget(self._composer_view)
         self._stack.addWidget(self._patcher_view)
