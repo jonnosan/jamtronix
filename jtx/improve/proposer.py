@@ -119,21 +119,34 @@ def _feel_specs() -> list[ParamSpec]:
 
 
 def default_param_specs() -> tuple[ParamSpec, ...]:
-    """All non-pattern Tier-A tunable scalars.
+    """Tier-A scalars the Phase-1c reward function can actually see.
 
-    Pattern overrides are seeded explicitly by the corpus / driver
-    (the optimizer doesn't enumerate every possible ``(voice,
-    algorithm, knob)`` triple, which is open-ended). Use
-    :func:`pattern_param_specs` to add a controlled subset when a
-    session wants to tune them.
+    Tempo and feel coefficients are intentionally excluded: the reward's
+    :data:`jtx.evaluation.FEATURE_SCHEMA` reads abstract events (pre-
+    feel-pass) and never reads :attr:`jtx.model.Song.tempo`, so moving
+    those scalars produces ΔR=0 every iteration and starves the search.
+    Use :func:`tempo_param_specs` / :func:`feel_param_specs` explicitly
+    when a future reward term measures their effect.
+
+    Pattern overrides also aren't enumerated by default (the space is
+    open-ended); use :func:`pattern_param_specs` to add a seeded subset
+    when a session wants to tune them.
     """
     specs: list[ParamSpec] = []
     specs.extend(_voice_tau_specs())
     specs.append(ParamSpec("tau_bias_magnitude", lo=0.0, hi=0.5, step_scale=0.03))
     specs.extend(_filter_specs())
-    specs.extend(_tempo_specs())
-    specs.extend(_feel_specs())
     return tuple(specs)
+
+
+def tempo_param_specs() -> tuple[ParamSpec, ...]:
+    """Tempo coefficients — opt-in once the reward sees tempo."""
+    return tuple(_tempo_specs())
+
+
+def feel_param_specs() -> tuple[ParamSpec, ...]:
+    """Feel-knob coefficients — opt-in once the reward sees feel-pass output."""
+    return tuple(_feel_specs())
 
 
 def pattern_param_specs(

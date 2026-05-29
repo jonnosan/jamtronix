@@ -26,15 +26,31 @@ from jtx.improve.proposer import (
 # ---------- ParamSpec / get_param / set_param --------------------------
 
 
-def test_default_param_specs_covers_all_categories() -> None:
+def test_default_param_specs_covers_reward_visible_surfaces() -> None:
+    """Defaults: voice_tau + tau_bias_magnitude + filter only.
+
+    Tempo + feel are deliberately excluded — the reward function reads
+    abstract events (pre-feel) and never reads Song.tempo, so those
+    scalars produce ΔR=0 and starve the search.
+    """
     specs = default_param_specs()
     paths = {s.path for s in specs}
     assert "voice_tau.bass" in paths
     assert "tau_bias_magnitude" in paths
     assert "filter.depth_scale" in paths
-    assert "tempo.centre_base" in paths
-    assert "feel.window_half_base" in paths
-    assert "feel.centres.pump.energy" in paths
+    # Excluded by default.
+    assert "tempo.centre_base" not in paths
+    assert "feel.window_half_base" not in paths
+
+
+def test_tempo_and_feel_specs_available_opt_in() -> None:
+    """Tempo + feel scalars exist but only via explicit opt-in helpers."""
+    from jtx.improve.proposer import feel_param_specs, tempo_param_specs
+
+    tempo_paths = {s.path for s in tempo_param_specs()}
+    feel_paths = {s.path for s in feel_param_specs()}
+    assert "tempo.centre_base" in tempo_paths
+    assert "feel.centres.pump.energy" in feel_paths
 
 
 def test_get_param_reads_voice_tau() -> None:
