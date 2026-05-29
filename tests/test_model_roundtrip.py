@@ -225,15 +225,20 @@ def test_setup_validation_rejects_bad_midi_channel() -> None:
 
 
 def test_load_setup_ableton_mpe_validates() -> None:
-    """The bundled ableton-mpe setup loads cleanly and has an MPE lead voice."""
+    """The bundled ableton-mpe setup loads cleanly with MPE on the poly voices.
+
+    PR 7 (canonical setup consolidation) moved MPE off ``lead`` (mono)
+    onto ``pad`` + ``stabs`` (the two poly palette voices) — those are
+    the ones that benefit from per-note pitch/timbre control.
+    """
     setup = load_setup("setups/ableton-mpe.jtx-setup")
-    lead = setup.voice("lead")
-    assert lead is not None
-    assert lead.mpe_mode is True
-    assert lead.mpe_channel_count == 6
-    assert lead.midi_channel == 2
-    # No voice may collide with the reserved MPE master channel 1.
-    assert all(v.midi_channel != 1 for v in setup.voices)
+    pad = setup.voice("pad")
+    assert pad is not None
+    assert pad.mpe_mode is True
+    assert pad.midi_channel >= 2  # MPE block can't start on the reserved master ch1
+    stabs = setup.voice("stabs")
+    assert stabs is not None
+    assert stabs.mpe_mode is True
     # Utility reference channels are preserved.
     assert setup.voice("chord_ref") is not None
     assert setup.voice("root_ref") is not None

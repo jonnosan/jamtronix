@@ -3,14 +3,14 @@
   "name": "Ableton MPE (IAC Bus 1)",
   "default_midi_port": "IAC Driver Bus 1",
   "daw_template_path": null,
-  "clock_mode": "internal_master",
-  "midi_clock_in_port": null,
   "voices": [
     {
-      "name": "kit",
+      "name": "drumkit",
       "type": "drum_kit",
       "default_role": "drum_kit",
       "midi_channel": 9,
+      "midi_port": null,
+      "note": 36,
       "kit_map": {
         "kick": {
           "note": 36,
@@ -18,131 +18,187 @@
         },
         "snare": {
           "note": 38,
-          "channel": 10
+          "channel": 9
         },
         "chh": {
           "note": 42,
-          "channel": 10
+          "channel": 9
         },
         "ohh": {
           "note": 46,
-          "channel": 10
+          "channel": 9
+        },
+        "clap": {
+          "note": 39,
+          "channel": 9
         },
         "tom": {
           "note": 45,
-          "channel": 11
+          "channel": 9
         },
         "clave": {
           "note": 75,
-          "channel": 11
+          "channel": 9
         },
         "shaker": {
           "note": 82,
-          "channel": 11
+          "channel": 9
+        },
+        "perc": {
+          "note": 64,
+          "channel": 9
         }
-      }
+      },
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
+    },
+    {
+      "name": "bass",
+      "type": "mono",
+      "default_role": "bass",
+      "midi_channel": 1,
+      "midi_port": null,
+      "note": 36,
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
+    },
+    {
+      "name": "sub",
+      "type": "mono",
+      "default_role": "bass",
+      "midi_channel": 7,
+      "midi_port": null,
+      "note": 36,
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "lead",
       "type": "mono",
       "default_role": "lead",
+      "midi_channel": 6,
+      "midi_port": null,
+      "note": 36,
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
+    },
+    {
+      "name": "pad",
+      "type": "poly",
+      "default_role": "pad",
       "midi_channel": 2,
+      "midi_port": null,
+      "note": 36,
+      "kit_map": {},
+      "parameter_map": {},
       "mpe_mode": true,
-      "mpe_channel_count": 6,
+      "mpe_channel_count": 4
+    },
+    {
+      "name": "chord",
+      "type": "poly",
+      "default_role": "chord",
+      "midi_channel": 8,
+      "midi_port": null,
+      "note": 36,
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
+    },
+    {
+      "name": "arp",
+      "type": "mono",
+      "default_role": "lead",
+      "midi_channel": 10,
+      "midi_port": null,
+      "note": 36,
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
+    },
+    {
+      "name": "stabs",
+      "type": "poly",
+      "default_role": "stab",
+      "midi_channel": 12,
+      "midi_port": null,
+      "note": 36,
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": true,
+      "mpe_channel_count": 2
+    },
+    {
+      "name": "fx",
+      "type": "mono",
+      "default_role": "lead",
+      "midi_channel": 11,
+      "midi_port": null,
+      "note": 36,
+      "kit_map": {},
       "parameter_map": {
-        "bend": {
-          "kind": "mpe_pitch_bend"
-        },
-        "cutoff": {
-          "kind": "mpe_timbre"
+        "noise": {
+          "kind": "cc",
+          "cc": 1
         }
-      }
+      },
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "filter",
       "type": "modulator",
       "default_role": "modulator",
-      "midi_channel": 8,
+      "midi_channel": 14,
+      "midi_port": null,
+      "note": 36,
+      "kit_map": {},
       "parameter_map": {
         "cutoff": {
           "kind": "cc",
           "cc": 74
         }
-      }
-    },
-    {
-      "name": "kick",
-      "type": "drum",
-      "default_role": "drum",
-      "midi_channel": 9,
-      "note": 36
-    },
-    {
-      "name": "snare",
-      "type": "drum",
-      "default_role": "drum",
-      "midi_channel": 10,
-      "note": 38
-    },
-    {
-      "name": "chh",
-      "type": "drum",
-      "default_role": "drum",
-      "midi_channel": 10,
-      "note": 42
-    },
-    {
-      "name": "ohh",
-      "type": "drum",
-      "default_role": "drum",
-      "midi_channel": 10,
-      "note": 46
-    },
-    {
-      "name": "tom",
-      "type": "drum",
-      "default_role": "drum",
-      "midi_channel": 11,
-      "note": 45
-    },
-    {
-      "name": "clave",
-      "type": "drum",
-      "default_role": "drum",
-      "midi_channel": 11,
-      "note": 75
-    },
-    {
-      "name": "shaker",
-      "type": "drum",
-      "default_role": "drum",
-      "midi_channel": 11,
-      "note": 82
-    },
-    {
-      "name": "acid",
-      "type": "mono",
-      "default_role": "bass",
-      "midi_channel": 12
-    },
-    {
-      "name": "stab",
-      "type": "poly",
-      "default_role": "stab",
-      "midi_channel": 13
-    },
-    {
-      "name": "chord_ref",
-      "type": "mono",
-      "default_role": "lead",
-      "midi_channel": 15
+      },
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     },
     {
       "name": "root_ref",
       "type": "mono",
       "default_role": "lead",
-      "midi_channel": 16
+      "midi_channel": 15,
+      "midi_port": null,
+      "note": 36,
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
+    },
+    {
+      "name": "chord_ref",
+      "type": "mono",
+      "default_role": "lead",
+      "midi_channel": 16,
+      "midi_port": null,
+      "note": 36,
+      "kit_map": {},
+      "parameter_map": {},
+      "mpe_mode": false,
+      "mpe_channel_count": 8
     }
   ],
-  "schema_version": 3
+  "clock_mode": "internal_master",
+  "midi_clock_in_port": null,
+  "osc_host": "127.0.0.1",
+  "osc_port": 11000,
+  "schema_version": 4
 }
