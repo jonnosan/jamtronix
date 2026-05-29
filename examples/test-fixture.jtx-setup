@@ -37,9 +37,7 @@
           "channel": 10
         }
       },
-      "parameter_map": {},
-      "mpe_mode": false,
-      "mpe_channel_count": 8
+      "parameter_map": {}
     },
     {
       "name": "bass",
@@ -54,9 +52,7 @@
           "kind": "cc",
           "cc": 74
         }
-      },
-      "mpe_mode": false,
-      "mpe_channel_count": 8
+      }
     },
     {
       "name": "filter",
@@ -71,14 +67,12 @@
           "kind": "cc",
           "cc": 74
         }
-      },
-      "mpe_mode": false,
-      "mpe_channel_count": 8
+      }
     }
   ],
   "clock_mode": "internal_master",
   "midi_clock_in_port": null,
   "osc_host": "127.0.0.1",
   "osc_port": 11000,
-  "schema_version": 3
+  "schema_version": 5
 }

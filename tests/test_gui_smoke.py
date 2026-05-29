@@ -438,40 +438,9 @@ def test_voice_slot_cc_map_v1_migrates_to_parameter_map(tmp_path: Path) -> None:
     }
 
 
-def test_setup_validation_rejects_mpe_mode_on_channel_1() -> None:
-    """A voice with mpe_mode=True must not sit on the MPE master channel."""
-    from jtx.model import VoiceSlot
-
-    slot = VoiceSlot(
-        name="lead",
-        type="mono",
-        default_role="lead",
-        midi_channel=1,
-        mpe_mode=True,
-    )
-    errors = slot.validate()
-    assert any("channel 1" in e for e in errors)
-
-
-def test_setup_validation_rejects_mpe_block_overflowing_channel_16() -> None:
-    """midi_channel + count - 1 > 16 is rejected at validate()."""
-    from jtx.model import VoiceSlot
-
-    slot = VoiceSlot(
-        name="lead",
-        type="mono",
-        default_role="lead",
-        midi_channel=12,
-        mpe_mode=True,
-        mpe_channel_count=8,  # block ends at ch 19
-    )
-    errors = slot.validate()
-    assert any("MPE block" in e for e in errors)
-
-
 def test_setup_editor_target_helpers_round_trip_osc() -> None:
     """_target_kind + _target_from_kind handle OscTarget end-to-end."""
-    from jtx.model import CCTarget, MPEPitchBendTarget, OscTarget
+    from jtx.model import CCTarget, OscTarget
     from jtx_gui.views.setup_editor import (
         _KIND_LABELS,
         _default_osc_address,
@@ -484,7 +453,6 @@ def test_setup_editor_target_helpers_round_trip_osc() -> None:
 
     # _target_kind recognises every variant.
     assert _target_kind(CCTarget(74)) == "cc"
-    assert _target_kind(MPEPitchBendTarget()) == "mpe_pitch_bend"
     assert _target_kind(OscTarget("/jtx/x/cutoff")) == "osc"
 
     # Round-trip a constructed OscTarget through _target_from_kind.

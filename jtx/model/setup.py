@@ -52,19 +52,8 @@ class VoiceSlot:
     ``PitchBend`` / ``ChannelPressure`` with
     ``function="cutoff"``/``"resonance"``/etc.); the sink-side
     :class:`jtx.engine.parameter_router.ParameterRouter` rewrites each
-    event per this map (CC remap, MPE channel allocation, etc.). Lookup
-    falls back to the algorithm's ``DEFAULT_PARAM_MAP`` if a function
-    is unset here.
-    """
-    mpe_mode: bool = False
-    """If True, the voice spans an MPE channel block starting at
-    ``midi_channel``. NoteOns round-robin through the block; tagged
-    pitch-bend / pressure / timbre events ride per-note channels."""
-    mpe_channel_count: int = 8
-    """How many channels the MPE block spans starting at ``midi_channel``.
-
-    Only honoured when ``mpe_mode`` is True. Default 8 matches typical
-    MPE-aware instruments (Ableton Sampler, Wavetable, Drift, Meld).
+    event per this map. Lookup falls back to the algorithm's
+    ``DEFAULT_PARAM_MAP`` if a function is unset here.
     """
 
     def validate(self) -> list[str]:
@@ -114,22 +103,6 @@ class VoiceSlot:
             if isinstance(target, CCTarget) and not (0 <= int(target.cc) <= 127):
                 errors.append(
                     f"voice {self.name!r}: parameter_map[{func!r}].cc = {target.cc} not in 0..127"
-                )
-        if self.mpe_mode:
-            if self.midi_channel == 1:
-                errors.append(
-                    f"voice {self.name!r}: mpe_mode collides with reserved MPE master "
-                    f"channel 1; pick midi_channel in 2..16"
-                )
-            if self.mpe_channel_count < 1:
-                errors.append(
-                    f"voice {self.name!r}: mpe_channel_count {self.mpe_channel_count} < 1"
-                )
-            block_end = self.midi_channel + self.mpe_channel_count - 1
-            if block_end > 16:
-                errors.append(
-                    f"voice {self.name!r}: MPE block ends at channel {block_end} (> 16); "
-                    f"reduce mpe_channel_count or midi_channel"
                 )
         return errors
 

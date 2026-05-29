@@ -44,9 +44,6 @@ from PySide6.QtWidgets import (
 from jtx.model import (
     CCTarget,
     ClockMode,
-    MPEPitchBendTarget,
-    MPEPressureTarget,
-    MPETimbreTarget,
     OscTarget,
     ParameterTarget,
     Setup,
@@ -60,14 +57,6 @@ from jtx_gui.cc_functions import DEFAULT_TARGETS, functions_for_type
 
 AuditionFn = Callable[[VoiceSlot, str, int], None]
 """Callable that fires a CC audition. Args: voice, function name, cc number."""
-
-MPEAuditionFn = Callable[[VoiceSlot, str, str], None]
-"""Callable that fires an MPE-target audition.
-
-Args: voice, function name, kind (one of ``"mpe_pitch_bend"``,
-``"mpe_pressure"``, ``"mpe_timbre"``). Sends a NoteOn + ramp + NoteOff
-on the voice's first MPE channel so an MPE-aware instrument latches.
-"""
 
 OscAuditionFn = Callable[[Setup, VoiceSlot, str, str], None]
 """Callable that fires an OSC-target audition.
@@ -83,9 +72,6 @@ NoteAuditionFn = Callable[[VoiceSlot, list[int]], None]
 # UI-visible kind keys for the parameter target combo.
 _KIND_LABELS: tuple[tuple[str, str], ...] = (
     ("cc", "CC"),
-    ("mpe_pitch_bend", "MPE pitch bend"),
-    ("mpe_pressure", "MPE pressure"),
-    ("mpe_timbre", "MPE timbre (CC 74)"),
     ("osc", "OSC"),
 )
 
@@ -93,12 +79,6 @@ _KIND_LABELS: tuple[tuple[str, str], ...] = (
 def _target_kind(target: ParameterTarget) -> str:
     if isinstance(target, CCTarget):
         return "cc"
-    if isinstance(target, MPEPitchBendTarget):
-        return "mpe_pitch_bend"
-    if isinstance(target, MPEPressureTarget):
-        return "mpe_pressure"
-    if isinstance(target, MPETimbreTarget):
-        return "mpe_timbre"
     if isinstance(target, OscTarget):
         return "osc"
     return "cc"  # pragma: no cover
@@ -107,12 +87,6 @@ def _target_kind(target: ParameterTarget) -> str:
 def _target_from_kind(kind: str, cc: int = 0, address: str = "") -> ParameterTarget:
     if kind == "cc":
         return CCTarget(int(cc))
-    if kind == "mpe_pitch_bend":
-        return MPEPitchBendTarget()
-    if kind == "mpe_pressure":
-        return MPEPressureTarget()
-    if kind == "mpe_timbre":
-        return MPETimbreTarget()
     if kind == "osc":
         return OscTarget(address=address)
     raise ValueError(f"unknown parameter target kind: {kind!r}")
@@ -155,7 +129,6 @@ class SetupEditor(QDialog):
         setup_path: Path | None,
         audition_fn: AuditionFn | None = None,
         note_audition_fn: NoteAuditionFn | None = None,
-        mpe_audition_fn: MPEAuditionFn | None = None,
         osc_audition_fn: OscAuditionFn | None = None,
         parent: QWidget | None = None,
     ) -> None:
@@ -170,7 +143,6 @@ class SetupEditor(QDialog):
         self._setup_path = setup_path
         self._audition_fn = audition_fn or _default_audition
         self._note_audition_fn = note_audition_fn or _default_note_audition
-        self._mpe_audition_fn = mpe_audition_fn or _default_mpe_audition
         self._osc_audition_fn = osc_audition_fn or _default_osc_audition
         self.setWindowTitle(f"Jamtronix — Edit Setup ({setup.name})")
         self.resize(900, 660)
@@ -412,7 +384,6 @@ class SetupEditor(QDialog):
             setup=self._setup,
             audition_fn=self._audition_fn,
             note_audition_fn=self._note_audition_fn,
-            mpe_audition_fn=self._mpe_audition_fn,
             osc_audition_fn=self._osc_audition_fn,
             on_changed=self._refresh_voice_list,
         )
@@ -535,7 +506,6 @@ class _VoiceSlotEditor(QFrame):
         setup: Setup,
         audition_fn: AuditionFn,
         note_audition_fn: NoteAuditionFn,
-        mpe_audition_fn: MPEAuditionFn,
         osc_audition_fn: OscAuditionFn,
         on_changed: Callable[[], None],
     ) -> None:
@@ -545,7 +515,6 @@ class _VoiceSlotEditor(QFrame):
         self._setup = setup
         self._audition_fn = audition_fn
         self._note_audition_fn = note_audition_fn
-        self._mpe_audition_fn = mpe_audition_fn
         self._osc_audition_fn = osc_audition_fn
         self._on_changed = on_changed
 
@@ -577,35 +546,10 @@ class _VoiceSlotEditor(QFrame):
         self._port_edit.setPlaceholderText("(use setup default)")
         self._port_edit.editingFinished.connect(self._on_port_changed)
 
-        # MPE mode toggle + channel-count spinner.
-        self._mpe_mode_chk = QCheckBox("MPE mode")
-        self._mpe_mode_chk.setChecked(slot.mpe_mode)
-        self._mpe_mode_chk.setToolTip(
-            "When on, the voice spans a block of MIDI channels starting at "
-            "the voice's MIDI channel; NoteOns round-robin through the block "
-            "so per-note pitch bend lands on the right note."
-        )
-        self._mpe_mode_chk.toggled.connect(self._on_mpe_mode_changed)
-        self._mpe_count_spin = QSpinBox()
-        self._mpe_count_spin.setRange(1, 16)
-        self._mpe_count_spin.setValue(slot.mpe_channel_count)
-        self._mpe_count_spin.setEnabled(slot.mpe_mode)
-        self._mpe_count_spin.valueChanged.connect(self._on_mpe_count_changed)
-        mpe_row = QHBoxLayout()
-        mpe_row.setContentsMargins(0, 0, 0, 0)
-        mpe_row.setSpacing(8)
-        mpe_row.addWidget(self._mpe_mode_chk)
-        mpe_row.addWidget(QLabel("MPE channels"))
-        mpe_row.addWidget(self._mpe_count_spin)
-        mpe_row.addStretch(1)
-        mpe_wrap = QWidget()
-        mpe_wrap.setLayout(mpe_row)
-
         form.addRow("Type", self._type_combo)
         form.addRow("Role", self._role_combo)
         form.addRow("MIDI channel", self._channel_spin)
         form.addRow("Port override", self._port_edit)
-        form.addRow("MPE", mpe_wrap)
 
         # Voice-level note audition (mono / poly). Drum voices use the
         # per-row buttons in the kit map instead.
@@ -630,7 +574,6 @@ class _VoiceSlotEditor(QFrame):
             slot=slot,
             setup=setup,
             audition_fn=audition_fn,
-            mpe_audition_fn=mpe_audition_fn,
             osc_audition_fn=osc_audition_fn,
         )
 
@@ -678,15 +621,6 @@ class _VoiceSlotEditor(QFrame):
         self._drum_note_panel.setVisible(new_type == "drum")
         self._note_audition_btn.setVisible(new_type in {"mono", "poly"})
         self._param_section.refresh_rows()
-        self._on_changed()
-
-    def _on_mpe_mode_changed(self, checked: bool) -> None:
-        self._slot.mpe_mode = bool(checked)
-        self._mpe_count_spin.setEnabled(checked)
-        self._on_changed()
-
-    def _on_mpe_count_changed(self, value: int) -> None:
-        self._slot.mpe_channel_count = int(value)
         self._on_changed()
 
     def _refresh_role_combo(self) -> None:
@@ -913,8 +847,7 @@ class _ParameterMapSection(QFrame):
     For each function in the v1 vocabulary appropriate to the voice
     type, surfaces:
 
-    * a kind combo (``CC`` / ``MPE pitch bend`` / ``MPE pressure`` /
-      ``MPE timbre``) — picks the target type;
+    * a kind combo (``CC`` / ``OSC``) — picks the target type;
     * a CC# spinner (visible only when kind == CC);
     * an OVERRIDE checkbox toggling whether the row writes to
       ``slot.parameter_map`` (otherwise the slot inherits the
@@ -933,7 +866,6 @@ class _ParameterMapSection(QFrame):
         slot: VoiceSlot,
         setup: Setup,
         audition_fn: AuditionFn,
-        mpe_audition_fn: MPEAuditionFn,
         osc_audition_fn: OscAuditionFn,
     ) -> None:
         super().__init__()
@@ -941,7 +873,6 @@ class _ParameterMapSection(QFrame):
         self._slot = slot
         self._setup = setup
         self._audition_fn = audition_fn
-        self._mpe_audition_fn = mpe_audition_fn
         self._osc_audition_fn = osc_audition_fn
 
         self._kind_combos: dict[str, QComboBox] = {}
@@ -1050,8 +981,7 @@ class _ParameterMapSection(QFrame):
         audition_btn = QPushButton("AUDITION")
         audition_btn.setToolTip(
             "Send a probe sequence appropriate for the target kind so the "
-            "receiving instrument latches (CC sweep for CC; NoteOn + ramp + "
-            "NoteOff for MPE kinds; float sweep for OSC)."
+            "receiving instrument latches (CC sweep for CC; float sweep for OSC)."
         )
 
         def on_override(checked: bool, fn: str = function) -> None:
@@ -1145,7 +1075,7 @@ class _ParameterMapSection(QFrame):
                 )
                 self._osc_audition_fn(self._setup, self._slot, function, address)
             else:
-                self._mpe_audition_fn(self._slot, function, kind)
+                raise RuntimeError(f"unknown audition kind: {kind!r}")
         except Exception as exc:  # noqa: BLE001 — surface verbatim
             QMessageBox.critical(
                 self,
@@ -1225,54 +1155,6 @@ def _default_note_audition(voice: VoiceSlot, notes: list[int]) -> None:
         for note in notes:
             note = max(0, min(127, int(note)))
             out.send(mido.Message("note_off", channel=channel, note=note, velocity=0))
-    finally:
-        out.close()
-
-
-def _default_mpe_audition(voice: VoiceSlot, _function: str, kind: str) -> None:
-    """Probe an MPE target so the receiving instrument latches.
-
-    Sends NoteOn + a 4-step ramp of the appropriate expression message
-    + NoteOff on the voice's first MPE channel. The receiving track
-    (set to MPE in) will pick up on the per-note expression and learn
-    the mapping.
-    """
-    import time
-
-    import mido
-
-    if not voice.mpe_mode:
-        # Caller wired this up for an MPE kind on a non-MPE voice;
-        # fall through to the voice's main channel.
-        channel = voice.midi_channel - 1
-    else:
-        channel = voice.midi_channel - 1  # first channel of the MPE block
-    port_name = voice.midi_port
-    out = mido.open_output(port_name) if port_name else mido.open_output()
-    audition_note = 69  # A4 — neutral mid-register probe
-    try:
-        out.send(mido.Message("note_on", channel=channel, note=audition_note, velocity=100))
-        if kind == "mpe_pitch_bend":
-            for pb in (-4096, 0, 4096, 0):
-                out.send(mido.Message("pitchwheel", channel=channel, pitch=pb))
-                time.sleep(0.06)
-        elif kind == "mpe_pressure":
-            for value in (0, 64, 127, 64):
-                out.send(mido.Message("aftertouch", channel=channel, value=value))
-                time.sleep(0.06)
-        elif kind == "mpe_timbre":
-            for value in (0, 64, 127, 64):
-                out.send(
-                    mido.Message(
-                        "control_change",
-                        channel=channel,
-                        control=74,
-                        value=value,
-                    )
-                )
-                time.sleep(0.06)
-        time.sleep(0.08)
-        out.send(mido.Message("note_off", channel=channel, note=audition_note, velocity=0))
     finally:
         out.close()
 
