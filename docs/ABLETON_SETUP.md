@@ -325,6 +325,40 @@ When you decide a different instrument fits a voice better:
 Done. The jtx side is untouched, no MIDI Learn, no audition. The
 CC → Macro mappings inside the Rack persist across all such swaps.
 
+## Pitch bend
+
+Two voices emit per-note **pitch bend** as articulation. The Rack
+doesn't intermediate pitch bend (it's a separate MIDI message from
+CC), so the synth inside the Rack receives it directly. As long as
+the track listens on the right channel and the instrument responds
+to the pitch wheel (the default for nearly every soft synth and
+sampler), no extra wiring is needed.
+
+* **`bass` (acid mode)** — a small per-note wobble (~±1% of the
+  ±8192 pitchwheel range) wrapped around each note. With any
+  default synth bend range (typically ±2 semitones) this lands as a
+  near-imperceptible blur that adds gristle to the squelch. Nothing
+  to configure on the synth side beyond confirming the pitch wheel
+  is wired (it is, on every modern instrument).
+
+* **`fx` (high motion, `noise_riser` mode)** — a continuous bend
+  rise across the riser window, **normalised assuming ±2 semitones
+  of synth bend range**. If the riser's `pitch_rise_cents`
+  parameter is set high (e.g. 1200 for an octave) but your synth's
+  bend range is ±2 semitones, the bend hits the rail and you get a
+  clipped sub-octave rise instead of the full sweep. To unlock the
+  full sweep, raise the synth's pitch-bend range to match — most
+  soft synths expose this as a "Bend Range" or "Pitch Bend Up/Down"
+  parameter. Drift / Wavetable default to ±2 semitones; sampler
+  patches vary.
+
+All other voices emit no pitch bend, so the instrument's bend
+setting doesn't matter on those tracks.
+
+If you want a flat-pitched bass for an A/B comparison, set the
+bass voice's `bend` knob to 0 in the Patcher; for a flat riser,
+set the fx voice's `pitch_rise_cents` to 0.
+
 ## Ableton Link
 
 jtx supports Ableton Link as a clock source: Setup editor → General
