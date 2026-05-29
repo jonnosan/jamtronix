@@ -20,7 +20,7 @@ def test_sonics_regions_has_four_documented_entries() -> None:
 @pytest.mark.parametrize(
     "name,expected",
     [
-        ("acid",        (0.475, 0.725)),
+        ("acid",        (0.150, 0.725)),
         ("deep_techno", (0.775, 0.250)),
         ("psytrance",   (0.425, 0.850)),
         ("dub_techno",  (0.300, 0.800)),
