@@ -216,6 +216,8 @@ def compose(
         meter="4/4",
         mood=MoodSpec(valence=mood.valence, energy=mood.energy, chaos=chaos),
         format=fmt,
+        texture=texture,
+        motion=motion,
         tempo=tempo,
         voices=voices,
         parts=parts,

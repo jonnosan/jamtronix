@@ -292,6 +292,8 @@ def song_from_dict(d: dict[str, Any]) -> Song:
         meter=d.get("meter", "4/4"),
         mood=_mood_from_dict(d.get("mood")),
         format=_format_from_dict(d.get("format")),
+        texture=float(d.get("texture", 0.5)),
+        motion=float(d.get("motion", 0.5)),
         tempo=d.get("tempo", 120),
         chord_progression=_progression_from_dict(d.get("chord_progression")),
         voices={name: _voice_config_from_dict(v) for name, v in d.get("voices", {}).items()},

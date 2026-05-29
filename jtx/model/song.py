@@ -114,6 +114,16 @@ class Song:
     format: FormatType = "song"
     """Structural archetype the song was generated from (sting / jingle
     / loop / ramp / song / anthem). Persisted alongside :attr:`mood`."""
+    texture: float = 0.5
+    """Arrangement thickness in ``[0, 1]`` — sparse ↔ lush. Gates
+    palette-voice activation via per-voice τ thresholds in
+    :mod:`jtx.composer.recipe`. Persisted so the Composer GUI's
+    texture slider can round-trip through save → load."""
+    motion: float = 0.5
+    """Animation amount in ``[0, 1]`` — static ↔ animated. Picks
+    algorithm shortlists (sustained → arp → fast subdivision), drives
+    the filter LFO depth + speed, and shifts feel-target windows.
+    Persisted for the same round-trip reason as :attr:`texture`."""
     tempo: int = 120
     chord_progression: ChordProgression | None = None
     voices: dict[str, VoiceConfig] = field(default_factory=dict)
