@@ -103,11 +103,12 @@
     "fx": {
       "algorithm": "noise_riser",
       "pattern": {
-        "duration_bars": 4,
+        "duration_bars": 2,
         "cutoff_start": 39,
         "cutoff_end": 122,
         "vel_start": 40,
-        "vel_end": 101
+        "vel_end": 101,
+        "cycle_bars": 2
       },
       "mix": {}
     },
