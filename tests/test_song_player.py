@@ -5,6 +5,7 @@ from __future__ import annotations
 from jtx.engine.events import ControlChange, NoteOn
 from jtx.engine.scheduler import Scheduler
 from jtx.engine.sink import MemorySink
+from jtx.model.events import Hit, Note, Param
 from jtx.model.lfo import LFO, LFOApplication
 from jtx.model.setup import Setup, VoiceSlot
 from jtx.model.song import (
@@ -340,3 +341,62 @@ def test_song_player_routes_lfo_voice_target_to_phantom_slot() -> None:
     ]
     assert len(filter_ccs) == 8
     player.close()
+
+
+def test_abstract_events_for_bar_returns_per_voice_semantic_events() -> None:
+    """The evaluation tap point: abstract events grouped by voice,
+    carrying semantic instrument and parameter-function names.
+    """
+    player = SongPlayer(_basic_song(), _basic_setup(), "drop")
+    abstract = player.abstract_events_for_bar(0)
+
+    # Voice grouping matches the song.
+    assert set(abstract.keys()) == {"kick", "acid", "echo"}
+
+    # Kick voice (drum_pattern) emits Hit events instrument-tagged.
+    kick_hits = [e for e in abstract["kick"] if isinstance(e, Hit)]
+    assert kick_hits, "kick should emit Hit events"
+    assert all(h.instrument == "kick" for h in kick_hits)
+
+    # Acid voice emits Note events (pitched, MIDI-naive — no channel).
+    acid_notes = [e for e in abstract["acid"] if isinstance(e, Note)]
+    assert acid_notes, "acid_bass should emit Note events"
+    for n in acid_notes:
+        assert 0 <= n.pitch <= 127
+        assert 1 <= n.velocity <= 127
+
+    # Acid voice may also emit Param events with semantic function names
+    # (e.g. "cutoff", "resonance"). They must not be pre-resolved to CC#.
+    params = [e for e in abstract["acid"] if isinstance(e, Param)]
+    for p in params:
+        assert isinstance(p.name, str) and p.name
+        assert not p.name.startswith("cc")  # function name, not CC number
+
+
+def test_abstract_events_for_bar_is_deterministic() -> None:
+    """Same song + setup + bar → identical abstract events across runs."""
+    p1 = SongPlayer(_basic_song(), _basic_setup(), "drop")
+    p2 = SongPlayer(_basic_song(), _basic_setup(), "drop")
+    a1 = p1.abstract_events_for_bar(0)
+    a2 = p2.abstract_events_for_bar(0)
+    assert a1 == a2
+
+
+def test_abstract_events_for_bar_matches_events_for_bar_algo_phase() -> None:
+    """The new tap returns the same per-voice algorithm output that
+    feeds into events_for_bar's mix/feel/voicing pipeline. We can't
+    compare directly to events_for_bar's MIDI output (different shape),
+    but we can verify that the abstract-events Note pitches are present
+    in the MIDI NoteOns for the same bar on a different player instance.
+    """
+    p_abstract = SongPlayer(_basic_song(), _basic_setup(), "drop")
+    abstract = p_abstract.abstract_events_for_bar(0)
+    acid_pitches = sorted(n.pitch for n in abstract["acid"] if isinstance(n, Note))
+
+    p_midi = SongPlayer(_basic_song(), _basic_setup(), "drop")
+    events = p_midi.events_for_bar(0)
+    # acid is on channel 2 (per _basic_setup).
+    midi_acid_pitches = sorted(
+        e.note for e in events if isinstance(e, NoteOn) and e.channel == 2
+    )
+    assert acid_pitches == midi_acid_pitches
