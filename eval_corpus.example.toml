@@ -1,0 +1,67 @@
+# eval_corpus.example.toml — Phase 2b corpus schema reference.
+#
+# Copy to `eval_corpus.toml` (anywhere convenient) and point
+# `jtx-improve run --corpus path/to/eval_corpus.toml` at it to
+# customise which cases the reward function scores.
+#
+# Every section + key below is optional; omitted entries inherit
+# `jtx.improve.corpus.default_corpus()`. The default ships seven named
+# anchors (4 sonics + 3 mood), a 3×3 (texture, motion) grid, and one
+# format-coverage case per format archetype, which matches the corpus
+# the Phase 1b/1c tests pin down.
+#
+# Unknown sections / keys fail loudly when loaded (typo protection).
+
+[settings]
+# Path to the .jtx-setup the SongPlayer renders against. Relative
+# paths are resolved from the repo root.
+setup_path = "setups/iac.jtx-setup"
+# Which part names get rendered for the anchor + collapse terms.
+parts = ["drop"]
+# How many bars of each part to render (bar 0 is skipped — fade-in).
+bars = 4
+# Jitter samples per anchor for the discriminability baseline.
+jitter_per_anchor = 3
+# Chaos value used for the jitter samples (the anchor centres always
+# use chaos=0; the jitter samples perturb).
+jitter_chaos = 0.05
+# Which composer axes the dead-knob check sweeps.
+sensitivity_axes = ["texture", "motion", "valence", "energy"]
+# How many evenly-spaced steps per axis.
+sensitivity_steps = 5
+
+# ---------- anchors --------------------------------------------------
+# Each [anchors.<name>] overrides the defaults for one named anchor.
+# `<name>` must match a key in `jtx.evaluation.ANCHORS`; otherwise the
+# loop has nothing to score against and the case is silently skipped.
+
+[anchors.acid]
+mood_valence = -0.15
+mood_energy  = 0.55
+texture      = 0.475
+motion       = 0.725
+fmt          = "song"
+chaos        = 0.0
+
+# ---------- ad-hoc grid points --------------------------------------
+# Use [[grid]] to extend the discriminability dataset beyond the named
+# anchors. Each entry is a CorpusCase the harness composes + renders
+# but does not score against a named Target.
+#
+# [[grid]]
+# mood_valence = 0.0
+# mood_energy  = 0.0
+# texture      = 0.25
+# motion       = 0.5
+# fmt          = "song"
+
+# ---------- format-coverage cases for structural integrity ----------
+# Each [[structure_cases]] entry is a CorpusCase the structural_integrity
+# check runs against; the per-format pass/fail count feeds the S term.
+#
+# [[structure_cases]]
+# mood_valence = 0.1
+# mood_energy  = 0.3
+# texture      = 0.5
+# motion       = 0.5
+# fmt          = "anthem"
