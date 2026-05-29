@@ -141,8 +141,31 @@ def test_song_default_mood_format_round_trip(tmp_path: Path) -> None:
     assert loaded.format == "song"
 
 
-def test_song_load_rejects_pre_v4_schema_version() -> None:
-    """A pre-v4 song dict is rejected (no migration path)."""
+def test_song_texture_motion_round_trip(tmp_path: Path) -> None:
+    """Texture + motion floats survive save → load."""
+    song = _sample_song()
+    song.texture = 0.73
+    song.motion = 0.18
+    path = tmp_path / "textured.jtx"
+    save_song(song, path)
+    loaded = load_song(path)
+    assert loaded.texture == 0.73
+    assert loaded.motion == 0.18
+    assert loaded == song
+
+
+def test_song_default_texture_motion_round_trip(tmp_path: Path) -> None:
+    """A song without explicit texture/motion round-trips at the (0.5, 0.5) centre."""
+    song = _sample_song()
+    path = tmp_path / "default-tm.jtx"
+    save_song(song, path)
+    loaded = load_song(path)
+    assert loaded.texture == 0.5
+    assert loaded.motion == 0.5
+
+
+def test_song_load_rejects_older_schema_version() -> None:
+    """A song dict at the previous SCHEMA_VERSION is rejected (no migration path)."""
     payload = {
         "title": "Old",
         "setup_ref": "iac",
@@ -153,6 +176,36 @@ def test_song_load_rejects_pre_v4_schema_version() -> None:
         "schema_version": SCHEMA_VERSION - 1,
     }
     with pytest.raises(ValidationError, match="schema_version"):
+        song_from_dict(payload)
+
+
+def test_song_load_rejects_texture_out_of_range() -> None:
+    payload = {
+        "title": "Bad",
+        "setup_ref": "iac",
+        "key": {"tonic": "A", "scale": "minor"},
+        "voices": {},
+        "parts": {},
+        "arrangement": [],
+        "texture": 1.5,
+        "schema_version": SCHEMA_VERSION,
+    }
+    with pytest.raises(ValidationError, match="texture"):
+        song_from_dict(payload)
+
+
+def test_song_load_rejects_motion_out_of_range() -> None:
+    payload = {
+        "title": "Bad",
+        "setup_ref": "iac",
+        "key": {"tonic": "A", "scale": "minor"},
+        "voices": {},
+        "parts": {},
+        "arrangement": [],
+        "motion": -0.2,
+        "schema_version": SCHEMA_VERSION,
+    }
+    with pytest.raises(ValidationError, match="motion"):
         song_from_dict(payload)
 
 

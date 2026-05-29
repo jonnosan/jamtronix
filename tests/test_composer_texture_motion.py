@@ -19,6 +19,7 @@ import json
 
 from jtx.composer import build_recipe, compose
 from jtx.composer.mood import MoodSpec
+from jtx.persist import load_song, save_song
 
 
 def _song_json(song) -> str:
@@ -166,3 +167,29 @@ def test_motion_raises_drive_target() -> None:
     low_drive = sum(low.mood.feel_targets["drive"]) / 2
     high_drive = sum(high.mood.feel_targets["drive"]) / 2
     assert high_drive > low_drive
+
+
+# ---------- compose → save → load → recompose round trip ---------------
+
+
+def test_compose_save_load_recompose_is_byte_identical(tmp_path) -> None:
+    """Texture + motion survive the persistence round-trip + drive recomposition.
+
+    compose() with explicit texture/motion → save → load → recompose using
+    the loaded Song's texture/motion → byte-identical Song.
+    """
+    args = ("RoundTrip", "iac", MoodSpec(valence=-0.3, energy=0.45), "song")
+    original = compose(*args, chaos=0.2, texture=0.7, motion=0.4)
+    assert original.texture == 0.7
+    assert original.motion == 0.4
+
+    path = tmp_path / "roundtrip.jtx"
+    save_song(original, path)
+    loaded = load_song(path)
+    assert loaded.texture == 0.7
+    assert loaded.motion == 0.4
+
+    recomposed = compose(
+        *args, chaos=0.2, texture=loaded.texture, motion=loaded.motion,
+    )
+    assert _song_json(recomposed) == _song_json(original)

@@ -43,6 +43,17 @@ def validate_song(song: Song) -> list[str]:
             f"supported {SCHEMA_VERSION}"
         )
 
+    for axis_name in ("texture", "motion"):
+        axis_value = getattr(song, axis_name)
+        if not isinstance(axis_value, int | float):
+            errors.append(
+                f"song {song.title!r}: {axis_name} = {axis_value!r} is not numeric"
+            )
+        elif not (0.0 <= float(axis_value) <= 1.0):
+            errors.append(
+                f"song {song.title!r}: {axis_name} = {axis_value} not in [0, 1]"
+            )
+
     # Song-wide feel knobs.
     extra_feel = set(song.feel) - _VALID_FEEL_KEYS
     if extra_feel:

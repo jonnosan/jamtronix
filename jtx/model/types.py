@@ -37,7 +37,7 @@ its concrete binding is deferred (see ``jtx.engine.AbletonLinkClock``);
 selecting it will raise until that's resolved.
 """
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 """Bump when the on-disk JSON shape changes incompatibly.
 
 * v1 → v2 (Phase A): ``VoiceSlot.cc_map: {fn: cc}`` replaced by
@@ -60,4 +60,11 @@ SCHEMA_VERSION = 4
   migration path — pre-v4 ``.jtx`` files are rejected at load time;
   regenerate via :func:`jtx.composer.compose` (Composer GUI lands in
   PR 4).
+* v4 → v5 (texture + motion axes): ``Song.texture`` and
+  ``Song.motion`` (floats in ``[0, 1]``) become first-class
+  persisted fields alongside ``mood`` and ``format``. They drive
+  voice activation thresholds, algorithm shortlists, and filter LFO
+  parameters in :mod:`jtx.composer`. No migration path — pre-v5
+  ``.jtx`` files are rejected at load time; regenerate via
+  :func:`jtx.composer.compose` (epic #134).
 """

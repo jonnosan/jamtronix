@@ -13,6 +13,8 @@
     "chaos": 0.0
   },
   "format": "song",
+  "texture": 0.5,
+  "motion": 0.5,
   "tempo": 120,
   "chord_progression": {
     "degrees": [
@@ -107,5 +109,5 @@
     "tension": 0.5,
     "wander": 0.1
   },
-  "schema_version": 4
+  "schema_version": 5
 }
