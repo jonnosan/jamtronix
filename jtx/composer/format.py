@@ -19,8 +19,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-FormatType = Literal["sting", "jingle", "loop", "ramp", "song", "anthem"]
-"""Format literal accepted by :func:`jtx.composer.compose`."""
+from jtx.model.composer_types import FormatType
+
+# Re-exported from :mod:`jtx.model.composer_types`; lives there so
+# :class:`jtx.model.Song.format` can be typed without cycling back
+# through :mod:`jtx.composer`.
 
 
 @dataclass(frozen=True)

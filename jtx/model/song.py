@@ -11,8 +11,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from jtx.model.composer_types import FormatType, MoodSpec
 from jtx.model.lfo import LFO
 from jtx.model.types import SCHEMA_VERSION
+
+_DEFAULT_MOOD = MoodSpec(valence=0.0, energy=0.0, chaos=0.0)
 
 # Knob payloads are JSON-shaped: numbers / strings / bools / lists / nested
 # dicts. We don't try to type them at this layer — the algorithm registry
@@ -104,6 +107,13 @@ class Song:
     key: Key
     seed_override: int | None = None
     meter: str = "4/4"
+    mood: MoodSpec = _DEFAULT_MOOD
+    """Composer-time mood the song was generated from
+    (valence × energy + chaos). Persisted so re-rolling can start from
+    the same pad position and so the GUI can reflect it when loading."""
+    format: FormatType = "song"
+    """Structural archetype the song was generated from (sting / jingle
+    / loop / ramp / song / anthem). Persisted alongside :attr:`mood`."""
     tempo: int = 120
     chord_progression: ChordProgression | None = None
     voices: dict[str, VoiceConfig] = field(default_factory=dict)

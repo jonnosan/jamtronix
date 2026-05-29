@@ -9,26 +9,16 @@ the composer perturbs picks around the recipe's centre (knob ranges,
 algorithm shortlists, weird-pick probability). Anchors default to
 ``chaos=0.0``; the Composer view's chaos slider supplies the actual
 value at generate time.
+
+:class:`MoodSpec` itself lives in :mod:`jtx.model.composer_types` so
+:class:`jtx.model.Song` can carry it without cycling back through
+:mod:`jtx.composer`. It's re-exported here for the composer-facing
+import surface.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-
-@dataclass(frozen=True)
-class MoodSpec:
-    """Point on the mood pad plus a chaos amount.
-
-    ``valence`` and ``energy`` are both in ``[-1, 1]``; ``chaos`` is in
-    ``[0, 1]``. The composer clamps out-of-range values silently — the
-    GUI is the source of truth for range enforcement.
-    """
-
-    valence: float
-    energy: float
-    chaos: float = 0.0
-
+from jtx.model.composer_types import MoodSpec
 
 MOOD_ANCHORS: dict[str, MoodSpec] = {
     "happy": MoodSpec(valence=0.6, energy=0.4),

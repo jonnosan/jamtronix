@@ -37,7 +37,7 @@ its concrete binding is deferred (see ``jtx.engine.AbletonLinkClock``);
 selecting it will raise until that's resolved.
 """
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 """Bump when the on-disk JSON shape changes incompatibly.
 
 * v1 → v2 (Phase A): ``VoiceSlot.cc_map: {fn: cc}`` replaced by
@@ -54,4 +54,10 @@ SCHEMA_VERSION = 3
   (pump, groove, drive, tension, wander). ``Part.intensity_start``
   + ``intensity_end`` envelope each part. No migration path —
   re-generate songs from templates.
+* v3 → v4 (mood + format composer): ``Song.mood`` (MoodSpec) and
+  ``Song.format`` (FormatType literal) become first-class persisted
+  fields, replacing the implicit style-template heritage. No
+  migration path — pre-v4 ``.jtx`` files are rejected at load time;
+  regenerate via :func:`jtx.composer.compose` (Composer GUI lands in
+  PR 4).
 """

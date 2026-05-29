@@ -21,6 +21,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, cast
 
+from jtx.model.composer_types import FormatType, MoodSpec
 from jtx.model.lfo import LFO, LFOApplication
 from jtx.model.parameter_target import (
     CCTarget,
@@ -39,6 +40,10 @@ from jtx.model.song import (
 )
 from jtx.model.types import SCHEMA_VERSION, ClockMode, LFOShape, Role, VoiceType
 from jtx.model.validate import ValidationError, validate_song
+
+_VALID_FORMATS: frozenset[str] = frozenset(
+    {"sting", "jingle", "loop", "ramp", "song", "anthem"}
+)
 
 # ---------------------------------------------------------------- setup
 
@@ -247,13 +252,46 @@ def _song_feel_from_dict(raw: dict[str, Any] | None) -> dict[str, float]:
     return out
 
 
+def _mood_from_dict(raw: dict[str, Any] | None) -> MoodSpec:
+    """Parse the song-level mood dict; missing/empty defaults to neutral."""
+    if not raw:
+        return MoodSpec(valence=0.0, energy=0.0, chaos=0.0)
+    return MoodSpec(
+        valence=float(raw.get("valence", 0.0)),
+        energy=float(raw.get("energy", 0.0)),
+        chaos=float(raw.get("chaos", 0.0)),
+    )
+
+
+def _format_from_dict(raw: Any) -> FormatType:
+    """Parse the song-level format literal; reject unknown values."""
+    if raw is None:
+        return "song"
+    if not isinstance(raw, str) or raw not in _VALID_FORMATS:
+        raise ValidationError(
+            [f"song format {raw!r} not in {sorted(_VALID_FORMATS)!r}"]
+        )
+    return cast("FormatType", raw)
+
+
 def song_from_dict(d: dict[str, Any]) -> Song:
+    file_schema_version = int(d.get("schema_version", 0))
+    if file_schema_version != SCHEMA_VERSION:
+        raise ValidationError(
+            [
+                f"song schema_version {file_schema_version} != supported "
+                f"{SCHEMA_VERSION} (regenerate via jtx.composer.compose; "
+                f"no migration from older songs)"
+            ]
+        )
     song = Song(
         title=d["title"],
         setup_ref=d["setup_ref"],
         key=_key_from_dict(d["key"]),
         seed_override=d.get("seed_override"),
         meter=d.get("meter", "4/4"),
+        mood=_mood_from_dict(d.get("mood")),
+        format=_format_from_dict(d.get("format")),
         tempo=d.get("tempo", 120),
         chord_progression=_progression_from_dict(d.get("chord_progression")),
         voices={name: _voice_config_from_dict(v) for name, v in d.get("voices", {}).items()},
